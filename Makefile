@@ -1,4 +1,4 @@
-.PHONY: install lint format test typecheck run clean help
+.PHONY: install lint format format-check test typecheck run clean help
 
 # Variables
 PYTHON_VERSION := $(shell cat .python-version)
@@ -9,11 +9,12 @@ help:
 	@echo "Makefile for simgrep development"
 	@echo ""
 	@echo "Available targets:"
-	@echo "  install    - Install dependencies and the project in editable mode"
-	@echo "  lint       - Run linters (Ruff check)"
-	@echo "  format     - Format code (Ruff format)"
-	@echo "  test       - Run unit tests (Pytest)"
-	@echo "  typecheck  - Run static type checker (Mypy)"
+	@echo "  install      - Install dependencies and the project in editable mode"
+	@echo "  lint         - Run linters (Ruff check)"
+	@echo "  format       - Format code (Ruff format)"
+	@echo "  format-check - Check code formatting (Ruff format --check)"
+	@echo "  test         - Run unit tests (Pytest)"
+	@echo "  typecheck    - Run static type checker (Mypy)"
 	@echo "  run        - Run the simgrep application (e.g., simgrep --help)"
 	@echo "  clean      - Clean up build artifacts and cache files"
 	@echo ""
@@ -29,6 +30,10 @@ lint:
 format:
 	@echo "Formatting code (Ruff format)..."
 	$(UV) run ruff format .
+
+format-check:
+	@echo "Checking code formatting (Ruff format --check)..."
+	$(UV) run ruff format --check .
 
 test:
 	@echo "Running tests (Pytest)..."
@@ -66,5 +71,5 @@ check-python-version:
 setup: check-python-version install
 	@echo "Setup complete."
 
-all: install lint test typecheck
+all: install lint format-check test typecheck
 	@echo "All checks passed."
