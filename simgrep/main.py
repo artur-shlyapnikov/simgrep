@@ -1,20 +1,26 @@
-import typer
-from pathlib import Path
-from rich.console import Console
 import warnings
+from pathlib import Path
+from typing import List
+
+import numpy as np  # For type hinting (np.ndarray)
+import typer
+from rich.console import Console
+
+# Use relative import for processor module
+from .processor import chunk_text_simple, extract_text_from_file, generate_embeddings
 
 # Filter the specific UserWarning from unstructured regarding libmagic
 # This warning is advisory and unstructured can often proceed without libmagic
 # for common file types.
 warnings.filterwarnings(
     "ignore",
-    message="libmagic is unavailable but assists in filetype detection. Please consider installing libmagic for better results.",
+    message=(
+        "libmagic is unavailable but assists in filetype detection. "
+        "Please consider installing libmagic for better results."
+    ),
     # category=UserWarning # category can be added if we are sure it's always UserWarning
 )
 
-# Use relative import for processor module
-from .processor import extract_text_from_file, chunk_text_simple, generate_embeddings
-import numpy as np # For type hinting (np.ndarray)
 
 __version__ = "0.1.0"  # Placeholder version, can be updated or managed elsewhere
 
@@ -85,7 +91,7 @@ def search(
         #     raise typer.Exit(code=1)
 
         extracted_content = extract_text_from_file(path_to_search)
-        console.print(f"\n[bold]Extracted Content (first 500 chars):[/bold]")
+        console.print("\n[bold]Extracted Content (first 500 chars):[/bold]")
         console.print(
             extracted_content[:500] + "..."
             if len(extracted_content) > 500
@@ -102,11 +108,6 @@ def search(
         )
 
         try:
-            # Need to import List for type hint if not already done, but it's usually available with Typer/Pydantic
-            from typing import (
-                List,
-            )  # Add if not available, though often implicitly available
-
             text_chunks: List[str] = chunk_text_simple(
                 text=extracted_content,
                 chunk_size_chars=chunk_size_chars,
@@ -139,7 +140,7 @@ def search(
         query_embedding: np.ndarray
         chunk_embeddings: np.ndarray = np.array([]) # Initialize to an empty array
 
-        console.print(f"\n[bold]Step 3: Generating Embeddings[/bold]")
+        console.print("\n[bold]Step 3: Generating Embeddings[/bold]")
         # Model name is currently hardcoded in generate_embeddings default.
         # Future phases will make this configurable.
         # Inform user about potential first-time model download.

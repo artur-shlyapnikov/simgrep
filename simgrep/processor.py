@@ -1,9 +1,10 @@
 from pathlib import Path
 from typing import List
-import unstructured.partition.auto as auto_partition
-from unstructured.documents.elements import Element
-from sentence_transformers import SentenceTransformer
+
 import numpy as np
+import unstructured.partition.auto as auto_partition
+from sentence_transformers import SentenceTransformer
+from unstructured.documents.elements import Element
 
 
 def extract_text_from_file(file_path: Path) -> str:

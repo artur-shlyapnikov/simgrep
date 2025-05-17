@@ -19,16 +19,18 @@ simgrep = "simgrep.main:app"
 dev-dependencies = [
     "mypy>=1.15.0",
     "pytest>=8.2.0",
-    "ruff>=0.11.10",
+    "ruff>=0.4.0,<0.5.0", # Updated ruff version constraint
 ]
 
 [tool.ruff]
+line-length = 120 # Set line length for linter (e.g., for E501)
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
 
 [tool.ruff.format]
-line-width = 120
+# The formatter uses the global `line-length` from `[tool.ruff]`
+# Options like quote-style, indent-style, etc. can go here if needed.
 
 [tool.mypy]
 # Basic mypy configuration
