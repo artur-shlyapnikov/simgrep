@@ -1,0 +1,45 @@
+[project]
+name = "simgrep-project"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.11.4",
+    "rich>=14.0.0",
+    "typer>=0.15.4",
+]
+
+[project.scripts]
+simgrep = "simgrep.main:app"
+
+[tool.uv]
+dev-dependencies = [
+    "mypy>=1.15.0",
+    "ruff>=0.11.10",
+]
+
+# Tool configurations
+[tool.ruff]
+# Minimal configuration to start
+# You can expand this later, e.g., line-length = 88
+# For now, just having the section is enough for ruff to pick it up.
+
+[tool.ruff.lint]
+# Select a basic set of rules to start (Error, Flake8, Isort)
+select = ["E", "F", "I"]
+# ignore = [] # Add specific ignores later if needed
+
+[tool.ruff.format]
+# You can leave this empty to use Ruff's default (Black-compatible)
+# or specify options like:
+# quote-style = "double"
+# indent-style = "space"
+
+[tool.mypy]
+# Basic mypy configuration
+python_version = "3.12" # Or your target Python version (e.g., 3.10, 3.11)
+# warn_return_any = true # Good to enable early
+# warn_unused_configs = true # Good to enable early
+# Add more strictness progressively. For D0.1, just having the section is key.
+# For mypy to recognize 'simgrep' as a package, ensure simgrep/__init__.py exists.
