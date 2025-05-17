@@ -25,17 +25,14 @@ dev-dependencies = [
 ]
 
 [tool.ruff]
-line-length = 120 # Set line length for linter (e.g., for E501)
+line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
 
 [tool.ruff.format]
-# The formatter uses the global `line-length` from `[tool.ruff]`
-# Options like quote-style, indent-style, etc. can go here if needed.
 
 [tool.mypy]
-# Basic mypy configuration
 python_version = "3.12" # Or your target Python version (e.g., 3.10, 3.11)
 warn_return_any = true
 warn_unused_configs = true
@@ -43,7 +40,6 @@ disallow_untyped_defs = true
 disallow_incomplete_defs = true
 check_untyped_defs = true
 disallow_untyped_calls = true
-# For mypy to recognize 'simgrep' as a package, ensure simgrep/__init__.py exists.
 
 [tool.pytest.ini_options]
 pythonpath = [

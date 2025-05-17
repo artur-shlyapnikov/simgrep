@@ -1,10 +1,8 @@
 .PHONY: install lint format format-check test typecheck run clean help
 
-# Variables
 PYTHON_VERSION := $(shell cat .python-version)
 UV := uv
 
-# Default target
 help:
 	@echo "Makefile for simgrep development"
 	@echo ""
@@ -59,7 +57,6 @@ clean:
 	rm -rf .venv # If uv creates a .venv by default and it's not globally managed
 	@echo "Cleaned."
 
-# Ensure .python-version exists for UV
 check-python-version:
 	@if [ ! -f .python-version ]; then \
 		echo "Error: .python-version file not found. Please create it with your Python version (e.g., 3.12)."; \
@@ -67,7 +64,6 @@ check-python-version:
 	fi
 	$(UV) version # A simple uv command to ensure it's working with the environment
 
-# Example of a target that depends on python version check
 setup: check-python-version install
 	@echo "Setup complete."
 
