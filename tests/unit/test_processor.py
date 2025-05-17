@@ -1,8 +1,10 @@
-import pytest
 from pathlib import Path
 from typing import List
 
-from simgrep.processor import extract_text_from_file, chunk_text_simple
+import pytest
+
+from simgrep.processor import chunk_text_simple, extract_text_from_file
+
 
 # Fixtures for creating temporary files and directories
 @pytest.fixture
@@ -12,17 +14,20 @@ def temp_text_file(tmp_path: Path) -> Path:
     file.write_text(file_content)
     return file
 
+
 @pytest.fixture
 def temp_empty_file(tmp_path: Path) -> Path:
     file = tmp_path / "empty_file.txt"
     file.write_text("")
     return file
 
+
 @pytest.fixture
 def temp_dir(tmp_path: Path) -> Path:
     dir_path = tmp_path / "test_dir"
     dir_path.mkdir()
     return dir_path
+
 
 # Tests for extract_text_from_file
 class TestExtractTextFromFile:
@@ -42,11 +47,16 @@ class TestExtractTextFromFile:
 
     def test_extract_from_non_existent_file(self, tmp_path: Path):
         non_existent_file = tmp_path / "non_existent.txt"
-        with pytest.raises(FileNotFoundError, match=f"File not found or is not a file: {non_existent_file}"):
+        with pytest.raises(
+            FileNotFoundError,
+            match=f"File not found or is not a file: {non_existent_file}",
+        ):
             extract_text_from_file(non_existent_file)
 
     def test_extract_from_directory(self, temp_dir: Path):
-        with pytest.raises(FileNotFoundError, match=f"File not found or is not a file: {temp_dir}"):
+        with pytest.raises(
+            FileNotFoundError, match=f"File not found or is not a file: {temp_dir}"
+        ):
             extract_text_from_file(temp_dir)
 
     # Consider mocking unstructured.partition.auto.partition for error case if needed,
@@ -63,38 +73,80 @@ class TestChunkTextSimple:
         "text, chunk_size, overlap, expected_chunks",
         [
             # Basic case
-            ("abcdefghijklmnopqrstuvwxyz", 10, 3, ["abcdefghij", "hijklmnopq", "opqrstuvwx", "uvwxyz"]),
+            (
+                "abcdefghijklmnopqrstuvwxyz",
+                10,
+                3,
+                ["abcdefghij", "hijklmnopq", "opqrstuvwx", "uvwxyz"],
+            ),
             # Text shorter than chunk size
             ("abc", 10, 3, ["abc"]),
             # Exact multiple of (chunk_size - overlap) after first chunk
-            ("abcdefghijklmno", 10, 5, ["abcdefghij", "fghijklmno"]), # 15 chars, step 5. 0-9, 5-14.
+            (
+                "abcdefghijklmno",
+                10,
+                5,
+                ["abcdefghij", "fghijklmno"],
+            ),  # 15 chars, step 5. 0-9, 5-14.
             # Last chunk smaller
-            ("abcdefghijkl", 10, 5, ["abcdefghij", "fghijkl"]), # 12 chars, step 5. 0-9, 5-11
+            (
+                "abcdefghijkl",
+                10,
+                5,
+                ["abcdefghij", "fghijkl"],
+            ),  # 12 chars, step 5. 0-9, 5-11
             # Zero overlap
-            ("abcdefghijklm", 5, 0, ["abcde", "fghij", "klm"]), # 13 chars, step 5. 0-4, 5-9, 10-12
+            (
+                "abcdefghijklm",
+                5,
+                0,
+                ["abcde", "fghij", "klm"],
+            ),  # 13 chars, step 5. 0-4, 5-9, 10-12
             # Empty text
             ("", 10, 3, []),
             # Overlap makes next chunk start beyond text
             ("abcdefghij", 10, 0, ["abcdefghij"]),
             # Overlap makes next chunk start exactly at end (no more chunks)
-            ("abcdefghij", 5, 2, ["abcde", "defgh", "fghij"]), # text len 10, chunk 5, overlap 2, step 3
-                                                               # 0-4 (abcde), 3-7 (defgh), 6-10 (fghij)
+            (
+                "abcdefghij",
+                5,
+                2,
+                ["abcde", "defgh", "fghij"],
+            ),  # text len 10, chunk 5, overlap 2, step 3
+            # 0-4 (abcde), 3-7 (defgh), 6-10 (fghij)
             # Another overlap case
-            ("This is a test string for chunking.", 10, 2, [
-                "This is a ", #0
-                "is a test ", #8
-                " test stri", #16
-                "t string f", #24
-                "ring for c", #32
-                " for chun", #40
-                " chunking." #46
-            ]),
-             ("12345", 5, 0, ["12345"]),
-             ("1234567890", 5, 1, ["12345", "56789", "90"]), # Chunks: 0-4, 4-8, 8-9 (Corrected: 8-12 -> "90")
-             ("1234567890", 5, 4, ["12345", "23456", "34567", "45678", "56789", "67890"]), # Step 1
-        ]
+            (
+                "This is a test string for chunking.",
+                10,
+                2,
+                [
+                    "This is a ",  # 0
+                    "is a test ",  # 8
+                    " test stri",  # 16
+                    "t string f",  # 24
+                    "ring for c",  # 32
+                    " for chun",  # 40
+                    " chunking.",  # 46
+                ],
+            ),
+            ("12345", 5, 0, ["12345"]),
+            (
+                "1234567890",
+                5,
+                1,
+                ["12345", "56789", "90"],
+            ),  # Chunks: 0-4, 4-8, 8-9 (Corrected: 8-12 -> "90")
+            (
+                "1234567890",
+                5,
+                4,
+                ["12345", "23456", "34567", "45678", "56789", "67890"],
+            ),  # Step 1
+        ],
     )
-    def test_chunking_logic(self, text: str, chunk_size: int, overlap: int, expected_chunks: List[str]):
+    def test_chunking_logic(
+        self, text: str, chunk_size: int, overlap: int, expected_chunks: List[str]
+    ):
         assert chunk_text_simple(text, chunk_size, overlap) == expected_chunks
 
     @pytest.mark.parametrize(
@@ -104,12 +156,24 @@ class TestChunkTextSimple:
             # "Hello world. This is a test." chunk_size=20, overlap=5
             # "Hello world. This i" (0-19)
             # "ld. This is a test." (15-31)
-            ("Hello world. This is a test.", 20, 5, ["Hello world. This i", "ld. This is a test."]),
-        ]
+            (
+                "Hello world. This is a test.",
+                20,
+                5,
+                ["Hello world. This i", "ld. This is a test."],
+            ),
+        ],
     )
-    def test_chunking_logic_manual(self, text: str, chunk_size: int, overlap: int, expected_chunks_manual_check: List[str]):
-        assert chunk_text_simple(text, chunk_size, overlap) == expected_chunks_manual_check
-
+    def test_chunking_logic_manual(
+        self,
+        text: str,
+        chunk_size: int,
+        overlap: int,
+        expected_chunks_manual_check: List[str],
+    ):
+        assert (
+            chunk_text_simple(text, chunk_size, overlap) == expected_chunks_manual_check
+        )
 
     @pytest.mark.parametrize(
         "chunk_size, overlap, error_message_match",
@@ -119,9 +183,11 @@ class TestChunkTextSimple:
             (10, -1, "overlap_chars must be a non-negative integer."),
             (10, 10, "overlap_chars must be less than chunk_size_chars."),
             (10, 11, "overlap_chars must be less than chunk_size_chars."),
-        ]
+        ],
     )
-    def test_invalid_parameters(self, chunk_size: int, overlap: int, error_message_match: str):
+    def test_invalid_parameters(
+        self, chunk_size: int, overlap: int, error_message_match: str
+    ):
         with pytest.raises(ValueError, match=error_message_match):
             chunk_text_simple("some text", chunk_size, overlap)
 
@@ -135,8 +201,10 @@ class TestChunkTextSimple:
     def test_chunk_size_one_with_overlap_error(self):
         text = "abc"
         chunk_size = 1
-        overlap = 1 # overlap must be less than chunk_size
-        with pytest.raises(ValueError, match="overlap_chars must be less than chunk_size_chars."):
+        overlap = 1  # overlap must be less than chunk_size
+        with pytest.raises(
+            ValueError, match="overlap_chars must be less than chunk_size_chars."
+        ):
             chunk_text_simple(text, chunk_size, overlap)
 
     def test_long_text_consistency(self):
@@ -144,7 +212,7 @@ class TestChunkTextSimple:
         chunk_size = 100
         overlap = 10
         chunks = chunk_text_simple(text, chunk_size, overlap)
-        
+
         # Expected number of chunks:
         # First chunk covers 100. Remaining text 900.
         # Each step is chunk_size - overlap = 90.
@@ -154,12 +222,12 @@ class TestChunkTextSimple:
         # L=1000, C=100, O=10. C-O = 90.
         # 1 + ceil((1000-100)/90) = 1 + ceil(900/90) = 1 + 10 = 11.
         assert len(chunks) == 11
-        
+
         # Check content
         assert chunks[0] == "a" * 100
-        assert chunks[1] == "a" * 100 # starts at index 90
-        assert chunks[1][0:10] == "a" * 10 # Overlap part
-        assert chunks[1][10:] == "a" * 90 # New part
+        assert chunks[1] == "a" * 100  # starts at index 90
+        assert chunks[1][0:10] == "a" * 10  # Overlap part
+        assert chunks[1][10:] == "a" * 90  # New part
 
         # Last chunk
         # Last chunk starts at index: (11-1) * 90 = 10 * 90 = 900
@@ -173,5 +241,3 @@ class TestChunkTextSimple:
         overlap = 2
         expected = ["1234567890"]
         assert chunk_text_simple(text, chunk_size, overlap) == expected
-```
-    

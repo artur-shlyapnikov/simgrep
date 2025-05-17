@@ -35,3 +35,8 @@ python_version = "3.12" # Or your target Python version (e.g., 3.10, 3.11)
 # warn_unused_configs = true # Good to enable early
 # Add more strictness progressively. For D0.1, just having the section is key.
 # For mypy to recognize 'simgrep' as a package, ensure simgrep/__init__.py exists.
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "."
+]
