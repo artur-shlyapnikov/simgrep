@@ -2,6 +2,8 @@ from pathlib import Path
 from typing import List
 import unstructured.partition.auto as auto_partition
 from unstructured.documents.elements import Element
+from sentence_transformers import SentenceTransformer
+import numpy as np
 
 
 def extract_text_from_file(file_path: Path) -> str:
@@ -66,3 +68,51 @@ def chunk_text_simple(
         # However, the current logic ensures at least one chunk is added if text is not empty.
 
     return chunks
+
+
+def generate_embeddings(
+    texts: List[str], model_name: str = "all-MiniLM-L6-v2"
+) -> np.ndarray:
+    """
+    Generates vector embeddings for a list of input texts using a specified
+    sentence-transformer model.
+
+    The underlying SentenceTransformer library handles caching of models,
+    typically in `~/.cache/torch/sentence_transformers/` or a similar
+    directory, so subsequent calls with the same model_name are faster
+    after the initial download.
+
+    Args:
+        texts: A list of strings for which to generate embeddings.
+               If the list is empty, an empty numpy array is returned.
+        model_name: The identifier of the sentence-transformer model to use
+                    (e.g., 'all-MiniLM-L6-v2').
+
+    Returns:
+        A 2D numpy.ndarray where each row corresponds to the embedding
+        of the text at the same index in the input list. Returns an
+        empty np.ndarray with shape (0, embedding_dim) if texts is empty.
+        The embedding dimension is model-specific.
+
+    Raises:
+        RuntimeError: If there's an issue with model loading or the
+                      embedding process itself (e.g., network error during
+                      download, incompatible model format).
+    """
+    # SentenceTransformer().encode([]) returns an empty float32 numpy array of shape (0, hidden_dimension)
+    # So, we can rely on that behavior for empty lists.
+    # No special handling needed for `if not texts:` before model loading if we let `model.encode` handle it.
+
+    try:
+        model = SentenceTransformer(model_name)
+        # show_progress_bar=False is suitable for now as lists are expected to be small.
+        embeddings = model.encode(texts, show_progress_bar=False)
+        return embeddings
+    except Exception as e:
+        # Catching a broad Exception as SentenceTransformer can raise various errors.
+        error_message = (
+            f"Failed to generate embeddings using model '{model_name}'. "
+            f"Ensure the model name is correct and an internet connection "
+            f"is available for the first download. Original error: {e}"
+        )
+        raise RuntimeError(error_message) from e

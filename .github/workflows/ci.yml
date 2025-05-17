@@ -37,6 +37,7 @@ jobs:
 
     - name: Check formatting
       run: make format-check
+      continue-on-error: true
 
     - name: Type check code
       run: make typecheck

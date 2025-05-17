@@ -9,6 +9,7 @@ dependencies = [
     "rich>=14.0.0",
     "typer>=0.15.4",
     "unstructured[md]>=0.13.0",
+    "sentence-transformers>=2.2.0", # Or a more recent compatible version
 ]
 
 [project.scripts]
@@ -27,13 +28,17 @@ dev-dependencies = [
 select = ["E", "F", "I"]
 
 [tool.ruff.format]
+line-width = 120
 
 [tool.mypy]
 # Basic mypy configuration
 python_version = "3.12" # Or your target Python version (e.g., 3.10, 3.11)
-# warn_return_any = true # Good to enable early
-# warn_unused_configs = true # Good to enable early
-# Add more strictness progressively. For D0.1, just having the section is key.
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_calls = true
 # For mypy to recognize 'simgrep' as a package, ensure simgrep/__init__.py exists.
 
 [tool.pytest.ini_options]
