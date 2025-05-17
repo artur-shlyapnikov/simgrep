@@ -26,3 +26,40 @@ def extract_text_from_file(file_path: Path) -> str:
         print(f"Error processing file {file_path} with unstructured: {e}")
         # Depending on desired behavior, either re-raise or return empty string/raise custom error
         raise RuntimeError(f"Failed to extract text from {file_path}") from e
+
+
+def chunk_text_simple(text: str, chunk_size_chars: int, overlap_chars: int) -> List[str]:
+    """
+    Splits a given text into a list of overlapping character-based chunks.
+    """
+    if chunk_size_chars <= 0:
+        raise ValueError("chunk_size_chars must be a positive integer.")
+    if overlap_chars < 0:
+        raise ValueError("overlap_chars must be a non-negative integer.")
+    if overlap_chars >= chunk_size_chars:
+        raise ValueError("overlap_chars must be less than chunk_size_chars.")
+
+    if not text:
+        return []
+
+    chunks: List[str] = []
+    current_idx = 0
+    
+    # Effective step must be positive due to validation overlap_chars < chunk_size_chars
+    effective_step = chunk_size_chars - overlap_chars
+
+    while current_idx < len(text):
+        chunk = text[current_idx : current_idx + chunk_size_chars]
+        chunks.append(chunk)
+        
+        # If the end of the current chunk is at or beyond the end of the text,
+        # it's the last chunk.
+        if current_idx + chunk_size_chars >= len(text):
+            break
+        
+        current_idx += effective_step
+        # If current_idx itself becomes >= len(text) after stepping,
+        # the 'while' condition will handle termination before next iteration if step is large.
+        # However, the current logic ensures at least one chunk is added if text is not empty.
+
+    return chunks
