@@ -12,14 +12,8 @@ warnings.filterwarnings(
     # category=UserWarning # category can be added if we are sure it's always UserWarning
 )
 
-# Conditional import based on how the script is run
-if __package__ is None or __package__ == "":
-    # Executed as a script (e.g., python simgrep/main.py)
-    # Assumes processor.py is in the same directory.
-    from processor import extract_text_from_file, chunk_text_simple
-else:
-    # Imported as part of a package (e.g., python -m simgrep.main or when installed)
-    from .processor import extract_text_from_file, chunk_text_simple
+# Use relative import for processor module
+from .processor import extract_text_from_file, chunk_text_simple
 
 __version__ = "0.1.0"  # Placeholder version, can be updated or managed elsewhere
 

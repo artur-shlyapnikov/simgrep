@@ -77,7 +77,12 @@ class TestChunkTextSimple:
                 "abcdefghijklmnopqrstuvwxyz",
                 10,
                 3,
-                ["abcdefghij", "hijklmnopq", "opqrstuvwx", "uvwxyz"],
+                [
+                    "abcdefghij",
+                    "hijklmnopq",
+                    "opqrstuvwx",
+                    "vwxyz",
+                ],  # Corrected last chunk
             ),
             # Text shorter than chunk size
             ("abc", 10, 3, ["abc"]),
@@ -111,24 +116,8 @@ class TestChunkTextSimple:
                 "abcdefghij",
                 5,
                 2,
-                ["abcde", "defgh", "fghij"],
+                ["abcde", "defgh", "ghij"],  # Corrected last chunk
             ),  # text len 10, chunk 5, overlap 2, step 3
-            # 0-4 (abcde), 3-7 (defgh), 6-10 (fghij)
-            # Another overlap case
-            (
-                "This is a test string for chunking.",
-                10,
-                2,
-                [
-                    "This is a ",  # 0
-                    "is a test ",  # 8
-                    " test stri",  # 16
-                    "t string f",  # 24
-                    "ring for c",  # 32
-                    " for chun",  # 40
-                    " chunking.",  # 46
-                ],
-            ),
             ("12345", 5, 0, ["12345"]),
             (
                 "1234567890",
@@ -152,15 +141,11 @@ class TestChunkTextSimple:
     @pytest.mark.parametrize(
         "text, chunk_size, overlap, expected_chunks_manual_check",
         [
-            # Case from implementation plan D1.2 example (manual check)
-            # "Hello world. This is a test." chunk_size=20, overlap=5
-            # "Hello world. This i" (0-19)
-            # "ld. This is a test." (15-31)
             (
                 "Hello world. This is a test.",
                 20,
                 5,
-                ["Hello world. This i", "ld. This is a test."],
+                ["Hello world. This is", "is is a test."],
             ),
         ],
     )
