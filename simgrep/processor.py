@@ -54,17 +54,24 @@ def chunk_text_simple(text: str, chunk_size_chars: int, overlap_chars: int) -> L
 
     while current_idx < len(text):
         chunk = text[current_idx : current_idx + chunk_size_chars]
-        chunks.append(chunk)
 
-        # If the end of the current chunk is at or beyond the end of the text,
-        # it's the last chunk.
-        if current_idx + chunk_size_chars >= len(text):
+        # If the chunk is empty, it means current_idx was already at or past len(text).
+        # This check is mostly a safeguard, as `while current_idx < len(text)` should prevent it.
+        if not chunk:
+            break
+
+        # Add chunk if its length is >= overlap_chars,
+        # OR if overlap_chars is 0 (any non-empty chunk is fine),
+        # OR if it's the very first chunk (even if short).
+        if len(chunk) >= overlap_chars or overlap_chars == 0 or not chunks:
+            chunks.append(chunk)
+        else:
+            # This chunk is shorter than overlap_chars, overlap_chars > 0,
+            # and it's not the first chunk.
+            # This implies it's a small trailing piece. Stop processing.
             break
 
         current_idx += effective_step
-        # If current_idx itself becomes >= len(text) after stepping,
-        # the 'while' condition will handle termination before next iteration if step is large.
-        # However, the current logic ensures at least one chunk is added if text is not empty.
 
     return chunks
 

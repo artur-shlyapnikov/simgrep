@@ -61,7 +61,7 @@ def create_inmemory_index(
     )
 
     # Prepare Labels: Use the original 0-based index of each chunk embedding as its label in USearch.
-    # USearch expects np.int64 for labels.
+    # USearch expects np.int64 for labels (referred to as keys in API).
     labels = np.arange(num_vectors, dtype=np.int64)
 
     # Add Embeddings to Index:
@@ -118,23 +118,20 @@ def search_inmemory_index(
     matches: usearch.index.Matches = index.search(vectors=processed_query_embedding, count=k)
 
     results: List[Tuple[int, float]] = []
-    if matches.labels is not None and matches.distances is not None and len(matches.labels) > 0:
+    # Use matches.keys instead of matches.labels
+    if matches.keys is not None and matches.distances is not None and len(matches.keys) > 0:
         # Iterate through the results for the single query
-        # matches.labels[0] and matches.distances[0] would be the arrays for the first query if batch
-        # For a single query search (vectors=processed_query_embedding which is (1,D)),
-        # matches.labels, matches.distances are the direct arrays of labels and distances for that query.
+        # matches.keys and matches.distances are the direct arrays for that query.
 
-        # If matches is for a single query, matches.labels is a 1D array.
-        # If matches was for a batch of queries, matches.labels would be a list of arrays or 2D array.
-        # Usearch's `Matches` object for a single query (shape (1, D) input) has:
-        # matches.labels: 1D array of labels
+        # For a single query search (vectors=processed_query_embedding which is (1,D)),
+        # matches.keys: 1D array of keys (labels)
         # matches.distances: 1D array of distances
         # matches.counts: 1D array, usually [number_of_matches_found_for_this_query]
 
-        num_found_for_query = len(matches.labels)  # or matches.counts[0] if it exists and is reliable
+        num_found_for_query = len(matches.keys)  # or matches.counts[0] if it exists and is reliable
 
         for i in range(num_found_for_query):
-            label: int = int(matches.labels[i])  # Original chunk index (key)
+            key: int = int(matches.keys[i])  # Original chunk index (key)
             distance: float = float(matches.distances[i])
 
             similarity: float
@@ -158,6 +155,6 @@ def search_inmemory_index(
                 )
                 similarity = -distance
 
-            results.append((label, similarity))
+            results.append((key, similarity))
 
     return results
