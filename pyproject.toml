@@ -10,6 +10,8 @@ dependencies = [
     "typer>=0.15.4",
     "unstructured[md]>=0.13.0",
     "sentence-transformers>=2.2.0", # Or a more recent compatible version
+    "usearch>=2.9.0", # Added usearch, specify a recent version
+    "numpy>=1.23.0",   # Added numpy, specify a version compatible with ST and Usearch
 ]
 
 [project.scripts]

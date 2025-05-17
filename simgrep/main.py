@@ -1,13 +1,32 @@
 import warnings
 from pathlib import Path
-from typing import List
+from typing import List, Tuple # Added Tuple for type hinting
 
 import numpy as np  # For type hinting (np.ndarray)
 import typer
 from rich.console import Console
+import usearch.index # For type hinting Index objects
 
-# Use relative import for processor module
-from .processor import chunk_text_simple, extract_text_from_file, generate_embeddings
+# Package-internal imports
+try:
+    # Attempt relative imports for when run as part of the package
+    from .processor import chunk_text_simple, extract_text_from_file, generate_embeddings
+    from .vector_store import create_inmemory_index, search_inmemory_index
+except ImportError:
+    # Fallback for direct script execution (e.g., `python simgrep/main.py`)
+    # This block is executed if the script is run directly and relative imports fail.
+    if __name__ == "__main__": # Only adjust path if run as script
+        import os
+        import sys
+        # Add the project root directory (parent of 'simgrep' directory) to sys.path
+        # This allows absolute imports like 'from simgrep.processor import ...'
+        sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+        from simgrep.processor import chunk_text_simple, extract_text_from_file, generate_embeddings
+        from simgrep.vector_store import create_inmemory_index, search_inmemory_index
+    else:
+        # If it's not __main__ and relative imports failed, something else is wrong.
+        # This re-raises the original ImportError.
+        raise
 
 # Filter the specific UserWarning from unstructured regarding libmagic
 # This warning is advisory and unstructured can often proceed without libmagic
@@ -185,7 +204,65 @@ def search(
             raise typer.Exit(code=1)
         # --- END NEW CODE FOR D1.3 ---
 
-        # Later phases will embed and search these chunks.
+        # --- BEGIN NEW CODE FOR D1.4 ---
+        console.print("\n[bold]Step 4: Performing In-Memory Vector Search[/bold]")
+
+        DEFAULT_K_RESULTS: int = 5 # Number of top similar chunks to fetch
+        search_matches: List[Tuple[int, float]] = [] # Initialize to empty list
+
+        # CRITICAL PRE-CHECK: Only proceed if there are chunk embeddings to index and search.
+        if chunk_embeddings.size == 0 or chunk_embeddings.shape[0] == 0:
+            console.print("  No chunk embeddings generated from the file. Skipping vector search.")
+        else:
+            try:
+                # 1. Create an in-memory USearch index
+                console.print(f"  Creating in-memory index for {chunk_embeddings.shape[0]} chunk embedding(s)...")
+                # Using default metric 'cos' and dtype 'f32' from vector_store.py
+                vector_index: usearch.index.Index = create_inmemory_index(embeddings=chunk_embeddings)
+                console.print(
+                    f"    Index created with {len(vector_index)} item(s). "
+                    f"Metric: {vector_index.metric}, DType: {str(vector_index.dtype)}" # Use str() for dtype enum
+                )
+
+                # 2. Search the index
+                console.print(f"  Searching index for top {DEFAULT_K_RESULTS} similar chunk(s)...")
+                search_matches = search_inmemory_index(
+                    index=vector_index,
+                    query_embedding=query_embedding, # query_embedding is (1, D) from D1.3
+                    k=DEFAULT_K_RESULTS
+                )
+
+                # 3. Display raw results for D1.4 verification
+                if not search_matches:
+                    console.print("  No matches found in the vector index for the query.")
+                else:
+                    console.print(f"\n[bold]Search Matches (Top {len(search_matches)}):[/bold] (Chunk Original Index, Similarity Score)")
+                    for chunk_original_idx, similarity_score in search_matches:
+                        console.print(f"  Chunk's Original Index: {chunk_original_idx}, Similarity Score: {similarity_score:.4f}")
+                        # Note: In D1.5, `chunk_original_idx` will be used to retrieve the
+                        # actual text from the `text_chunks: List[str]` list.
+
+            except ValueError as ve: # Catch specific ValueErrors from vector_store functions
+                console.print(f"[bold red]Error during vector search operation: {ve}[/bold red]")
+                # Potentially log traceback for debug mode later
+                raise typer.Exit(code=1)
+            except Exception as e: # Catch any other unexpected errors from USearch or logic
+                console.print(f"[bold red]An unexpected error occurred during vector search: {e}[/bold red]")
+                # Potentially log traceback for debug mode later
+                raise typer.Exit(code=1)
+        # --- END NEW CODE FOR D1.4 ---
+
+        # For D1.5:
+        # if search_matches:
+        #   top_chunk_info = []
+        #   for original_idx, score in search_matches:
+        #       if 0 <= original_idx < len(text_chunks): # text_chunks is List[str]
+        #           chunk_text = text_chunks[original_idx]
+        #           top_chunk_info.append({'text': chunk_text, 'score': score, 'file': path_to_search})
+        #   # Then pass top_chunk_info to formatter
+        # else:
+        #   console.print("No relevant chunks found to display.")
+
     except (
         FileNotFoundError
     ) as e:  # This might be redundant if using path_to_search.exists() check above
