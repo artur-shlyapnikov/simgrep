@@ -1,11 +1,11 @@
 import warnings
 from pathlib import Path
-from typing import List, Tuple # Added Tuple for type hinting
+from typing import List, Tuple  # Added Tuple for type hinting
 
 import numpy as np  # For type hinting (np.ndarray)
 import typer
 from rich.console import Console
-import usearch.index # For type hinting Index objects
+import usearch.index  # For type hinting Index objects
 
 # Package-internal imports
 try:
@@ -15,12 +15,13 @@ try:
 except ImportError:
     # Fallback for direct script execution (e.g., `python simgrep/main.py`)
     # This block is executed if the script is run directly and relative imports fail.
-    if __name__ == "__main__": # Only adjust path if run as script
+    if __name__ == "__main__":  # Only adjust path if run as script
         import os
         import sys
+
         # Add the project root directory (parent of 'simgrep' directory) to sys.path
         # This allows absolute imports like 'from simgrep.processor import ...'
-        sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+        sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
         from simgrep.processor import chunk_text_simple, extract_text_from_file, generate_embeddings
         from simgrep.vector_store import create_inmemory_index, search_inmemory_index
     else:
@@ -86,21 +87,15 @@ def search(
     Searches for a query within a specified text file.
     (Placeholder for D1.1 - focuses on text extraction)
     """
-    console.print(
-        f"Searching for: '[bold blue]{query_text}[/bold blue]' in file: '[green]{path_to_search}[/green]'"
-    )
+    console.print(f"Searching for: '[bold blue]{query_text}[/bold blue]' in file: '[green]{path_to_search}[/green]'")
 
     try:
         # Manual checks because exists=False was chosen for path_to_search Argument.
         if not path_to_search.exists():
-            console.print(
-                f"[bold red]Error: File not found: {path_to_search}[/bold red]"
-            )
+            console.print(f"[bold red]Error: File not found: {path_to_search}[/bold red]")
             raise typer.Exit(code=1)
         if not path_to_search.is_file():
-            console.print(
-                f"[bold red]Error: Path provided is not a file: {path_to_search}[/bold red]"
-            )
+            console.print(f"[bold red]Error: Path provided is not a file: {path_to_search}[/bold red]")
             raise typer.Exit(code=1)
 
         # Optional: Check for readability if Typer's readable=True is not used.
@@ -111,11 +106,7 @@ def search(
 
         extracted_content = extract_text_from_file(path_to_search)
         console.print("\n[bold]Extracted Content (first 500 chars):[/bold]")
-        console.print(
-            extracted_content[:500] + "..."
-            if len(extracted_content) > 500
-            else extracted_content
-        )
+        console.print(extracted_content[:500] + "..." if len(extracted_content) > 500 else extracted_content)
 
         # --- BEGIN NEW CODE FOR D1.2 ---
         # Define hardcoded chunking parameters for now
@@ -135,20 +126,12 @@ def search(
 
             console.print(f"\n[bold]Generated Chunks ({len(text_chunks)}):[/bold]")
             if not text_chunks:
-                console.print(
-                    "No chunks generated (text might be empty or too short for parameters)."
-                )
+                console.print("No chunks generated (text might be empty or too short for parameters).")
             else:
                 for i, chunk_item in enumerate(text_chunks):
                     # Displaying chunk with a bit of context, limited length for readability
-                    display_chunk = (
-                        chunk_item[:100] + "..."
-                        if len(chunk_item) > 100
-                        else chunk_item
-                    )
-                    console.print(
-                        f'  [cyan]Chunk {i + 1}:[/cyan] "{display_chunk}" (Length: {len(chunk_item)})'
-                    )
+                    display_chunk = chunk_item[:100] + "..." if len(chunk_item) > 100 else chunk_item
+                    console.print(f'  [cyan]Chunk {i + 1}:[/cyan] "{display_chunk}" (Length: {len(chunk_item)})')
 
         except ValueError as ve:
             console.print(f"[bold red]Error during chunking: {ve}[/bold red]")
@@ -157,20 +140,18 @@ def search(
 
         # --- BEGIN NEW CODE FOR D1.3 ---
         query_embedding: np.ndarray
-        chunk_embeddings: np.ndarray = np.array([]) # Initialize to an empty array
+        chunk_embeddings: np.ndarray = np.array([])  # Initialize to an empty array
 
         console.print("\n[bold]Step 3: Generating Embeddings[/bold]")
         # Model name is currently hardcoded in generate_embeddings default.
         # Future phases will make this configurable.
         # Inform user about potential first-time model download.
-        console.print(
-            "  (This may take a moment on first run if the embedding model needs to be downloaded...)"
-        )
+        console.print("  (This may take a moment on first run if the embedding model needs to be downloaded...)")
 
         try:
             # 1. Embed the query
             console.print(f"  Embedding query: '[italic blue]{query_text}[/italic blue]'")
-            query_embedding = generate_embeddings(texts=[query_text]) # Query text must be in a list
+            query_embedding = generate_embeddings(texts=[query_text])  # Query text must be in a list
             console.print(f"    Query embedding shape: {query_embedding.shape}")
 
             # 2. Embed the text chunks (if any)
@@ -195,10 +176,10 @@ def search(
             # At this point, query_embedding and chunk_embeddings are available.
             # For D1.3, we've printed their shapes. Subsequent deliverables will use them.
 
-        except RuntimeError as e: # Catch the specific RuntimeError from generate_embeddings
+        except RuntimeError as e:  # Catch the specific RuntimeError from generate_embeddings
             console.print(f"[bold red]Embedding Generation Failed:[/bold red] {e}")
             raise typer.Exit(code=1)
-        except Exception as e: # Catch any other unexpected errors
+        except Exception as e:  # Catch any other unexpected errors
             console.print(f"[bold red]An unexpected error occurred during embedding: {e}[/bold red]")
             # Consider logging traceback here for debugging if --verbose is implemented later
             raise typer.Exit(code=1)
@@ -207,8 +188,8 @@ def search(
         # --- BEGIN NEW CODE FOR D1.4 ---
         console.print("\n[bold]Step 4: Performing In-Memory Vector Search[/bold]")
 
-        DEFAULT_K_RESULTS: int = 5 # Number of top similar chunks to fetch
-        search_matches: List[Tuple[int, float]] = [] # Initialize to empty list
+        DEFAULT_K_RESULTS: int = 5  # Number of top similar chunks to fetch
+        search_matches: List[Tuple[int, float]] = []  # Initialize to empty list
 
         # CRITICAL PRE-CHECK: Only proceed if there are chunk embeddings to index and search.
         if chunk_embeddings.size == 0 or chunk_embeddings.shape[0] == 0:
@@ -221,32 +202,36 @@ def search(
                 vector_index: usearch.index.Index = create_inmemory_index(embeddings=chunk_embeddings)
                 console.print(
                     f"    Index created with {len(vector_index)} item(s). "
-                    f"Metric: {vector_index.metric}, DType: {str(vector_index.dtype)}" # Use str() for dtype enum
+                    f"Metric: {vector_index.metric}, DType: {str(vector_index.dtype)}"  # Use str() for dtype enum
                 )
 
                 # 2. Search the index
                 console.print(f"  Searching index for top {DEFAULT_K_RESULTS} similar chunk(s)...")
                 search_matches = search_inmemory_index(
                     index=vector_index,
-                    query_embedding=query_embedding, # query_embedding is (1, D) from D1.3
-                    k=DEFAULT_K_RESULTS
+                    query_embedding=query_embedding,  # query_embedding is (1, D) from D1.3
+                    k=DEFAULT_K_RESULTS,
                 )
 
                 # 3. Display raw results for D1.4 verification
                 if not search_matches:
                     console.print("  No matches found in the vector index for the query.")
                 else:
-                    console.print(f"\n[bold]Search Matches (Top {len(search_matches)}):[/bold] (Chunk Original Index, Similarity Score)")
+                    console.print(
+                        f"\n[bold]Search Matches (Top {len(search_matches)}):[/bold] (Chunk Original Index, Similarity Score)"
+                    )
                     for chunk_original_idx, similarity_score in search_matches:
-                        console.print(f"  Chunk's Original Index: {chunk_original_idx}, Similarity Score: {similarity_score:.4f}")
+                        console.print(
+                            f"  Chunk's Original Index: {chunk_original_idx}, Similarity Score: {similarity_score:.4f}"
+                        )
                         # Note: In D1.5, `chunk_original_idx` will be used to retrieve the
                         # actual text from the `text_chunks: List[str]` list.
 
-            except ValueError as ve: # Catch specific ValueErrors from vector_store functions
+            except ValueError as ve:  # Catch specific ValueErrors from vector_store functions
                 console.print(f"[bold red]Error during vector search operation: {ve}[/bold red]")
                 # Potentially log traceback for debug mode later
                 raise typer.Exit(code=1)
-            except Exception as e: # Catch any other unexpected errors from USearch or logic
+            except Exception as e:  # Catch any other unexpected errors from USearch or logic
                 console.print(f"[bold red]An unexpected error occurred during vector search: {e}[/bold red]")
                 # Potentially log traceback for debug mode later
                 raise typer.Exit(code=1)
@@ -263,12 +248,8 @@ def search(
         # else:
         #   console.print("No relevant chunks found to display.")
 
-    except (
-        FileNotFoundError
-    ) as e:  # This might be redundant if using path_to_search.exists() check above
-        console.print(
-            f"[bold red]Error: {e}[/bold red]"
-        )  # processor.py also raises FileNotFoundError
+    except FileNotFoundError as e:  # This might be redundant if using path_to_search.exists() check above
+        console.print(f"[bold red]Error: {e}[/bold red]")  # processor.py also raises FileNotFoundError
         raise typer.Exit(code=1)
     except RuntimeError as e:  # Catching the re-raised error from processor
         console.print(f"[bold red]Error during text extraction: {e}[/bold red]")

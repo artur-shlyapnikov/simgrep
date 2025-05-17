@@ -65,9 +65,7 @@ def create_inmemory_index(
     labels = np.arange(num_vectors, dtype=np.int64)
 
     # Add Embeddings to Index:
-    index.add(
-        keys=labels, vectors=embeddings
-    )  # `keys` is the parameter name in usearch for labels
+    index.add(keys=labels, vectors=embeddings)  # `keys` is the parameter name in usearch for labels
 
     return index
 
@@ -106,16 +104,10 @@ def search_inmemory_index(
 
     processed_query_embedding = query_embedding
     if processed_query_embedding.ndim == 1:
-        processed_query_embedding = np.expand_dims(
-            processed_query_embedding, axis=0
-        )  # Reshape (D,) to (1, D)
+        processed_query_embedding = np.expand_dims(processed_query_embedding, axis=0)  # Reshape (D,) to (1, D)
 
-    if (
-        processed_query_embedding.shape[0] != 1
-    ):  # Ensure it's a single query for this simple case
-        raise ValueError(
-            f"Expected a single query embedding, but got batch of {processed_query_embedding.shape[0]}."
-        )
+    if processed_query_embedding.shape[0] != 1:  # Ensure it's a single query for this simple case
+        raise ValueError(f"Expected a single query embedding, but got batch of {processed_query_embedding.shape[0]}.")
     if processed_query_embedding.shape[1] != index.ndim:
         raise ValueError(
             f"Query embedding dimension ({processed_query_embedding.shape[1]}) "
@@ -123,16 +115,10 @@ def search_inmemory_index(
         )
 
     # `count` is the parameter name for k in usearch's search method
-    matches: usearch.index.Matches = index.search(
-        vectors=processed_query_embedding, count=k
-    )
+    matches: usearch.index.Matches = index.search(vectors=processed_query_embedding, count=k)
 
     results: List[Tuple[int, float]] = []
-    if (
-        matches.labels is not None
-        and matches.distances is not None
-        and len(matches.labels) > 0
-    ):
+    if matches.labels is not None and matches.distances is not None and len(matches.labels) > 0:
         # Iterate through the results for the single query
         # matches.labels[0] and matches.distances[0] would be the arrays for the first query if batch
         # For a single query search (vectors=processed_query_embedding which is (1,D)),
@@ -145,9 +131,7 @@ def search_inmemory_index(
         # matches.distances: 1D array of distances
         # matches.counts: 1D array, usually [number_of_matches_found_for_this_query]
 
-        num_found_for_query = len(
-            matches.labels
-        )  # or matches.counts[0] if it exists and is reliable
+        num_found_for_query = len(matches.labels)  # or matches.counts[0] if it exists and is reliable
 
         for i in range(num_found_for_query):
             label: int = int(matches.labels[i])  # Original chunk index (key)

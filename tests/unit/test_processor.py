@@ -54,9 +54,7 @@ class TestExtractTextFromFile:
             extract_text_from_file(non_existent_file)
 
     def test_extract_from_directory(self, temp_dir: Path):
-        with pytest.raises(
-            FileNotFoundError, match=f"File not found or is not a file: {temp_dir}"
-        ):
+        with pytest.raises(FileNotFoundError, match=f"File not found or is not a file: {temp_dir}"):
             extract_text_from_file(temp_dir)
 
     # Consider mocking unstructured.partition.auto.partition for error case if needed,
@@ -133,9 +131,7 @@ class TestChunkTextSimple:
             ),  # Step 1
         ],
     )
-    def test_chunking_logic(
-        self, text: str, chunk_size: int, overlap: int, expected_chunks: List[str]
-    ):
+    def test_chunking_logic(self, text: str, chunk_size: int, overlap: int, expected_chunks: List[str]):
         assert chunk_text_simple(text, chunk_size, overlap) == expected_chunks
 
     @pytest.mark.parametrize(
@@ -156,9 +152,7 @@ class TestChunkTextSimple:
         overlap: int,
         expected_chunks_manual_check: List[str],
     ):
-        assert (
-            chunk_text_simple(text, chunk_size, overlap) == expected_chunks_manual_check
-        )
+        assert chunk_text_simple(text, chunk_size, overlap) == expected_chunks_manual_check
 
     @pytest.mark.parametrize(
         "chunk_size, overlap, error_message_match",
@@ -170,9 +164,7 @@ class TestChunkTextSimple:
             (10, 11, "overlap_chars must be less than chunk_size_chars."),
         ],
     )
-    def test_invalid_parameters(
-        self, chunk_size: int, overlap: int, error_message_match: str
-    ):
+    def test_invalid_parameters(self, chunk_size: int, overlap: int, error_message_match: str):
         with pytest.raises(ValueError, match=error_message_match):
             chunk_text_simple("some text", chunk_size, overlap)
 
@@ -187,9 +179,7 @@ class TestChunkTextSimple:
         text = "abc"
         chunk_size = 1
         overlap = 1  # overlap must be less than chunk_size
-        with pytest.raises(
-            ValueError, match="overlap_chars must be less than chunk_size_chars."
-        ):
+        with pytest.raises(ValueError, match="overlap_chars must be less than chunk_size_chars."):
             chunk_text_simple(text, chunk_size, overlap)
 
     def test_long_text_consistency(self):

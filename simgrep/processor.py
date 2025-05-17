@@ -32,9 +32,7 @@ def extract_text_from_file(file_path: Path) -> str:
         raise RuntimeError(f"Failed to extract text from {file_path}") from e
 
 
-def chunk_text_simple(
-    text: str, chunk_size_chars: int, overlap_chars: int
-) -> List[str]:
+def chunk_text_simple(text: str, chunk_size_chars: int, overlap_chars: int) -> List[str]:
     """
     Splits a given text into a list of overlapping character-based chunks.
     """
@@ -71,9 +69,7 @@ def chunk_text_simple(
     return chunks
 
 
-def generate_embeddings(
-    texts: List[str], model_name: str = "all-MiniLM-L6-v2"
-) -> np.ndarray:
+def generate_embeddings(texts: List[str], model_name: str = "all-MiniLM-L6-v2") -> np.ndarray:
     """
     Generates vector embeddings for a list of input texts using a specified
     sentence-transformer model.
