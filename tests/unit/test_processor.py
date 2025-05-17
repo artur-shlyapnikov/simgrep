@@ -56,17 +56,19 @@ def binary_zip_file(tmp_path: Path) -> Path:
         f.write(zip_buffer.getvalue())
     return file_path
 
+
 @pytest.fixture
 def large_repetitive_file(tmp_path: Path) -> Path:
     file_path = tmp_path / "large_repetitive.txt"
     # Create a 1MB file (approx) with repetitive content
     # 100 chars * 10000 reps = 1,000,000 chars = ~1MB
     pattern = "This is a highly repetitive short sentence that will be repeated many times to make the file large. "
-    repetitions = 10000 # (len(pattern) is 100)
+    repetitions = 10000  # (len(pattern) is 100)
     with open(file_path, "w", encoding="utf-8") as f:
         for _ in range(repetitions):
             f.write(pattern)
     return file_path
+
 
 @pytest.fixture
 def file_with_unicode_name(tmp_path: Path) -> Path:
@@ -121,7 +123,7 @@ class TestExtractTextFromFile:
         except UnicodeDecodeError as e:
             pytest.fail(f"Unhandled UnicodeDecodeError for non-UTF-8 file: {e}")
 
-    @pytest.mark.timeout(10) # Protect against hangs
+    @pytest.mark.timeout(10)  # Protect against hangs
     def test_pathological_binary_file_zip(self, binary_zip_file: Path):
         # unstructured might try to parse zip files if it has the capability.
         # We expect it to either extract text (if any parsable parts) or return empty/minimal,
@@ -142,7 +144,7 @@ class TestExtractTextFromFile:
         except Exception as e:
             pytest.fail(f"extract_text_from_file failed unexpectedly on binary (zip) file: {e}")
 
-    @pytest.mark.timeout(20) # Allow more time for larger file
+    @pytest.mark.timeout(20)  # Allow more time for larger file
     def test_very_large_repetitive_file(self, large_repetitive_file: Path):
         try:
             content = extract_text_from_file(large_repetitive_file)
@@ -154,7 +156,7 @@ class TestExtractTextFromFile:
             # implying most of it was read.
             # len(pattern) = 100, repetitions = 10000. Total ~1,000,000.
             # unstructured might add newlines between elements, slightly changing length.
-            assert len(content) > 900000 # Check it's mostly there
+            assert len(content) > 900000  # Check it's mostly there
         except RuntimeError as e:
             pytest.fail(f"extract_text_from_file crashed on large repetitive file: {e}")
         except Exception as e:
@@ -182,42 +184,48 @@ class TestChunkTextSimple:
                 10,
                 3,
                 [
-                    "abcdefghij", # 0-9
-                    "hijklmnopq", # 7-16
-                    "opqrstuvwx", # 14-23
-                    "vwxyz",      # 21-25
+                    "abcdefghij",  # 0-9
+                    "hijklmnopq",  # 7-16
+                    "opqrstuvwx",  # 14-23
+                    "vwxyz",  # 21-25
                 ],
             ),
             # Text shorter than chunk size
             ("abc", 10, 3, ["abc"]),
             # Exact multiple of (chunk_size - overlap) after first chunk
             (
-                "abcdefghijklmno", # len 15
-                10, # C
+                "abcdefghijklmno",  # len 15
+                10,  # C
                 5,  # O
                 # Step = C-O = 5
-                ["abcdefghij", # 0-9
-                 "fghijklmno", # 5-14
-                 "klmno"],      # 10-14
+                [
+                    "abcdefghij",  # 0-9
+                    "fghijklmno",  # 5-14
+                    "klmno",
+                ],  # 10-14
             ),
             # Last chunk smaller
             (
-                "abcdefghijkl", # len 12
-                10, # C
+                "abcdefghijkl",  # len 12
+                10,  # C
                 5,  # O
                 # Step = C-O = 5
-                ["abcdefghij", # 0-9
-                 "fghijkl"],   # 5-11
+                [
+                    "abcdefghij",  # 0-9
+                    "fghijkl",
+                ],  # 5-11
             ),
             # Zero overlap
             (
-                "abcdefghijklm", # len 13
+                "abcdefghijklm",  # len 13
                 5,  # C
                 0,  # O
                 # Step = C-O = 5
-                ["abcde", # 0-4
-                 "fghij", # 5-9
-                 "klm"],  # 10-12
+                [
+                    "abcde",  # 0-4
+                    "fghij",  # 5-9
+                    "klm",
+                ],  # 10-12
             ),
             # Empty text
             ("", 10, 3, []),
@@ -225,36 +233,42 @@ class TestChunkTextSimple:
             ("abcdefghij", 10, 0, ["abcdefghij"]),
             # Overlap makes next chunk start exactly at end (no more chunks)
             (
-                "abcdefghij", # len 10
-                5, # C
-                2, # O
+                "abcdefghij",  # len 10
+                5,  # C
+                2,  # O
                 # Step = C-O = 3
-                ["abcde", # 0-4
-                 "defgh", # 3-7
-                 "ghij"], # 6-9
+                [
+                    "abcde",  # 0-4
+                    "defgh",  # 3-7
+                    "ghij",
+                ],  # 6-9
             ),
             ("12345", 5, 0, ["12345"]),
             (
-                "1234567890", # len 10
-                5, # C
-                1, # O
+                "1234567890",  # len 10
+                5,  # C
+                1,  # O
                 # Step = C-O = 4
-                ["12345", # 0-4
-                 "56789", # 4-8
-                 "90"],   # 8-9 (text[8:8+5] -> text[8:10])
+                [
+                    "12345",  # 0-4
+                    "56789",  # 4-8
+                    "90",
+                ],  # 8-9 (text[8:8+5] -> text[8:10])
             ),
             (
-                "1234567890", # len 10
-                5, # C
-                4, # O
+                "1234567890",  # len 10
+                5,  # C
+                4,  # O
                 # Step = C-O = 1
-                ["12345", # 0-4
-                 "23456", # 1-5
-                 "34567", # 2-6
-                 "45678", # 3-7
-                 "56789", # 4-8
-                 "67890", # 5-9
-                 "7890"], # 6-9 (len 4, shorter, so last)
+                [
+                    "12345",  # 0-4
+                    "23456",  # 1-5
+                    "34567",  # 2-6
+                    "45678",  # 3-7
+                    "56789",  # 4-8
+                    "67890",  # 5-9
+                    "7890",
+                ],  # 6-9 (len 4, shorter, so last)
             ),
             # Test Case: Text Containing Only Whitespace or Newlines
             # text = '     ', C=3, O=1, S=2. L=5
@@ -266,7 +280,7 @@ class TestChunkTextSimple:
             # idx=2, chunk='   ' (2-4). idx=4.
             # idx=4, chunk=' '   (4-4). len=1 < C. break.
             ("     ", 3, 1, ["   ", "   ", " "]),
-            ("\n\n\n\n", 2, 0, ["\n\n", "\n\n"]), # 4 newlines, C=2, O=0, S=2
+            ("\n\n\n\n", 2, 0, ["\n\n", "\n\n"]),  # 4 newlines, C=2, O=0, S=2
             # text = '  \t  ', C=5, O=2, S=3. L=5
             # idx=0, chunk='  \t  ' (0-4). idx=3.
             # idx=3, chunk='  '    (3-4). len=2 < C. break.
@@ -293,7 +307,6 @@ class TestChunkTextSimple:
             # Next start: idx = 7
             # Chunk 2: "hijxxx" (text[7:13]) -> length 6. Overlap was "hij" (3 chars).
             # This still doesn't fit "last chunk is exactly overlap_chars long".
-
             # Let text_len = C + S - O where S is step C-O
             # No, let text_len = C + (N-1)*S such that the last chunk is text[ (N-1)*S : (N-1)*S + C ]
             # and we want the part of this last chunk that is new (not overlapping with previous) to be small.
@@ -320,12 +333,14 @@ class TestChunkTextSimple:
         "text, chunk_size, overlap, expected_chunks_manual_check",
         [
             (
-                "Hello world. This is a test.", # len 29
-                20, # C
+                "Hello world. This is a test.",  # len 29
+                20,  # C
                 5,  # O
                 # S = 15
-                ["Hello world. This is", # 0-19
-                 "is is a test."],      # 15-28 (text[15:15+20])
+                [
+                    "Hello world. This is",  # 0-19
+                    "is is a test.",
+                ],  # 15-28 (text[15:15+20])
             ),
         ],
     )
@@ -361,10 +376,9 @@ class TestChunkTextSimple:
         assert chunk_text_simple(text, chunk_size, overlap) == expected
 
         # Performance aspect for very long string (conceptual, not a true perf test here)
-        long_text = "a" * 200 # Small scale for unit test speed
+        long_text = "a" * 200  # Small scale for unit test speed
         expected_long = ["a"] * 200
         assert chunk_text_simple(long_text, chunk_size, overlap) == expected_long
-
 
     def test_chunk_size_one_with_overlap_error(self):
         text = "abc"
@@ -385,14 +399,14 @@ class TestChunkTextSimple:
         # Next start 990. chunk text[990:1000] (12th chunk, len 10, shorter than C)
         assert len(chunks) == 12
         assert chunks[0] == "a" * 100
-        assert chunks[1] == "a" * 100 # text[90:190]
-        assert chunks[1][0:10] == "a" * 10 # Overlap part
-        assert chunks[1][10:] == "a" * 90 # New part
+        assert chunks[1] == "a" * 100  # text[90:190]
+        assert chunks[1][0:10] == "a" * 10  # Overlap part
+        assert chunks[1][10:] == "a" * 90  # New part
 
-        assert chunks[10] == "a" * 100 # This is the chunk text[900:1000]
+        assert chunks[10] == "a" * 100  # This is the chunk text[900:1000]
         assert len(chunks[10]) == 100
 
-        assert chunks[-1] == "a" * 10 # Last chunk text[990:1000]
+        assert chunks[-1] == "a" * 10  # Last chunk text[990:1000]
         assert len(chunks[-1]) == 10
 
     def test_text_length_equals_chunk_size(self):
