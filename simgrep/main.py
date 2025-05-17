@@ -22,7 +22,7 @@ app = typer.Typer()
 console = Console()
 
 
-def version_callback(value: bool):
+def version_callback(value: bool) -> None:
     if value:
         console.print(f"simgrep version: {__version__}")
         raise typer.Exit()
@@ -37,7 +37,7 @@ def main_callback(
         is_eager=True,
         help="Show version and exit.",
     ),
-):
+) -> None:
     """
     simgrep CLI application.
     """
@@ -56,7 +56,7 @@ def search(
         resolve_path=True,
         help="The path to the text file to search within.",
     ),
-):
+) -> None:
     """
     Searches for a query within a specified text file.
     (Placeholder for D1.1 - focuses on text extraction)
