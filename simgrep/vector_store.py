@@ -11,6 +11,7 @@ import usearch.index  # For usearch.index.Index, usearch.index.Matches, usearch.
 
 def create_inmemory_index(
     embeddings: np.ndarray,
+    labels_for_usearch: np.ndarray,
     metric: str = "cos",
     dtype: str = "f32",
     # accuracy: Optional[float] = None, # Future: for tuning
@@ -24,9 +25,9 @@ def create_inmemory_index(
     Args:
         embeddings: A 2D NumPy array of shape (num_chunks, embedding_dimension)
                     containing the vector embeddings for text chunks.
-                    This function assumes `embeddings` is not empty and is correctly shaped.
-                    The caller (e.g., main.py) should handle empty/invalid `embeddings`
-                    before calling this function.
+        labels_for_usearch: A 1D NumPy array of dtype np.int64, containing the unique labels
+                            (e.g., ChunkData.usearch_label) for each embedding.
+                            Shape must match embeddings.shape[0].
         metric: The distance metric for USearch (e.g., "cos", "ip", "l2sq").
         dtype: The data type of vectors in the index (e.g., "f32", "f16").
 
@@ -34,20 +35,26 @@ def create_inmemory_index(
         A populated usearch.index.Index object.
 
     Raises:
-        ValueError: If `embeddings` is not a 2D NumPy array or if `ndim` cannot be determined.
-                    (Though pre-checks by caller should prevent this).
+        ValueError: If inputs are invalid.
     """
-    # Basic sanity check, though primary validation is expected from the caller
     if not isinstance(embeddings, np.ndarray) or embeddings.ndim != 2:
         raise ValueError("Embeddings must be a 2D NumPy array.")
+    if not isinstance(labels_for_usearch, np.ndarray) or labels_for_usearch.ndim != 1:
+        raise ValueError("labels_for_usearch must be a 1D NumPy array.")
     if embeddings.shape[0] == 0:
-        # This case should ideally be handled by the caller to avoid creating an index
-        # with an unknown ndim if embeddings.shape[1] can't be accessed.
-        # If it must be handled here, ndim would need to be passed or defaulted.
-        # For D1.4, caller handles this.
         raise ValueError("Embeddings array cannot be empty when creating an index.")
+    if embeddings.shape[0] != labels_for_usearch.shape[0]:
+        raise ValueError(
+            f"Number of embeddings ({embeddings.shape[0]}) must match number of labels ({labels_for_usearch.shape[0]})."
+        )
+    
+    # Ensure labels are np.int64 as USearch expects this for keys
+    if labels_for_usearch.dtype != np.int64:
+        processed_labels = labels_for_usearch.astype(np.int64)
+        # print("Warning: labels_for_usearch were cast to np.int64.") # Optional warning
+    else:
+        processed_labels = labels_for_usearch
 
-    num_vectors: int = embeddings.shape[0]
     num_dimensions: int = embeddings.shape[1]
 
     index = usearch.index.Index(
@@ -60,12 +67,8 @@ def create_inmemory_index(
         # expansion_search=expansion_search # ef for HNSW
     )
 
-    # Prepare Labels: Use the original 0-based index of each chunk embedding as its label in USearch.
-    # USearch expects np.int64 for labels (referred to as keys in API).
-    labels = np.arange(num_vectors, dtype=np.int64)
-
     # Add Embeddings to Index:
-    index.add(keys=labels, vectors=embeddings)  # `keys` is the parameter name in usearch for labels
+    index.add(keys=processed_labels, vectors=embeddings)  # `keys` is the parameter name in usearch for labels
 
     return index
 

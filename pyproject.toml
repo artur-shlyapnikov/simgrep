@@ -9,9 +9,10 @@ dependencies = [
     "rich>=14.0.0",
     "typer>=0.15.4",
     "unstructured[md]>=0.13.0",
-    "sentence-transformers>=2.2.0", # Or a more recent compatible version
-    "usearch>=2.9.0", # Added usearch, specify a recent version
-    "numpy>=1.23.0",   # Added numpy, specify a version compatible with ST and Usearch
+    "sentence-transformers>=2.2.0",
+    "usearch>=2.9.0",
+    "numpy>=1.23.0",
+    "duckdb>=0.10.0",
 ]
 
 [project.scripts]
@@ -21,7 +22,7 @@ simgrep = "simgrep.main:app"
 dev-dependencies = [
     "mypy>=1.15.0",
     "pytest>=8.2.0",
-    "ruff>=0.4.0,<0.5.0", # Updated ruff version constraint
+    "ruff>=0.4.0,<0.5.0",
 ]
 
 [tool.ruff]
