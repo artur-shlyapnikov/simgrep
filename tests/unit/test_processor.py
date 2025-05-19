@@ -71,6 +71,17 @@ def large_repetitive_file(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def utf8_with_bom_file(tmp_path: Path) -> Path:
+    file_content = "File with BOM."
+    file_path = tmp_path / "bom_file.txt"
+    # Write content with UTF-8 BOM
+    with open(file_path, "wb") as f:
+        f.write(codecs.BOM_UTF8)
+        f.write(file_content.encode("utf-8"))
+    return file_path
+
+
+@pytest.fixture
 def file_with_unicode_name(tmp_path: Path) -> Path:
     # File name with spaces and unicode characters (e.g., Cyrillic, emoji)
     # Most modern OS and pathlib handle these fine.
@@ -98,7 +109,9 @@ class TestExtractTextFromFile:
             extract_text_from_file(non_existent_file)
 
     def test_extract_from_directory(self, temp_dir: Path):
-        with pytest.raises(FileNotFoundError, match=f"File not found or is not a file: {temp_dir}"):
+        with pytest.raises(
+            FileNotFoundError, match=f"File not found or is not a file: {temp_dir}"
+        ):
             extract_text_from_file(temp_dir)
 
     def test_non_utf8_encoded_file(self, non_utf8_file: Path):
@@ -142,7 +155,9 @@ class TestExtractTextFromFile:
             # This is an acceptable outcome if unstructured explicitly fails on this file type.
             pass
         except Exception as e:
-            pytest.fail(f"extract_text_from_file failed unexpectedly on binary (zip) file: {e}")
+            pytest.fail(
+                f"extract_text_from_file failed unexpectedly on binary (zip) file: {e}"
+            )
 
     @pytest.mark.timeout(20)  # Allow more time for larger file
     def test_very_large_repetitive_file(self, large_repetitive_file: Path):
@@ -160,7 +175,9 @@ class TestExtractTextFromFile:
         except RuntimeError as e:
             pytest.fail(f"extract_text_from_file crashed on large repetitive file: {e}")
         except Exception as e:
-            pytest.fail(f"extract_text_from_file failed unexpectedly on large repetitive file: {e}")
+            pytest.fail(
+                f"extract_text_from_file failed unexpectedly on large repetitive file: {e}"
+            )
 
     def test_file_with_unicode_name_handling(self, file_with_unicode_name: Path):
         # This test primarily ensures that `str(file_path)` and its use in
@@ -171,6 +188,15 @@ class TestExtractTextFromFile:
             assert content == "Content of file with unicode name."
         except Exception as e:
             pytest.fail(f"extract_text_from_file failed on file with unicode name: {e}")
+
+    def test_extract_from_utf8_with_bom_file(self, utf8_with_bom_file: Path):
+        # unstructured should handle UTF-8 BOM transparently.
+        expected_content = "File with BOM."
+        try:
+            content = extract_text_from_file(utf8_with_bom_file)
+            assert content == expected_content
+        except Exception as e:
+            pytest.fail(f"extract_text_from_file failed on UTF-8 file with BOM: {e}")
 
 
 # Tests for chunk_text_simple
@@ -324,9 +350,17 @@ class TestChunkTextSimple:
             # idx=3. C2: "defghijklm" (3-12)
             # idx=6. C3: "ghijklm" (6-12). Length 7. This is O.
             ("abcdefghijklm", 10, 7, ["abcdefghij", "defghijklm", "ghijklm"]),
+            # Test Case: Text length slightly greater than chunk_size
+            # Text: "abcdefghijk" (length 11)
+            # C=10, O=3, S=7
+            # 1. idx=0. chunk=text[0:10]="abcdefghij". Add. idx=7.
+            # 2. idx=7. chunk=text[7:11]="hijk". Add. idx=14. Loop ends.
+            ("abcdefghijk", 10, 3, ["abcdefghij", "hijk"]),
         ],
     )
-    def test_chunking_logic(self, text: str, chunk_size: int, overlap: int, expected_chunks: List[str]):
+    def test_chunking_logic(
+        self, text: str, chunk_size: int, overlap: int, expected_chunks: List[str]
+    ):
         assert chunk_text_simple(text, chunk_size, overlap) == expected_chunks
 
     @pytest.mark.parametrize(
@@ -351,7 +385,9 @@ class TestChunkTextSimple:
         overlap: int,
         expected_chunks_manual_check: List[str],
     ):
-        assert chunk_text_simple(text, chunk_size, overlap) == expected_chunks_manual_check
+        assert (
+            chunk_text_simple(text, chunk_size, overlap) == expected_chunks_manual_check
+        )
 
     @pytest.mark.parametrize(
         "chunk_size, overlap, error_message_match",
@@ -363,7 +399,9 @@ class TestChunkTextSimple:
             (10, 11, "overlap_chars must be less than chunk_size_chars."),
         ],
     )
-    def test_invalid_parameters(self, chunk_size: int, overlap: int, error_message_match: str):
+    def test_invalid_parameters(
+        self, chunk_size: int, overlap: int, error_message_match: str
+    ):
         with pytest.raises(ValueError, match=error_message_match):
             chunk_text_simple("some text", chunk_size, overlap)
 
@@ -384,7 +422,9 @@ class TestChunkTextSimple:
         text = "abc"
         chunk_size = 1
         overlap = 1  # overlap must be less than chunk_size
-        with pytest.raises(ValueError, match="overlap_chars must be less than chunk_size_chars."):
+        with pytest.raises(
+            ValueError, match="overlap_chars must be less than chunk_size_chars."
+        ):
             chunk_text_simple(text, chunk_size, overlap)
 
     def test_long_text_consistency(self):
