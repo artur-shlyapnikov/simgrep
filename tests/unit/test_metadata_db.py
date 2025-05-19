@@ -114,10 +114,25 @@ class TestMetadataDB:
         file_path = tmp_path / "unique_test.txt"
         file_path.touch()
         metadata1 = [(0, file_path)]
-        metadata2 = [(1, file_path)]
+        metadata2 = [(1, file_path)] # Different file_id, same path
 
         batch_insert_files(db_conn, metadata1)
-        with pytest.raises(duckdb.ConstraintException):
+        # temp_files.file_path has a UNIQUE constraint
+        with pytest.raises(duckdb.ConstraintException, match="violates unique constraint"):
+            batch_insert_files(db_conn, metadata2)
+
+    def test_batch_insert_files_duplicate_file_id(self, db_conn: duckdb.DuckDBPyConnection, tmp_path: pathlib.Path):
+        file_path1 = tmp_path / "file_A.txt"
+        file_path1.touch()
+        file_path2 = tmp_path / "file_B.txt"
+        file_path2.touch()
+        
+        metadata1 = [(0, file_path1)]
+        metadata2 = [(0, file_path2)] # Same file_id, different path
+
+        batch_insert_files(db_conn, metadata1)
+        # temp_files.file_id is PRIMARY KEY
+        with pytest.raises(duckdb.ConstraintException, match="violates primary key constraint"):
             batch_insert_files(db_conn, metadata2)
 
 
@@ -141,9 +156,30 @@ class TestMetadataDB:
         count = db_conn.execute("SELECT COUNT(*) FROM temp_chunks;").fetchone()[0]
         assert count == 0
 
-    def test_batch_insert_chunks_fk_constraint(self, db_conn: duckdb.DuckDBPyConnection, sample_chunk_data_list: list[ChunkData]):
-        with pytest.raises(duckdb.ConstraintException):
+    def test_batch_insert_chunks_fk_constraint_violation(self, db_conn: duckdb.DuckDBPyConnection, sample_chunk_data_list: list[ChunkData]):
+        # Files are not inserted, so FK constraint on temp_chunks.file_id will fail
+        with pytest.raises(duckdb.ConstraintException, match="Violates foreign key constraint"):
             batch_insert_chunks(db_conn, sample_chunk_data_list)
+
+    def test_batch_insert_chunks_unique_constraint_chunk_id(self, db_conn: duckdb.DuckDBPyConnection, sample_files_metadata: list[tuple[int, pathlib.Path]], sample_chunk_data_list: list[ChunkData]):
+        batch_insert_files(db_conn, sample_files_metadata)
+        
+        # Create a duplicate chunk_id (usearch_label)
+        chunk_with_duplicate_id = ChunkData(
+            text="Another chunk",
+            source_file_path=sample_chunk_data_list[0].source_file_path,
+            source_file_id=sample_chunk_data_list[0].source_file_id,
+            usearch_label=sample_chunk_data_list[0].usearch_label, # Duplicate ID
+            start_char_offset=100,
+            end_char_offset=110,
+            token_count=3,
+        )
+        extended_chunk_list = sample_chunk_data_list + [chunk_with_duplicate_id]
+        
+        # temp_chunks.chunk_id is PRIMARY KEY
+        with pytest.raises(duckdb.ConstraintException, match="violates primary key constraint"):
+            batch_insert_chunks(db_conn, extended_chunk_list)
+
 
     def test_retrieve_chunk_for_display_valid_id(self, db_conn: duckdb.DuckDBPyConnection, sample_files_metadata: list[tuple[int, pathlib.Path]], sample_chunk_data_list: list[ChunkData]):
         batch_insert_files(db_conn, sample_files_metadata)
@@ -162,3 +198,37 @@ class TestMetadataDB:
     def test_retrieve_chunk_for_display_invalid_id(self, db_conn: duckdb.DuckDBPyConnection):
         retrieved = retrieve_chunk_for_display(db_conn, 99999) # Non-existent ID
         assert retrieved is None
+
+    def test_retrieve_chunk_for_display_chunk_exists_file_missing_in_db(self, db_conn: duckdb.DuckDBPyConnection, sample_files_metadata: list[tuple[int, pathlib.Path]], sample_chunk_data_list: list[ChunkData]):
+        # This scenario should ideally be prevented by FK constraints if data is inserted correctly.
+        # However, this tests robustness if the DB state is somehow inconsistent.
+        
+        # Insert only the first file
+        batch_insert_files(db_conn, [sample_files_metadata[0]])
+        
+        # Insert all chunks. Chunks referring to file_id 1 will have a dangling FK if we didn't have constraints.
+        # DuckDB's default behavior with FKs will prevent inserting chunks for file_id 1.
+        # So, we'll only insert chunks for file_id 0.
+        chunks_for_file0 = [c for c in sample_chunk_data_list if c.source_file_id == 0]
+        batch_insert_chunks(db_conn, chunks_for_file0)
+
+        # Now, manually remove the file from temp_files after chunks are inserted
+        # This simulates an inconsistent state not achievable via normal API if FKs are active.
+        # To do this, we must temporarily disable FK checks or drop the constraint.
+        # For simplicity in a unit test, we'll assume the query in retrieve_chunk_for_display
+        # might encounter this if, for example, a file was deleted from temp_files
+        # *after* a chunk was inserted (which is bad DB management).
+
+        # Store the label of a chunk we expect to be deleted
+        chunk_to_retrieve_label = chunks_for_file0[0].usearch_label
+        
+        # First, delete the chunks that reference file_id = 0
+        db_conn.execute("DELETE FROM temp_chunks WHERE file_id = 0;")
+        # Then, delete the file itself. This should now succeed.
+        db_conn.execute("DELETE FROM temp_files WHERE file_id = 0;")
+        
+        # Try to retrieve a chunk that was linked to the now-deleted file_id 0 and whose record was deleted
+        retrieved = retrieve_chunk_for_display(db_conn, chunk_to_retrieve_label)
+        
+        # The JOIN should fail to find a match in temp_files (and temp_chunks), so result should be None
+        assert retrieved is None, "Should not retrieve chunk if its corresponding file_id is missing from temp_files or chunk itself is deleted"

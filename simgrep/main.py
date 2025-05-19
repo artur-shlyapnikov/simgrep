@@ -7,6 +7,7 @@ from typing import (
     Dict,
     Optional,
 )
+from enum import Enum
 
 import numpy as np
 import typer
@@ -25,7 +26,7 @@ try:
         ProcessedChunkInfo,
     )
     from .vector_store import create_inmemory_index, search_inmemory_index
-    from .formatter import format_show_basic
+    from .formatter import format_show_basic, format_paths
     from .metadata_db import (
         create_inmemory_db_connection,
         setup_ephemeral_tables,
@@ -51,7 +52,7 @@ except ImportError:
             ProcessedChunkInfo,
         )
         from simgrep.vector_store import create_inmemory_index, search_inmemory_index
-        from simgrep.formatter import format_show_basic
+        from simgrep.formatter import format_show_basic, format_paths
         from simgrep.metadata_db import (
             create_inmemory_db_connection,
             setup_ephemeral_tables,
@@ -75,6 +76,13 @@ __version__ = "0.1.0"
 
 app = typer.Typer()
 console = Console()
+
+
+class OutputMode(str, Enum):
+    show = "show"
+    paths = "paths"
+    # json = "json" # Future modes
+    # rag = "rag"   # Future modes
 
 
 EMBEDDING_MODEL_NAME: str = "all-MiniLM-L6-v2"
@@ -114,9 +122,25 @@ def search(
         file_okay=True,
         dir_okay=True,
         readable=True,
-        resolve_path=True,
+        resolve_path=True, # Ensures path_to_search is absolute and symlinks resolved
         help="The path to the text file or directory to search within.",
     ),
+    output: OutputMode = typer.Option(
+        OutputMode.show, # Default output mode
+        "--output",
+        "-o",
+        help="Output mode. 'paths' mode lists unique, sorted file paths containing matches.",
+        case_sensitive=False,
+    ),
+    relative_paths: bool = typer.Option(
+        False,
+        "--relative-paths/--absolute-paths", # Provides --no-relative-paths as well
+        help=(
+            "Display relative file paths. "
+            "Paths are relative to the initial search target directory, or its parent if the target is a file. "
+            "Only used with '--output paths'."
+        ),
+    )
 ) -> None:
     """
     Searches for a query within a specified text file or files in a directory using token-based chunking
@@ -368,30 +392,67 @@ def search(
 
         console.print("\n[bold]Step 5: Displaying Results[/bold]")
 
+        if relative_paths and output != OutputMode.paths:
+            console.print(
+                "[yellow]Warning: --relative-paths is only effective with --output paths. "
+                "Paths will be displayed according to the selected output mode.[/yellow]"
+            )
+
         if not search_matches:
-            console.print(
-                "  No relevant chunks found for your query in the processed file(s)."
-            )
+            if output == OutputMode.paths:
+                console.print(format_paths(file_paths=[], use_relative=False, base_path=None)) # Handles "No matching files found."
+            else: # OutputMode.show or other future modes that might show "no results"
+                console.print(
+                    "  No relevant chunks found for your query in the processed file(s)."
+                )
         else:
-            console.print(
-                f"\n[bold cyan]Search Results (Top {len(search_matches)}):[/bold cyan]"
-            )
-            for matched_chunk_id, similarity_score in search_matches:
-                retrieved_details = retrieve_chunk_for_display(db_conn, matched_chunk_id)
+            if output == OutputMode.paths:
+                paths_from_matches: List[Path] = []
+                for matched_chunk_id, _similarity_score in search_matches:
+                    retrieved_details = retrieve_chunk_for_display(db_conn, matched_chunk_id)
+                    if retrieved_details:
+                        _text_content, retrieved_path, _start_char, _end_char = retrieved_details
+                        paths_from_matches.append(retrieved_path)
+                    else:
+                        console.print(f"[yellow]Warning: Could not retrieve path for chunk_id {matched_chunk_id}.[/yellow]")
                 
-                if retrieved_details:
-                    retrieved_text, retrieved_path, _start_offset, _end_offset = retrieved_details
-                    output_string = format_show_basic(
-                        file_path=retrieved_path,
-                        chunk_text=retrieved_text,
-                        score=similarity_score,
-                    )
-                    console.print("---")  # Visual separator
+                current_base_path_for_relativity: Optional[Path] = None
+                actual_use_relative = relative_paths
+
+                if actual_use_relative:
+                    if path_to_search.is_dir():
+                        current_base_path_for_relativity = path_to_search
+                    else: # path_to_search is a file
+                        current_base_path_for_relativity = path_to_search.parent
+                
+                output_string = format_paths(
+                    file_paths=paths_from_matches,
+                    use_relative=actual_use_relative,
+                    base_path=current_base_path_for_relativity
+                )
+                if output_string:
                     console.print(output_string)
-                else:
-                    console.print(
-                        f"[bold yellow]Warning: Could not retrieve details for chunk_id {matched_chunk_id} from DB.[/bold yellow]"
-                    )
+
+            elif output == OutputMode.show:
+                console.print(
+                    f"\n[bold cyan]Search Results (Top {len(search_matches)}):[/bold cyan]"
+                )
+                for matched_chunk_id, similarity_score in search_matches:
+                    retrieved_details = retrieve_chunk_for_display(db_conn, matched_chunk_id)
+                    
+                    if retrieved_details:
+                        retrieved_text, retrieved_path, _start_offset, _end_offset = retrieved_details
+                        output_string = format_show_basic(
+                            file_path=retrieved_path,
+                            chunk_text=retrieved_text,
+                            score=similarity_score,
+                        )
+                        console.print("---")  # Visual separator
+                        console.print(output_string)
+                    else:
+                        console.print(
+                            f"[bold yellow]Warning: Could not retrieve details for chunk_id {matched_chunk_id} from DB.[/bold yellow]"
+                        )
 
     finally:
         if db_conn:
