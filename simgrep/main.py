@@ -12,6 +12,7 @@ try:
     # Attempt relative imports for when run as part of the package
     from .processor import chunk_text_simple, extract_text_from_file, generate_embeddings
     from .vector_store import create_inmemory_index, search_inmemory_index
+    from .formatter import format_show_basic
 except ImportError:
     # Fallback for direct script execution (e.g., `python simgrep/main.py`)
     # This block is executed if the script is run directly and relative imports fail.
@@ -24,6 +25,7 @@ except ImportError:
         sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
         from simgrep.processor import chunk_text_simple, extract_text_from_file, generate_embeddings
         from simgrep.vector_store import create_inmemory_index, search_inmemory_index
+        from simgrep.formatter import format_show_basic
     else:
         # If it's not __main__ and relative imports failed, something else is wrong.
         # This re-raises the original ImportError.
@@ -237,16 +239,36 @@ def search(
                 raise typer.Exit(code=1)
         # --- END NEW CODE FOR D1.4 ---
 
-        # For D1.5:
-        # if search_matches:
-        #   top_chunk_info = []
-        #   for original_idx, score in search_matches:
-        #       if 0 <= original_idx < len(text_chunks): # text_chunks is List[str]
-        #           chunk_text = text_chunks[original_idx]
-        #           top_chunk_info.append({'text': chunk_text, 'score': score, 'file': path_to_search})
-        #   # Then pass top_chunk_info to formatter
-        # else:
-        #   console.print("No relevant chunks found to display.")
+        # --- BEGIN NEW CODE FOR D1.5 ---
+        console.print("\n[bold]Step 5: Displaying Top Search Result[/bold]")
+
+        if not text_chunks:  # If there were no chunks to begin with
+            console.print("  No text chunks were generated from the file, so no search results to display.")
+        elif not search_matches:  # If chunks existed, but no matches found by USearch
+            console.print("  No relevant chunks found for your query in the file.")
+        else:
+            # Get the top match (search_matches should be sorted by similarity by search_inmemory_index)
+            # search_matches is List[Tuple[int, float]] -> (chunk_original_idx, similarity_score)
+            top_match_original_idx, top_match_score = search_matches[0]
+
+            # Retrieve the actual text of the top matching chunk
+            # Ensure the index is valid
+            if 0 <= top_match_original_idx < len(text_chunks):
+                actual_chunk_text = text_chunks[top_match_original_idx]
+
+                # Use the formatter to create the output string
+                output_string = format_show_basic(
+                    file_path=path_to_search, chunk_text=actual_chunk_text, score=top_match_score
+                )
+                console.print("\n[bold cyan]Search Result:[/bold cyan]")
+                console.print(output_string)
+            else:
+                # This case should ideally not be reached if indexing and search are correct.
+                console.print(
+                    f"[bold red]Error: Top match index {top_match_original_idx} "
+                    f"is out of bounds for text_chunks (length {len(text_chunks)}).[/bold red]"
+                )
+        # --- END NEW CODE FOR D1.5 ---
 
     except FileNotFoundError as e:  # This might be redundant if using path_to_search.exists() check above
         console.print(f"[bold red]Error: {e}[/bold red]")  # processor.py also raises FileNotFoundError
