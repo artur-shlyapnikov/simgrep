@@ -1,7 +1,7 @@
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
-import usearch.index  # For usearch.index.Index and usearch.index.Matches
+import usearch.index  # For usearch.index.Index, usearch.index.Matches, usearch.index.BatchMatches
 
 # Consider defining constants for default USearch parameters if they are used in multiple places
 # For D1.4, defaults in function signatures are sufficient.
@@ -115,46 +115,56 @@ def search_inmemory_index(
         )
 
     # `count` is the parameter name for k in usearch's search method
-    matches: usearch.index.Matches = index.search(vectors=processed_query_embedding, count=k)
+    # `index.search` can return `Matches` (for 1D input) or `BatchMatches` (for 2D input).
+    # Our `processed_query_embedding` is always 2D (1, ndim).
+    search_result: Union[usearch.index.Matches, usearch.index.BatchMatches] = index.search(
+        vectors=processed_query_embedding, count=k
+    )
 
     results: List[Tuple[int, float]] = []
-    # Use matches.keys instead of matches.labels
-    if matches.keys is not None and matches.distances is not None and len(matches.keys) > 0:
-        # Iterate through the results for the single query
-        # matches.keys and matches.distances are the direct arrays for that query.
 
-        # For a single query search (vectors=processed_query_embedding which is (1,D)),
-        # matches.keys: 1D array of keys (labels)
-        # matches.distances: 1D array of distances
-        # matches.counts: 1D array, usually [number_of_matches_found_for_this_query]
+    actual_keys: Optional[np.ndarray] = None
+    actual_distances: Optional[np.ndarray] = None
+    num_found_for_query: int = 0
 
-        num_found_for_query = len(matches.keys)  # or matches.counts[0] if it exists and is reliable
-
+    if isinstance(search_result, usearch.index.BatchMatches):
+        # This is the expected path for (1, ndim) input.
+        # search_result.counts is a np.ndarray of shape (batch_size,)
+        if search_result.counts is not None and len(search_result.counts) > 0:
+            num_found_for_query = search_result.counts[0]
+            if num_found_for_query > 0:
+                # search_result.keys is np.ndarray of objects (arrays), shape (batch_size,)
+                actual_keys = search_result.keys[0]
+                actual_distances = search_result.distances[0]
+    elif isinstance(search_result, usearch.index.Matches):
+        # This path would be taken if input was 1D (ndim,).
+        # search_result.counts is an int for Matches.
+        # search_result.keys and .distances are 1D np.ndarrays.
+        if search_result.counts is not None: # Check for None although it's typed as int
+             num_found_for_query = search_result.counts
+        if num_found_for_query > 0: # Check num_found_for_query directly
+            actual_keys = search_result.keys
+            actual_distances = search_result.distances
+    
+    if num_found_for_query > 0 and actual_keys is not None and actual_distances is not None:
         for i in range(num_found_for_query):
-            key: int = int(matches.keys[i])  # Original chunk index (key)
-            distance: float = float(matches.distances[i])
+            key: int = int(actual_keys[i])
+            distance: float = float(actual_distances[i])
 
             similarity: float
-            metric_str = str(index.metric).lower()  # Make comparison robust
+            metric_str = str(index.metric).lower()
 
-            if "cos" in metric_str:  # e.g., "cos", "cosine"
+            if "cos" in metric_str:
                 similarity = 1.0 - distance
-            elif "ip" in metric_str:  # e.g., "ip", "inner_product"
-                # USearch's 'ip' distance is typically -1 * (inner_product).
-                # So, similarity = -distance. (Assumes higher inner product is better)
+            elif "ip" in metric_str:
                 similarity = -distance
-            elif "l2" in metric_str:  # e.g., "l2sq"
-                # Heuristic: Higher distance means less similar.
-                # This simple inversion is a basic heuristic for L2.
-                similarity = 1.0 / (1.0 + distance)  # Avoid division by zero
+            elif "l2" in metric_str:
+                similarity = 1.0 / (1.0 + distance)
             else:
-                # For unknown metrics, we might not be able to convert to a normalized similarity.
-                # Fallback: return negative distance, implying higher is better (less negative).
                 print(
                     f"Warning: Unknown metric '{index.metric}' for similarity conversion. Returning raw negative distance."
                 )
                 similarity = -distance
-
             results.append((key, similarity))
 
     return results

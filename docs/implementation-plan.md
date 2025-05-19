@@ -110,6 +110,8 @@
     * Search results should still be correct. Internally, data is now flowing through DuckDB.
     * (Optional) Add a debug flag to dump DuckDB table contents.
 
+---
+
 * **Deliverable 2.4: `--output paths` Mode**
   * **Goal:** Add an option to list unique file paths containing matches.
   * **Tasks:**

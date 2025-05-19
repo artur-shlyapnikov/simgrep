@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, TypedDict
+from typing import List, TypedDict, cast
 
 import numpy as np
 import unstructured.partition.auto as auto_partition
@@ -38,8 +38,11 @@ def load_tokenizer(model_name: str) -> PreTrainedTokenizerBase:
     Loads a Hugging Face tokenizer.
     """
     try:
-        # AutoTokenizer.from_pretrained is typed to return PreTrainedTokenizerBase
-        return AutoTokenizer.from_pretrained(model_name)
+        # AutoTokenizer.from_pretrained is typed to return Union[PreTrainedTokenizerFast, PreTrainedTokenizer]
+        # both of which are subtypes of PreTrainedTokenizerBase.
+        # We cast to satisfy mypy strict checks when it might infer Any.
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        return cast(PreTrainedTokenizerBase, tokenizer)
     except OSError as e:
         raise RuntimeError(
             f"Failed to load tokenizer for model '{model_name}'. "
