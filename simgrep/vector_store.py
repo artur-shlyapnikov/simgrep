@@ -1,12 +1,8 @@
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
-import usearch.index  # For usearch.index.Index, usearch.index.Matches, usearch.index.BatchMatches
-
-# Consider defining constants for default USearch parameters if they are used in multiple places
-# For D1.4, defaults in function signatures are sufficient.
-# DEFAULT_USEARCH_METRIC = "cos"
-# DEFAULT_USEARCH_DTYPE = "f32"
+import usearch.index
+import numpy as np
 
 
 def create_inmemory_index(
@@ -14,10 +10,6 @@ def create_inmemory_index(
     labels_for_usearch: np.ndarray,
     metric: str = "cos",
     dtype: str = "f32",
-    # accuracy: Optional[float] = None, # Future: for tuning
-    # connectivity: Optional[int] = None, # Future: for HNSW M parameter
-    # expansion_add: Optional[int] = None, # Future: for HNSW efConstruction
-    # expansion_search: Optional[int] = None # Future: for HNSW ef
 ) -> usearch.index.Index:
     """
     Creates and populates an in-memory USearch index.
@@ -51,7 +43,6 @@ def create_inmemory_index(
     # Ensure labels are np.int64 as USearch expects this for keys
     if labels_for_usearch.dtype != np.int64:
         processed_labels = labels_for_usearch.astype(np.int64)
-        # print("Warning: labels_for_usearch were cast to np.int64.") # Optional warning
     else:
         processed_labels = labels_for_usearch
 
@@ -61,14 +52,9 @@ def create_inmemory_index(
         ndim=num_dimensions,
         metric=metric,
         dtype=dtype,
-        # accuracy=accuracy, # For future tuning
-        # connectivity=connectivity, # M for HNSW
-        # expansion_add=expansion_add, # efConstruction for HNSW
-        # expansion_search=expansion_search # ef for HNSW
     )
 
-    # Add Embeddings to Index:
-    index.add(keys=processed_labels, vectors=embeddings)  # `keys` is the parameter name in usearch for labels
+    index.add(keys=processed_labels, vectors=embeddings)
 
     return index
 
@@ -101,8 +87,7 @@ def search_inmemory_index(
     if k <= 0:
         raise ValueError("k (number of results) must be a positive integer.")
 
-    # If index is empty, no search can be performed
-    if len(index) == 0:  # `len(index)` gives the number of items in the USearch index
+    if len(index) == 0:
         return []
 
     processed_query_embedding = query_embedding
@@ -117,9 +102,6 @@ def search_inmemory_index(
             f"does not match index dimension ({index.ndim})."
         )
 
-    # `count` is the parameter name for k in usearch's search method
-    # `index.search` can return `Matches` (for 1D input) or `BatchMatches` (for 2D input).
-    # Our `processed_query_embedding` is always 2D (1, ndim).
     search_result: Union[usearch.index.Matches, usearch.index.BatchMatches] = index.search(
         vectors=processed_query_embedding, count=k
     )
@@ -131,21 +113,15 @@ def search_inmemory_index(
     num_found_for_query: int = 0
 
     if isinstance(search_result, usearch.index.BatchMatches):
-        # This is the expected path for (1, ndim) input.
-        # search_result.counts is a np.ndarray of shape (batch_size,)
         if search_result.counts is not None and len(search_result.counts) > 0:
             num_found_for_query = search_result.counts[0]
             if num_found_for_query > 0:
-                # search_result.keys is np.ndarray of objects (arrays), shape (batch_size,)
                 actual_keys = search_result.keys[0]
                 actual_distances = search_result.distances[0]
     elif isinstance(search_result, usearch.index.Matches):
-        # This path would be taken if input was 1D (ndim,).
-        # search_result.counts is an int for Matches.
-        # search_result.keys and .distances are 1D np.ndarrays.
-        if search_result.counts is not None: # Check for None although it's typed as int
-             num_found_for_query = search_result.counts
-        if num_found_for_query > 0: # Check num_found_for_query directly
+        num_found_for_query = search_result.count
+        
+        if num_found_for_query > 0:
             actual_keys = search_result.keys
             actual_distances = search_result.distances
     

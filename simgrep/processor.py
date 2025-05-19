@@ -38,9 +38,6 @@ def load_tokenizer(model_name: str) -> PreTrainedTokenizerBase:
     Loads a Hugging Face tokenizer.
     """
     try:
-        # AutoTokenizer.from_pretrained is typed to return Union[PreTrainedTokenizerFast, PreTrainedTokenizer]
-        # both of which are subtypes of PreTrainedTokenizerBase.
-        # We cast to satisfy mypy strict checks when it might infer Any.
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         return cast(PreTrainedTokenizerBase, tokenizer)
     except OSError as e:
@@ -70,11 +67,6 @@ def chunk_text_by_tokens(
     if not full_text.strip():
         return []
 
-    # Tokenize the entire text, getting input IDs and offset mappings.
-    # add_special_tokens=False is important as we are chunking raw content.
-    # The sentence-embedding model will later add its own special tokens (CLS, SEP)
-    # when processing the final chunk text for embedding.
-    # truncation=False ensures we process the entire text.
     encoding = tokenizer(
         full_text,
         return_offsets_mapping=True,
@@ -85,11 +77,11 @@ def chunk_text_by_tokens(
     all_token_ids = encoding.input_ids
     all_offsets = encoding.offset_mapping
 
-    if not all_token_ids: # e.g., text contained only characters the tokenizer ignores
+    if not all_token_ids:
         return []
 
     chunks: List[ProcessedChunkInfo] = []
-    step = chunk_size_tokens - overlap_tokens # Must be > 0 due to prior validation
+    step = chunk_size_tokens - overlap_tokens
 
     current_token_idx = 0
     while current_token_idx < len(all_token_ids):
@@ -98,7 +90,7 @@ def chunk_text_by_tokens(
         chunk_token_ids_batch = all_token_ids[current_token_idx : token_slice_end]
         chunk_offsets_batch = all_offsets[current_token_idx : token_slice_end]
 
-        if not chunk_token_ids_batch: # Reached the end, slice is empty
+        if not chunk_token_ids_batch:
             break
 
         # Determine character offsets for the current chunk
@@ -107,16 +99,8 @@ def chunk_text_by_tokens(
         # The last token's end offset is the chunk's end
         end_char = chunk_offsets_batch[-1][1]
         
-        # Decode the token IDs to get the chunk text
-        # skip_special_tokens=True is good practice here, though we used add_special_tokens=False
         chunk_text = tokenizer.decode(chunk_token_ids_batch, skip_special_tokens=True)
         
-        # Sanity check (optional, can be commented out for performance)
-        # if chunk_text != full_text[start_char:end_char]:
-        #     print(f"Warning: Decoded text mismatch for chunk. "
-        #           f"Tokenizer decoded: '{chunk_text}', "
-        #           f"Direct slice: '{full_text[start_char:end_char]}'")
-
         num_tokens_in_this_chunk = len(chunk_token_ids_batch)
 
         chunks.append(ProcessedChunkInfo(

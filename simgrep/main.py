@@ -5,7 +5,7 @@ from typing import (
     Tuple,
     Any,
     Dict,
-    Optional, # Added Optional
+    Optional,
 )
 
 import numpy as np
@@ -26,7 +26,7 @@ try:
     )
     from .vector_store import create_inmemory_index, search_inmemory_index
     from .formatter import format_show_basic
-    from .metadata_db import ( # Added metadata_db imports
+    from .metadata_db import (
         create_inmemory_db_connection,
         setup_ephemeral_tables,
         batch_insert_files,
@@ -52,7 +52,7 @@ except ImportError:
         )
         from simgrep.vector_store import create_inmemory_index, search_inmemory_index
         from simgrep.formatter import format_show_basic
-        from simgrep.metadata_db import ( # Added metadata_db imports for fallback
+        from simgrep.metadata_db import (
             create_inmemory_db_connection,
             setup_ephemeral_tables,
             batch_insert_files,
@@ -77,7 +77,6 @@ app = typer.Typer()
 console = Console()
 
 
-# TODO: Phase X - Make these configurable (e.g., via config file, CLI options)
 EMBEDDING_MODEL_NAME: str = "all-MiniLM-L6-v2"
 CHUNK_SIZE_TOKENS: int = 128
 OVERLAP_TOKENS: int = 20
@@ -205,7 +204,7 @@ def search(
                         chunk_data_item = ChunkData(
                             text=partial_chunk["text"],
                             source_file_path=file_path_item,
-                            source_file_id=file_idx,  # Ephemeral ID for this processing run
+                            source_file_id=file_idx,
                             usearch_label=global_usearch_label_counter,
                             start_char_offset=partial_chunk["start_char_offset"],
                             end_char_offset=partial_chunk["end_char_offset"],
@@ -326,7 +325,7 @@ def search(
 
         # --- In-Memory Vector Search ---
         console.print("\n[bold]Step 4: Performing In-Memory Vector Search[/bold]")
-        search_matches: List[Tuple[int, float]] = [] # (matched_chunk_id, similarity_score)
+        search_matches: List[Tuple[int, float]] = []
 
         if chunk_embeddings.size == 0 or chunk_embeddings.shape[0] == 0:
             console.print("  No chunk embeddings available. Skipping vector search.")
@@ -378,7 +377,6 @@ def search(
                 f"\n[bold cyan]Search Results (Top {len(search_matches)}):[/bold cyan]"
             )
             for matched_chunk_id, similarity_score in search_matches:
-                # matched_chunk_id is the ChunkData.usearch_label
                 retrieved_details = retrieve_chunk_for_display(db_conn, matched_chunk_id)
                 
                 if retrieved_details:

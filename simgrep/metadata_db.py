@@ -7,8 +7,6 @@ import duckdb
 try:
     from .models import ChunkData
 except ImportError:
-    # Fallback for potential direct script execution or different project structure
-    # This path might be hit if running this file directly for isolated tests in the future.
     from simgrep.models import ChunkData
 
 
@@ -23,7 +21,6 @@ def setup_ephemeral_tables(conn: duckdb.DuckDBPyConnection) -> None:
     These tables are designed for a single ephemeral search operation.
     """
     # temp_files: Stores information about each unique file processed.
-    # file_id is the ephemeral ID (e.g., index from enumerate(files_to_process)).
     conn.execute(
         """
         CREATE TABLE temp_files (
@@ -34,8 +31,6 @@ def setup_ephemeral_tables(conn: duckdb.DuckDBPyConnection) -> None:
     )
 
     # temp_chunks: Stores detailed information about each chunk.
-    # chunk_id is the ChunkData.usearch_label, serving as the primary key.
-    # file_id links back to temp_files.
     conn.execute(
         """
         CREATE TABLE temp_chunks (
@@ -49,8 +44,6 @@ def setup_ephemeral_tables(conn: duckdb.DuckDBPyConnection) -> None:
         );
     """
     )
-    # Consider adding indexes if performance becomes an issue, though unlikely for ephemeral.
-    # conn.execute("CREATE INDEX idx_chunk_file_id ON temp_chunks(file_id);")
 
 
 def batch_insert_files(
@@ -64,16 +57,14 @@ def batch_insert_files(
     """
     if not files_metadata:
         return
-    # Convert Path objects to strings for DB insertion.
     data_to_insert = [(fid, str(fp.resolve())) for fid, fp in files_metadata]
     try:
         conn.executemany(
             "INSERT INTO temp_files (file_id, file_path) VALUES (?, ?)", data_to_insert
         )
     except duckdb.Error as e:
-        # Handle potential DB errors, e.g., unique constraint violation if logic is flawed
         print(f"DuckDB error during batch file insert: {e}")
-        raise  # Re-raise to signal failure
+        raise
 
 
 def batch_insert_chunks(
@@ -89,9 +80,9 @@ def batch_insert_chunks(
         return
     data_to_insert = [
         (
-            chunk.usearch_label,  # chunk_id (PK)
-            chunk.source_file_id,  # file_id (FK)
-            chunk.text,  # text_content
+            chunk.usearch_label,
+            chunk.source_file_id,
+            chunk.text,
             chunk.start_char_offset,
             chunk.end_char_offset,
             chunk.token_count,
@@ -110,9 +101,7 @@ def batch_insert_chunks(
 
 def retrieve_chunk_for_display(
     conn: duckdb.DuckDBPyConnection, chunk_id: int
-) -> Optional[
-    Tuple[str, pathlib.Path, int, int]
-]:  # text, path, start_offset, end_offset
+) -> Optional[Tuple[str, pathlib.Path, int, int]]:
     """
     Retrieves necessary chunk details for display, given a chunk_id.
     """

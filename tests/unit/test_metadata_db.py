@@ -70,7 +70,6 @@ class TestMetadataDB:
         try:
             conn = create_inmemory_db_connection()
             assert isinstance(conn, duckdb.DuckDBPyConnection)
-            # Simple query to check if connection is usable
             assert conn.execute("SELECT 42;").fetchone()[0] == 42
         finally:
             if conn:
@@ -83,13 +82,11 @@ class TestMetadataDB:
         assert "temp_files" in table_names
         assert "temp_chunks" in table_names
 
-        # Check temp_files schema (basic check)
         files_columns = db_conn.execute("DESCRIBE temp_files;").fetchall()
         files_column_names = [col[0] for col in files_columns]
         assert "file_id" in files_column_names
         assert "file_path" in files_column_names
 
-        # Check temp_chunks schema (basic check)
         chunks_columns = db_conn.execute("DESCRIBE temp_chunks;").fetchall()
         chunks_column_names = [col[0] for col in chunks_columns]
         assert "chunk_id" in chunks_column_names
@@ -102,7 +99,6 @@ class TestMetadataDB:
         count = db_conn.execute("SELECT COUNT(*) FROM temp_files;").fetchone()[0]
         assert count == len(sample_files_metadata)
 
-        # Verify content of one entry
         file_id_to_check = sample_files_metadata[0][0]
         expected_path = str(sample_files_metadata[0][1].resolve())
         result = db_conn.execute("SELECT file_path FROM temp_files WHERE file_id = ?;", [file_id_to_check]).fetchone()
@@ -118,22 +114,21 @@ class TestMetadataDB:
         file_path = tmp_path / "unique_test.txt"
         file_path.touch()
         metadata1 = [(0, file_path)]
-        metadata2 = [(1, file_path)] # Same path, different ID - should violate UNIQUE on file_path
+        metadata2 = [(1, file_path)]
 
-        batch_insert_files(db_conn, metadata1) # This should succeed
-        with pytest.raises(duckdb.ConstraintException): # DuckDB raises ConstraintException for unique violations
+        batch_insert_files(db_conn, metadata1)
+        with pytest.raises(duckdb.ConstraintException):
             batch_insert_files(db_conn, metadata2)
 
 
     def test_batch_insert_chunks(self, db_conn: duckdb.DuckDBPyConnection, sample_files_metadata: list[tuple[int, pathlib.Path]], sample_chunk_data_list: list[ChunkData]):
-        # Prerequisite: insert files first for FK constraint
+        # Insert files first to satisfy the foreign key constraint for chunks
         batch_insert_files(db_conn, sample_files_metadata)
         batch_insert_chunks(db_conn, sample_chunk_data_list)
 
         count = db_conn.execute("SELECT COUNT(*) FROM temp_chunks;").fetchone()[0]
         assert count == len(sample_chunk_data_list)
 
-        # Verify content of one chunk
         chunk_to_check = sample_chunk_data_list[0]
         result = db_conn.execute("SELECT text_content, file_id, start_char_offset FROM temp_chunks WHERE chunk_id = ?;", [chunk_to_check.usearch_label]).fetchone()
         assert result is not None
@@ -147,8 +142,7 @@ class TestMetadataDB:
         assert count == 0
 
     def test_batch_insert_chunks_fk_constraint(self, db_conn: duckdb.DuckDBPyConnection, sample_chunk_data_list: list[ChunkData]):
-        # Do NOT insert files. Attempting to insert chunks should fail FK.
-        with pytest.raises(duckdb.ConstraintException): # Or duckdb.IntegrityError depending on version/context
+        with pytest.raises(duckdb.ConstraintException):
             batch_insert_chunks(db_conn, sample_chunk_data_list)
 
     def test_retrieve_chunk_for_display_valid_id(self, db_conn: duckdb.DuckDBPyConnection, sample_files_metadata: list[tuple[int, pathlib.Path]], sample_chunk_data_list: list[ChunkData]):
