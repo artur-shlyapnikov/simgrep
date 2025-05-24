@@ -220,7 +220,11 @@ def load_persistent_index(index_path: Path) -> Optional[usearch.index.Index]:
     if index_path.exists() and index_path.is_file():
         logger.info(f"Attempting to load USearch index from {index_path}")
         try:
-            index = usearch.index.Index.load(str(index_path))
+            # For usearch >= 2.9.0, load is an instance method.
+            # Create a temporary instance; load() will reconfigure it.
+            # The Index constructor defaults to ndim=0, which is fine for this.
+            index = usearch.index.Index()
+            index.load(str(index_path))
             logger.info(f"Successfully loaded USearch index from {index_path} with {len(index)} items.")
             return index
         except Exception as e:

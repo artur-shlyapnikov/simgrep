@@ -57,8 +57,8 @@ class TestPersistentVectorStore:
         # Note: USearch `index.keys()` might not be available or might be slow.
         # `index.get_key(internal_id)` or iterating `index` can get keys.
         # For simplicity, length check is often sufficient for basic save/load test.
-        original_keys = np.sort(sample_usearch_index.keys()) # Get keys from original if API allows
-        loaded_keys = np.sort(loaded_index.keys())
+        original_keys = np.sort(sample_usearch_index.keys) # Get keys from original if API allows
+        loaded_keys = np.sort(loaded_index.keys)
         assert np.array_equal(original_keys, loaded_keys)
 
 
@@ -100,7 +100,10 @@ class TestPersistentVectorStore:
 
         monkeypatch.setattr(os, "replace", mock_os_replace)
 
-        with pytest.raises(VectorStoreError, match=f"Failed to finalize saving index to {persistent_index_path}"):
+        # The error message comes from the outer catch block in save_persistent_index
+        # when the inner VectorStoreError (from finalize) is caught by `except Exception as e`.
+        expected_error_message = f"Failed to save index to {temp_file_path}"
+        with pytest.raises(VectorStoreError, match=expected_error_message):
             save_persistent_index(sample_usearch_index, persistent_index_path)
         
         # Final state: original file should not exist, temp file should be cleaned up

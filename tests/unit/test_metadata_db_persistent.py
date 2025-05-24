@@ -72,7 +72,7 @@ class TestPersistentMetadataDB:
 
             # Verify indexed_files schema
             indexed_files_schema = get_table_schema(conn, "indexed_files")
-            assert indexed_files_schema.get("file_id") == "INTEGER" # PK
+            assert indexed_files_schema.get("file_id") == "BIGINT" # PK (BIGSERIAL becomes BIGINT)
             assert indexed_files_schema.get("file_path") == "VARCHAR" # NOT NULL UNIQUE
             assert indexed_files_schema.get("content_hash") == "VARCHAR" # NOT NULL
             assert indexed_files_schema.get("file_size_bytes") == "BIGINT"
@@ -81,7 +81,7 @@ class TestPersistentMetadataDB:
 
             # Verify text_chunks schema
             text_chunks_schema = get_table_schema(conn, "text_chunks")
-            assert text_chunks_schema.get("chunk_id") == "INTEGER" # PK
+            assert text_chunks_schema.get("chunk_id") == "BIGINT" # PK (BIGSERIAL becomes BIGINT)
             assert text_chunks_schema.get("file_id") == "INTEGER" # NOT NULL FK
             assert text_chunks_schema.get("usearch_label") == "BIGINT" # NOT NULL UNIQUE
             assert text_chunks_schema.get("chunk_text_snippet") == "VARCHAR" # NOT NULL

@@ -173,7 +173,7 @@ def _create_persistent_tables_if_not_exist(conn: duckdb.DuckDBPyConnection) -> N
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS indexed_files (
-                file_id INTEGER PRIMARY KEY, -- Auto-incrementing in DuckDB
+                file_id BIGINT PRIMARY KEY,
                 file_path VARCHAR NOT NULL UNIQUE,
                 content_hash VARCHAR NOT NULL,
                 file_size_bytes BIGINT,
@@ -187,7 +187,7 @@ def _create_persistent_tables_if_not_exist(conn: duckdb.DuckDBPyConnection) -> N
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS text_chunks (
-                chunk_id INTEGER PRIMARY KEY, -- Auto-incrementing
+                chunk_id BIGINT PRIMARY KEY,
                 file_id INTEGER NOT NULL REFERENCES indexed_files(file_id),
                 usearch_label BIGINT UNIQUE NOT NULL,
                 chunk_text_snippet VARCHAR NOT NULL, -- Store empty string if no snippet
