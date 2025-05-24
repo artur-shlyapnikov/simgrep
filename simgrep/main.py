@@ -126,10 +126,10 @@ def main_callback(
         _config = load_or_create_global_config()
     except SimgrepConfigError as e:
         # Error already printed by load_or_create_global_config
-        # console.print(f"[bold red]Fatal Configuration Error:[/bold red]\n{e}", file=sys.stderr) # Redundant if config prints
+        # console.print(f"[bold red]Fatal Configuration Error:[/bold red]\n{e}") # Redundant if config prints
         raise typer.Exit(code=1)
     except Exception as e: # Catch any other unexpected errors during config load
-        console.print(f"[bold red]An unexpected error occurred during Simgrep initialization:[/bold red]\n{e}", file=sys.stderr)
+        console.print(f"[bold red]An unexpected error occurred during Simgrep initialization:[/bold red]\n{e}")
         raise typer.Exit(code=1)
 
 

@@ -173,7 +173,7 @@ def search_inmemory_index(
                 actual_keys = search_result.keys[0]
                 actual_distances = search_result.distances[0]
     elif isinstance(search_result, usearch.index.Matches): # Single query result
-        num_found_for_query = search_result.count
+        num_found_for_query = search_result.count # type: ignore[attr-defined]
         if num_found_for_query > 0:
             actual_keys = search_result.keys
             actual_distances = search_result.distances

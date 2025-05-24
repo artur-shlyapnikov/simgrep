@@ -30,7 +30,7 @@ def empty_usearch_index() -> usearch.index.Index:
 
 class TestPersistentVectorStore:
 
-    def test_save_and_load_persistent_index(self, sample_usearch_index: usearch.index.Index, persistent_index_path: pathlib.Path):
+    def test_save_and_load_persistent_index(self, sample_usearch_index: usearch.index.Index, persistent_index_path: pathlib.Path) -> None:
         """Test saving an index and then loading it back."""
         assert not persistent_index_path.exists()
         assert not persistent_index_path.parent.exists() # To check directory creation
@@ -62,7 +62,7 @@ class TestPersistentVectorStore:
         assert np.array_equal(original_keys, loaded_keys)
 
 
-    def test_save_empty_index(self, empty_usearch_index: usearch.index.Index, persistent_index_path: pathlib.Path):
+    def test_save_empty_index(self, empty_usearch_index: usearch.index.Index, persistent_index_path: pathlib.Path) -> None:
         """Test saving an empty index."""
         save_persistent_index(empty_usearch_index, persistent_index_path)
         assert persistent_index_path.exists()
@@ -72,13 +72,13 @@ class TestPersistentVectorStore:
         assert len(loaded_index) == 0
         assert loaded_index.ndim == empty_usearch_index.ndim
 
-    def test_load_persistent_index_non_existent_file(self, persistent_index_path: pathlib.Path):
+    def test_load_persistent_index_non_existent_file(self, persistent_index_path: pathlib.Path) -> None:
         """Test loading a non-existent index file returns None."""
         assert not persistent_index_path.exists()
         loaded_index = load_persistent_index(persistent_index_path)
         assert loaded_index is None
 
-    def test_save_persistent_index_directory_creation_failure(self, sample_usearch_index: usearch.index.Index, persistent_index_path: pathlib.Path):
+    def test_save_persistent_index_directory_creation_failure(self, sample_usearch_index: usearch.index.Index, persistent_index_path: pathlib.Path) -> None:
         """Test handling of OSError if index directory creation fails."""
         parent_dir_of_index_parent = persistent_index_path.parent.parent
         parent_dir_of_index_parent.mkdir(parents=True, exist_ok=True)
@@ -89,11 +89,11 @@ class TestPersistentVectorStore:
         with pytest.raises(VectorStoreError, match=f"Could not create directory for USearch index at {str(path_that_should_be_dir)}"):
             save_persistent_index(sample_usearch_index, persistent_index_path)
 
-    def test_save_persistent_index_atomic_failure_on_replace(self, sample_usearch_index: usearch.index.Index, persistent_index_path: pathlib.Path, monkeypatch):
+    def test_save_persistent_index_atomic_failure_on_replace(self, sample_usearch_index: usearch.index.Index, persistent_index_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that if os.replace fails, the temp file is cleaned up."""
         temp_file_path = persistent_index_path.with_suffix(persistent_index_path.suffix + ".tmp")
 
-        def mock_os_replace(src, dst):
+        def mock_os_replace(src: str, dst: str) -> None:
             # Simulate that temp file was created before os.replace is called
             assert temp_file_path.exists()
             raise OSError("Simulated failure during os.replace")
@@ -111,7 +111,7 @@ class TestPersistentVectorStore:
         assert not temp_file_path.exists()
 
 
-    def test_load_corrupted_index_file(self, persistent_index_path: pathlib.Path):
+    def test_load_corrupted_index_file(self, persistent_index_path: pathlib.Path) -> None:
         """Test loading a corrupted/invalid index file raises VectorStoreError."""
         persistent_index_path.parent.mkdir(parents=True, exist_ok=True)
         with open(persistent_index_path, "wb") as f:

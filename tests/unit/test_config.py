@@ -9,7 +9,7 @@ from simgrep.models import SimgrepConfig
 
 
 class TestSimgrepConfig:
-    def test_load_or_create_global_config_success(self, tmp_path: Path):
+    def test_load_or_create_global_config_success(self, tmp_path: Path) -> None:
         """
         Tests successful creation of SimgrepConfig and data directory using mocked home.
         """
@@ -38,7 +38,7 @@ class TestSimgrepConfig:
             assert expected_data_dir.exists()
             assert expected_data_dir.is_dir()
 
-    def test_load_or_create_global_config_dir_already_exists(self, tmp_path: Path):
+    def test_load_or_create_global_config_dir_already_exists(self, tmp_path: Path) -> None:
         """
         Tests that function works if the directory already exists.
         """
@@ -57,7 +57,7 @@ class TestSimgrepConfig:
             assert config.default_project_data_dir == expected_data_dir
             assert expected_data_dir.exists() # Still exists
 
-    def test_load_or_create_global_config_permission_error(self, tmp_path: Path):
+    def test_load_or_create_global_config_permission_error(self, tmp_path: Path) -> None:
         """
         Tests that SimgrepConfigError is raised if directory creation fails.
         """
@@ -87,7 +87,7 @@ class TestSimgrepConfig:
                     load_or_create_global_config()
 
 
-    def test_simgrep_config_defaults(self):
+    def test_simgrep_config_defaults(self) -> None:
         """Test that SimgrepConfig model has correct default values."""
         # This test should ideally not rely on the actual user's home.
         # We can mock expanduser here too for consistency if needed,
