@@ -152,8 +152,6 @@
   * **What to Test:**
     * Functions can be called. Test save/load of an empty/trivial index and DB.
 
----
-
 * **Deliverable 3.3: `simgrep index <path>` Command (Non-Incremental)**
   * **Goal:** Create a persistent index for a given path under the default project.
   * **Tasks:**
@@ -171,6 +169,8 @@
   * **What to Test:**
     * `simgrep index ./dir1`. Check that `~/.config/simgrep/default_project/metadata.duckdb` and `index.usearch` are created/populated.
     * (Manual) Inspect DB tables to verify content.
+
+---
 
 * **Deliverable 3.4: `simgrep search <query>` (Using Default Persistent Index)**
   * **Goal:** Search against the previously built persistent index.

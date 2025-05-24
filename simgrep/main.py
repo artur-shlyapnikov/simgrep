@@ -35,6 +35,8 @@ try:
         load_tokenizer,
     )
     from .vector_store import create_inmemory_index, search_inmemory_index
+    from .indexer import Indexer, IndexerConfig, IndexerError # New imports
+    from .models import SimgrepConfig # SimgrepConfig is used by index command
 except ImportError:
     # Fallback for running main.py directly during development
     if __name__ == "__main__":
@@ -53,7 +55,7 @@ except ImportError:
             retrieve_chunk_for_display,
             setup_ephemeral_tables,
         )
-        from simgrep.models import ChunkData
+        from simgrep.models import ChunkData, SimgrepConfig
         from simgrep.processor import (
             ProcessedChunkInfo,
             chunk_text_by_tokens,
@@ -62,6 +64,7 @@ except ImportError:
             load_tokenizer,
         )
         from simgrep.vector_store import create_inmemory_index, search_inmemory_index
+        from simgrep.indexer import Indexer, IndexerConfig, IndexerError
     else:
         raise
 
@@ -510,6 +513,63 @@ def search(
             console.print("\n[bold]Cleanup: Closing In-Memory Database[/bold]")
             db_conn.close()
             console.print("  Database connection closed.")
+
+
+@app.command()
+def index(
+    path_to_index: Path = typer.Argument(
+        ...,
+        exists=True,
+        file_okay=True,
+        dir_okay=True,
+        readable=True,
+        resolve_path=True, # Ensures path is absolute and symlinks resolved
+        help="The path to the file or directory to index.",
+    )
+) -> None:
+    """
+    Creates or updates a persistent index for the specified path in the default project.
+    WARNING: This command currently WIPES all existing data in the default project and re-indexes from scratch.
+    """
+    console.print(f"Starting indexing for path: [green]{path_to_index}[/green]")
+    console.print("[bold yellow]Warning: This will wipe and rebuild the default project's index.[/bold yellow]")
+    # Future: typer.confirm("Are you sure you want to wipe and rebuild the default project index?", abort=True)
+
+    try:
+        global_simgrep_config: SimgrepConfig = load_or_create_global_config()
+
+        # Construct paths for the default project
+        default_project_db_file = global_simgrep_config.default_project_data_dir / "metadata.duckdb"
+        default_project_usearch_file = global_simgrep_config.default_project_data_dir / "index.usearch"
+
+        # Prepare configuration for the Indexer
+        indexer_config = IndexerConfig(
+            project_name="default_project", # For logging/context
+            db_path=default_project_db_file,
+            usearch_index_path=default_project_usearch_file,
+            embedding_model_name=global_simgrep_config.default_embedding_model_name,
+            chunk_size_tokens=global_simgrep_config.default_chunk_size_tokens,
+            chunk_overlap_tokens=global_simgrep_config.default_chunk_overlap_tokens,
+            file_scan_patterns=["*.txt"], # Initially hardcode to .txt, make configurable later
+        )
+
+        indexer_instance = Indexer(config=indexer_config, console=console)
+        indexer_instance.index_path(target_path=path_to_index, wipe_existing=True)
+
+        console.print(f"[bold green]Successfully indexed '{path_to_index}' into the default project.[/bold green]")
+
+    except SimgrepConfigError as e:
+        console.print(f"[bold red]Configuration Error:[/bold red]\n  {e}")
+        raise typer.Exit(code=1)
+    except IndexerError as e: # Custom error from Indexer
+        console.print(f"[bold red]Indexing Error:[/bold red]\n  {e}")
+        raise typer.Exit(code=1)
+    except Exception as e:
+        console.print(f"[bold red]An unexpected error occurred during indexing:[/bold red]\n  {e}")
+        # For detailed debugging, consider logging the full traceback
+        # import traceback
+        # console.print(f"[dim]{traceback.format_exc()}[/dim]")
+        raise typer.Exit(code=1)
 
 
 if __name__ == "__main__":

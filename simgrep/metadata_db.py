@@ -1,6 +1,7 @@
+import datetime # Added for timestamp conversion
 import logging
 import pathlib
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple # Added Any, Dict
 
 import duckdb
 
@@ -246,3 +247,126 @@ def connect_persistent_db(db_path: pathlib.Path) -> duckdb.DuckDBPyConnection:
 
     _create_persistent_tables_if_not_exist(conn)
     return conn
+
+
+def clear_persistent_project_data(conn: duckdb.DuckDBPyConnection) -> None:
+    logger.info("Clearing all data from 'text_chunks' and 'indexed_files' tables for persistent project.")
+    try:
+        # Using an explicit transaction for atomicity of DDL-like operations and DML
+        with conn.cursor() as cursor:
+            cursor.execute("BEGIN TRANSACTION;")
+            cursor.execute("DELETE FROM text_chunks;")
+            logger.debug("Deleted all records from 'text_chunks'.")
+            cursor.execute("DELETE FROM indexed_files;")
+            logger.debug("Deleted all records from 'indexed_files'.")
+            
+            # Reset sequences for auto-incrementing primary keys
+            sequences = [seq[0] for seq in cursor.execute("SELECT sequence_name FROM duckdb_sequences();").fetchall()]
+            if 'text_chunks_chunk_id_seq' in sequences:
+                cursor.execute("ALTER SEQUENCE text_chunks_chunk_id_seq RESTART WITH 1;")
+                logger.debug("Reset sequence 'text_chunks_chunk_id_seq'.")
+            else:
+                logger.warning("Sequence 'text_chunks_chunk_id_seq' not found for reset.")
+
+            if 'indexed_files_file_id_seq' in sequences:
+                cursor.execute("ALTER SEQUENCE indexed_files_file_id_seq RESTART WITH 1;")
+                logger.debug("Reset sequence 'indexed_files_file_id_seq'.")
+            else:
+                logger.warning("Sequence 'indexed_files_file_id_seq' not found for reset.")
+            
+            cursor.execute("COMMIT;")
+        logger.info("Persistent project data cleared and sequences reset.")
+    except duckdb.Error as e:
+        logger.error(f"Error clearing persistent project data: {e}")
+        # Attempt to rollback if transaction was started and failed
+        try:
+            conn.execute("ROLLBACK;")
+            logger.info("Rolled back transaction after error in clear_persistent_project_data.")
+        except duckdb.Error as rb_err:
+            logger.error(f"Failed to rollback transaction: {rb_err}")
+        raise MetadataDBError("Failed to clear persistent project data") from e
+
+
+def insert_indexed_file_record(
+    conn: duckdb.DuckDBPyConnection,
+    file_path: str, # Absolute, resolved path
+    content_hash: str,
+    file_size_bytes: int,
+    last_modified_os_timestamp: float, # From file_path.stat().st_mtime
+) -> Optional[int]:
+    logger.debug(f"Attempting to insert metadata for file: {file_path}")
+    
+    last_modified_dt = datetime.datetime.fromtimestamp(last_modified_os_timestamp)
+
+    try:
+        result = conn.execute(
+            """
+            INSERT INTO indexed_files (file_path, content_hash, file_size_bytes, last_modified_os, last_indexed_at)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            RETURNING file_id;
+            """,
+            [file_path, content_hash, file_size_bytes, last_modified_dt],
+        ).fetchone()
+        
+        if result and result[0] is not None:
+            file_id = int(result[0])
+            logger.info(f"Inserted file '{file_path}' into 'indexed_files' with file_id {file_id}.")
+            return file_id
+        else:
+            logger.error(f"Failed to retrieve file_id after inserting file metadata for '{file_path}'.")
+            return None
+    except duckdb.ConstraintException as e:
+        logger.error(f"Constraint violation for file '{file_path}': {e}.")
+        raise MetadataDBError(f"Constraint violation inserting file metadata for '{file_path}'") from e
+    except duckdb.Error as e:
+        logger.error(f"DuckDB error inserting file metadata for '{file_path}': {e}")
+        raise MetadataDBError(f"Failed to insert file metadata for '{file_path}'") from e
+
+
+def batch_insert_text_chunks(conn: duckdb.DuckDBPyConnection, chunk_records: List[Dict[str, Any]]) -> None:
+    if not chunk_records:
+        logger.debug("No chunk records provided for batch insert into 'text_chunks'.")
+        return
+
+    data_to_insert = []
+    for record in chunk_records:
+        data_to_insert.append((
+            record["file_id"],
+            record["usearch_label"],
+            record["chunk_text_snippet"],
+            record["start_char_offset"],
+            record["end_char_offset"],
+            record["token_count"],
+            record.get("embedding_hash"),
+        ))
+    
+    logger.info(f"Batch inserting {len(data_to_insert)} chunk record(s) into persistent 'text_chunks'.")
+    try:
+        # Using an explicit transaction for batch insert
+        with conn.cursor() as cursor:
+            cursor.execute("BEGIN TRANSACTION;")
+            cursor.executemany(
+                """
+                INSERT INTO text_chunks (
+                    file_id, usearch_label, chunk_text_snippet,
+                    start_char_offset, end_char_offset, token_count, embedding_hash
+                ) VALUES (?, ?, ?, ?, ?, ?, ?);
+                """,
+                data_to_insert,
+            )
+            cursor.execute("COMMIT;")
+        logger.debug(f"Successfully batch inserted {len(data_to_insert)} chunk record(s) into 'text_chunks'.")
+    except duckdb.ConstraintException as e:
+        logger.error(f"Constraint violation during batch chunk insert: {e}.")
+        try:
+            conn.execute("ROLLBACK;")
+        except duckdb.Error as rb_err:
+            logger.error(f"Failed to rollback transaction: {rb_err}")
+        raise MetadataDBError("Constraint violation during batch chunk insert") from e
+    except duckdb.Error as e:
+        logger.error(f"DuckDB error during batch insert into 'text_chunks': {e}")
+        try:
+            conn.execute("ROLLBACK;")
+        except duckdb.Error as rb_err:
+            logger.error(f"Failed to rollback transaction: {rb_err}")
+        raise MetadataDBError("Failed during batch insert into 'text_chunks'") from e
