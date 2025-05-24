@@ -125,8 +125,6 @@
             ./dir1/b.txt
             ```
 
----
-
 **Phase 3: Persistent Default Project Indexing**
 
 *Goal: Implement `simgrep index <path>` and `simgrep search <query>` (without path) using a persistent default project index.*
@@ -140,6 +138,8 @@
   * **Key Modules:** `simgrep/models.py`, `simgrep/config.py`
   * **What to Test:**
     * Running any `simgrep` command creates `~/.config/simgrep/default_project` if it doesn't exist.
+
+---
 
 * **Deliverable 3.2: Persistent DuckDB & USearch for Default Project**
   * **Goal:** Store index data on disk.

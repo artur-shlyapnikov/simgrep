@@ -14,10 +14,12 @@ import typer
 from rich.console import Console
 import usearch.index
 import duckdb # Added duckdb
+import sys # For printing to stderr in case of config error
+
 
 # Assuming simgrep is installed or path is correctly set for sibling imports
 try:
-    from .models import ChunkData
+    from .models import ChunkData # SimgrepConfig will be loaded by .config
     from .processor import (
         extract_text_from_file,
         generate_embeddings,
@@ -34,6 +36,7 @@ try:
         batch_insert_chunks,
         retrieve_chunk_for_display
     )
+    from .config import load_or_create_global_config, SimgrepConfigError
 except ImportError:
     # Fallback for running main.py directly during development
     if __name__ == "__main__":
@@ -60,6 +63,7 @@ except ImportError:
             batch_insert_chunks,
             retrieve_chunk_for_display
         )
+        from simgrep.config import load_or_create_global_config, SimgrepConfigError
     else:
         raise
 
@@ -109,8 +113,24 @@ def main_callback(
 ) -> None:
     """
     simgrep CLI application.
+    Initializes global configuration, ensuring necessary directories are created.
     """
-    pass
+    if version: # If --version is passed, version_callback handles exit.
+        return
+
+    try:
+        # Load configuration. This step ensures the default_project_data_dir is created.
+        # The '_config' variable itself is not used further by main_callback or
+        # the ephemeral search command in *this deliverable*.
+        # It will be crucial for persistent indexing commands later.
+        _config = load_or_create_global_config()
+    except SimgrepConfigError as e:
+        # Error already printed by load_or_create_global_config
+        # console.print(f"[bold red]Fatal Configuration Error:[/bold red]\n{e}", file=sys.stderr) # Redundant if config prints
+        raise typer.Exit(code=1)
+    except Exception as e: # Catch any other unexpected errors during config load
+        console.print(f"[bold red]An unexpected error occurred during Simgrep initialization:[/bold red]\n{e}", file=sys.stderr)
+        raise typer.Exit(code=1)
 
 
 @app.command()
