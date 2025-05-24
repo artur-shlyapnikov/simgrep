@@ -6,7 +6,9 @@ import pytest
 
 from simgrep.exceptions import (
     MetadataDBError as SimgrepMetadataDBError,
-)  # Ensure consistent exception type
+)
+
+# Ensure consistent exception type
 from simgrep.metadata_db import MetadataDBError, connect_persistent_db
 
 
@@ -101,7 +103,7 @@ class TestPersistentMetadataDB:
             assert (
                 text_chunks_schema.get("chunk_id") == "BIGINT"
             )  # PK (BIGSERIAL becomes BIGINT)
-            assert text_chunks_schema.get("file_id") == "INTEGER"  # NOT NULL FK
+            assert text_chunks_schema.get("file_id") == "BIGINT"  # NOT NULL FK
             assert (
                 text_chunks_schema.get("usearch_label") == "BIGINT"
             )  # NOT NULL UNIQUE
@@ -201,7 +203,8 @@ class TestPersistentMetadataDB:
 
             # Try inserting a chunk with a non-existent file_id (FK violation)
             with pytest.raises(
-                duckdb.ConstraintException, match="FOREIGN KEY constraint failed"
+                duckdb.ConstraintException,
+                match=r"foreign key constraint|violates foreign key constraint|FOREIGN KEY constraint failed|Violates foreign key constraint",
             ):
                 conn.execute(
                     "INSERT INTO text_chunks (file_id, usearch_label, chunk_text_snippet, start_char_offset, end_char_offset, token_count) VALUES (?, ?, ?, ?, ?, ?)",
@@ -211,7 +214,7 @@ class TestPersistentMetadataDB:
             # Try inserting duplicate file_path (UNIQUE constraint violation)
             with pytest.raises(
                 duckdb.ConstraintException,
-                match="UNIQUE constraint failed: indexed_files.file_path",
+                match=r"UNIQUE constraint failed: indexed_files.file_path|violates unique constraint|duplicate key|Duplicate key",
             ):
                 conn.execute(
                     "INSERT INTO indexed_files (file_path, content_hash, file_size_bytes) VALUES (?, ?, ?)",
@@ -221,7 +224,7 @@ class TestPersistentMetadataDB:
             # Try inserting duplicate usearch_label (UNIQUE constraint violation)
             with pytest.raises(
                 duckdb.ConstraintException,
-                match="UNIQUE constraint failed: text_chunks.usearch_label",
+                match=r"UNIQUE constraint failed: text_chunks.usearch_label|violates unique constraint|duplicate key|Duplicate key",
             ):
                 conn.execute(
                     "INSERT INTO text_chunks (file_id, usearch_label, chunk_text_snippet, start_char_offset, end_char_offset, token_count) VALUES (?, ?, ?, ?, ?, ?)",

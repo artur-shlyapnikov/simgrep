@@ -1,18 +1,18 @@
+import logging
 import pathlib
 from typing import List, Optional, Tuple
-import logging
 
 import duckdb
 
 # Assuming models.py is in the same directory or simgrep is installed
 try:
-    from .models import ChunkData
     from .exceptions import MetadataDBError
+    from .models import ChunkData
 except ImportError:
     # This fallback might be needed if running scripts directly from the simgrep folder
     # or if the package structure is not fully resolved in some contexts.
-    from simgrep.models import ChunkData # type: ignore
-    from simgrep.exceptions import MetadataDBError # type: ignore
+    from simgrep.exceptions import MetadataDBError  # type: ignore
+    from simgrep.models import ChunkData  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ def batch_insert_files(
     if not files_metadata:
         logger.debug("No file metadata provided for batch insert.")
         return
-    
+
     data_to_insert = [(fid, str(fp.resolve())) for fid, fp in files_metadata]
     logger.info(f"Batch inserting {len(data_to_insert)} file(s) into temp_files.")
     try:
@@ -172,8 +172,13 @@ def _create_persistent_tables_if_not_exist(conn: duckdb.DuckDBPyConnection) -> N
     try:
         conn.execute(
             """
+            CREATE SEQUENCE IF NOT EXISTS indexed_files_file_id_seq;
+        """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS indexed_files (
-                file_id BIGINT PRIMARY KEY,
+                file_id BIGINT PRIMARY KEY DEFAULT nextval('indexed_files_file_id_seq'),
                 file_path VARCHAR NOT NULL UNIQUE,
                 content_hash VARCHAR NOT NULL,
                 file_size_bytes BIGINT,
@@ -186,9 +191,14 @@ def _create_persistent_tables_if_not_exist(conn: duckdb.DuckDBPyConnection) -> N
 
         conn.execute(
             """
+            CREATE SEQUENCE IF NOT EXISTS text_chunks_chunk_id_seq;
+        """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS text_chunks (
-                chunk_id BIGINT PRIMARY KEY,
-                file_id INTEGER NOT NULL REFERENCES indexed_files(file_id),
+                chunk_id BIGINT PRIMARY KEY DEFAULT nextval('text_chunks_chunk_id_seq'),
+                file_id BIGINT NOT NULL REFERENCES indexed_files(file_id),
                 usearch_label BIGINT UNIQUE NOT NULL,
                 chunk_text_snippet VARCHAR NOT NULL, -- Store empty string if no snippet
                 start_char_offset INTEGER NOT NULL,
@@ -225,7 +235,9 @@ def connect_persistent_db(db_path: pathlib.Path) -> duckdb.DuckDBPyConnection:
         logger.info(f"Successfully connected to persistent DB at {db_path}")
         # DuckDB enforces foreign keys by default if defined in schema.
         # The PRAGMA foreign_keys = ON; is SQLite syntax.
-        logger.debug(f"Foreign key constraints are enforced by default in DuckDB for DB at {db_path}")
+        logger.debug(
+            f"Foreign key constraints are enforced by default in DuckDB for DB at {db_path}"
+        )
     except duckdb.Error as e:
         logger.error(
             f"Failed to connect to or initialize persistent DB at {db_path}: {e}"
