@@ -9,6 +9,7 @@ from simgrep.metadata_db import (
     batch_insert_files,
     batch_insert_chunks,
     retrieve_chunk_for_display,
+    MetadataDBError,
 )
 
 @pytest.fixture
@@ -118,7 +119,7 @@ class TestMetadataDB:
 
         batch_insert_files(db_conn, metadata1)
         # temp_files.file_path has a UNIQUE constraint
-        with pytest.raises(duckdb.ConstraintException, match="violates unique constraint"):
+        with pytest.raises(MetadataDBError, match="Failed during batch file insert"):
             batch_insert_files(db_conn, metadata2)
 
     def test_batch_insert_files_duplicate_file_id(self, db_conn: duckdb.DuckDBPyConnection, tmp_path: pathlib.Path):
@@ -132,7 +133,7 @@ class TestMetadataDB:
 
         batch_insert_files(db_conn, metadata1)
         # temp_files.file_id is PRIMARY KEY
-        with pytest.raises(duckdb.ConstraintException, match="violates primary key constraint"):
+        with pytest.raises(MetadataDBError, match="Failed during batch file insert"):
             batch_insert_files(db_conn, metadata2)
 
 
@@ -158,7 +159,7 @@ class TestMetadataDB:
 
     def test_batch_insert_chunks_fk_constraint_violation(self, db_conn: duckdb.DuckDBPyConnection, sample_chunk_data_list: list[ChunkData]):
         # Files are not inserted, so FK constraint on temp_chunks.file_id will fail
-        with pytest.raises(duckdb.ConstraintException, match="Violates foreign key constraint"):
+        with pytest.raises(MetadataDBError, match="Failed during batch chunk insert"):
             batch_insert_chunks(db_conn, sample_chunk_data_list)
 
     def test_batch_insert_chunks_unique_constraint_chunk_id(self, db_conn: duckdb.DuckDBPyConnection, sample_files_metadata: list[tuple[int, pathlib.Path]], sample_chunk_data_list: list[ChunkData]):
@@ -177,7 +178,7 @@ class TestMetadataDB:
         extended_chunk_list = sample_chunk_data_list + [chunk_with_duplicate_id]
         
         # temp_chunks.chunk_id is PRIMARY KEY
-        with pytest.raises(duckdb.ConstraintException, match="violates primary key constraint"):
+        with pytest.raises(MetadataDBError, match="Failed during batch chunk insert"):
             batch_insert_chunks(db_conn, extended_chunk_list)
 
 

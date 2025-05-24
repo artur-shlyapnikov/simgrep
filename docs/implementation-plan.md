@@ -139,8 +139,6 @@
   * **What to Test:**
     * Running any `simgrep` command creates `~/.config/simgrep/default_project` if it doesn't exist.
 
----
-
 * **Deliverable 3.2: Persistent DuckDB & USearch for Default Project**
   * **Goal:** Store index data on disk.
   * **Tasks:**
@@ -153,6 +151,8 @@
   * **Key Modules:** `simgrep/metadata_db.py`, `simgrep/vector_store.py`, `simgrep/config.py`
   * **What to Test:**
     * Functions can be called. Test save/load of an empty/trivial index and DB.
+
+---
 
 * **Deliverable 3.3: `simgrep index <path>` Command (Non-Incremental)**
   * **Goal:** Create a persistent index for a given path under the default project.

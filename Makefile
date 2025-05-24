@@ -39,7 +39,7 @@ test:
 
 typecheck:
 	@echo "Running static type checker (Mypy)..."
-	$(UV) run mypy simgrep/
+	$(UV) run mypy simgrep/ tests/
 
 run:
 	@echo "Running simgrep --help as an example..."
