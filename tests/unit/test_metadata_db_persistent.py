@@ -1,12 +1,8 @@
 import pathlib
-from typing import Any, Dict, List, Tuple
+from typing import Dict, List, Tuple
 
 import duckdb
 import pytest
-
-from simgrep.exceptions import (
-    MetadataDBError as SimgrepMetadataDBError,
-)
 
 # Ensure consistent exception type
 from simgrep.metadata_db import MetadataDBError, connect_persistent_db

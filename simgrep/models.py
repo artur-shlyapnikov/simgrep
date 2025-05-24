@@ -1,7 +1,6 @@
 from pathlib import Path
-from typing import Optional # Added for future use, not strictly needed for 3.1 but good practice
 
-from pydantic import BaseModel, Field # Ensure Field is imported
+from pydantic import BaseModel, Field  # Ensure Field is imported
 
 
 class ChunkData(BaseModel):

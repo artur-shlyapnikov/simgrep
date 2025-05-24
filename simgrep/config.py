@@ -1,6 +1,4 @@
-import os  # For OSError
 import sys  # For printing to stderr
-from pathlib import Path
 
 try:
     from .models import SimgrepConfig

@@ -1,6 +1,6 @@
+import sys
 from pathlib import Path
 from typing import List, Optional
-import sys
 
 
 def format_show_basic(file_path: Path, chunk_text: str, score: float) -> str:

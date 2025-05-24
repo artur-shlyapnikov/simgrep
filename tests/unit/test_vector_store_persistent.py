@@ -1,10 +1,11 @@
+import os  # For os.replace mock
 import pathlib
-import pytest
-import numpy as np
-import usearch.index
-import os # For os.replace mock
 
-from simgrep.vector_store import save_persistent_index, load_persistent_index, VectorStoreError
+import numpy as np
+import pytest
+import usearch.index
+
+from simgrep.vector_store import VectorStoreError, load_persistent_index, save_persistent_index
 
 
 @pytest.fixture

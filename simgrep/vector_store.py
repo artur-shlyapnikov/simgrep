@@ -1,7 +1,7 @@
-from typing import List, Optional, Tuple, Union
 import logging
 import os
 from pathlib import Path
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import usearch.index
@@ -9,7 +9,7 @@ import usearch.index
 try:
     from .exceptions import VectorStoreError
 except ImportError:
-    from simgrep.exceptions import VectorStoreError # type: ignore
+    from simgrep.exceptions import VectorStoreError  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,6 @@ def create_inmemory_index(
     if labels_for_usearch.size > 0 and labels_for_usearch.dtype != np.int64:
         processed_labels = labels_for_usearch.astype(np.int64)
 
-
     num_dimensions: int
     if embeddings.shape[0] > 0:
         num_dimensions = embeddings.shape[1]
@@ -83,24 +82,29 @@ def create_inmemory_index(
         # This function is primarily for when embeddings *exist*.
         # Let's stick to the original logic: if embeddings are empty, raise ValueError.
         if embeddings.shape[0] == 0:
-             raise ValueError("Embeddings array cannot be empty when creating an index that infers ndim.")
+            raise ValueError(
+                "Embeddings array cannot be empty when creating an index that infers ndim."
+            )
         num_dimensions = embeddings.shape[1]
 
-
-    logger.info(f"Creating USearch index with ndim={num_dimensions}, metric='{metric}', dtype='{dtype}'.")
+    logger.info(
+        f"Creating USearch index with ndim={num_dimensions}, metric='{metric}', dtype='{dtype}'."
+    )
     try:
         index = usearch.index.Index(
             ndim=num_dimensions,
             metric=metric,
             dtype=dtype,
         )
-        if embeddings.shape[0] > 0: # Only add if there are embeddings
+        if embeddings.shape[0] > 0:  # Only add if there are embeddings
             index.add(keys=processed_labels, vectors=embeddings)
             logger.info(f"Added {embeddings.shape[0]} embeddings to the USearch index.")
         else:
-            logger.info("USearch index created empty as no embeddings were provided to add.")
+            logger.info(
+                "USearch index created empty as no embeddings were provided to add."
+            )
 
-    except Exception as e: # Catch broad USearch errors
+    except Exception as e:  # Catch broad USearch errors
         logger.error(f"Failed to create or populate USearch index: {e}")
         raise VectorStoreError("Failed to create or populate USearch index") from e
 
@@ -145,7 +149,9 @@ def search_inmemory_index(
         processed_query_embedding = np.expand_dims(processed_query_embedding, axis=0)
 
     if processed_query_embedding.shape[0] != 1:
-        raise ValueError(f"Expected a single query embedding, but got batch of {processed_query_embedding.shape[0]}.")
+        raise ValueError(
+            f"Expected a single query embedding, but got batch of {processed_query_embedding.shape[0]}."
+        )
     if processed_query_embedding.shape[1] != index.ndim:
         raise ValueError(
             f"Query embedding dimension ({processed_query_embedding.shape[1]}) "
@@ -154,8 +160,8 @@ def search_inmemory_index(
 
     logger.info(f"Searching USearch index for top {k} results.")
     try:
-        search_result: Union[usearch.index.Matches, usearch.index.BatchMatches] = index.search(
-            vectors=processed_query_embedding, count=k
+        search_result: Union[usearch.index.Matches, usearch.index.BatchMatches] = (
+            index.search(vectors=processed_query_embedding, count=k)
         )
     except Exception as e:
         logger.error(f"USearch search operation failed: {e}")
@@ -172,13 +178,17 @@ def search_inmemory_index(
             if num_found_for_query > 0:
                 actual_keys = search_result.keys[0]
                 actual_distances = search_result.distances[0]
-    elif isinstance(search_result, usearch.index.Matches): # Single query result
-        num_found_for_query = search_result.count # type: ignore[attr-defined]
+    elif isinstance(search_result, usearch.index.Matches):  # Single query result
+        num_found_for_query = search_result.count  # type: ignore[attr-defined]
         if num_found_for_query > 0:
             actual_keys = search_result.keys
             actual_distances = search_result.distances
-    
-    if num_found_for_query > 0 and actual_keys is not None and actual_distances is not None:
+
+    if (
+        num_found_for_query > 0
+        and actual_keys is not None
+        and actual_distances is not None
+    ):
         logger.debug(f"Found {num_found_for_query} matches in USearch.")
         for i in range(num_found_for_query):
             key: int = int(actual_keys[i])
@@ -188,19 +198,21 @@ def search_inmemory_index(
 
             if "cos" in metric_str:
                 similarity = 1.0 - distance
-            elif "ip" in metric_str: # Inner product; higher is better. USearch returns negative IP for similarity.
-                similarity = -distance # So, negate to get positive similarity.
-            elif "l2" in metric_str: # L2 squared distance; lower is better.
-                similarity = 1.0 / (1.0 + distance) # Simple inverse, can be refined.
+            elif (
+                "ip" in metric_str
+            ):  # Inner product; higher is better. USearch returns negative IP for similarity.
+                similarity = -distance  # So, negate to get positive similarity.
+            elif "l2" in metric_str:  # L2 squared distance; lower is better.
+                similarity = 1.0 / (1.0 + distance)  # Simple inverse, can be refined.
             else:
                 logger.warning(
                     f"Unknown metric '{index.metric}' for similarity conversion. Returning raw negative distance."
                 )
-                similarity = -distance # Default to negative distance if metric unknown
+                similarity = -distance  # Default to negative distance if metric unknown
             results.append((key, similarity))
     else:
         logger.info("No matches found by USearch for the query.")
-        
+
     return results
 
 
@@ -225,7 +237,9 @@ def load_persistent_index(index_path: Path) -> Optional[usearch.index.Index]:
             # The Index constructor defaults to ndim=0, which is fine for this.
             index = usearch.index.Index()
             index.load(str(index_path))
-            logger.info(f"Successfully loaded USearch index from {index_path} with {len(index)} items.")
+            logger.info(
+                f"Successfully loaded USearch index from {index_path} with {len(index)} items."
+            )
             return index
         except Exception as e:
             logger.error(f"Failed to load USearch index from {index_path}: {e}")
@@ -246,12 +260,16 @@ def save_persistent_index(index: usearch.index.Index, index_path: Path) -> None:
     Raises:
         VectorStoreError: If saving fails.
     """
-    logger.info(f"Attempting to save USearch index with {len(index)} items to {index_path}")
+    logger.info(
+        f"Attempting to save USearch index with {len(index)} items to {index_path}"
+    )
     try:
         index_path.parent.mkdir(parents=True, exist_ok=True)
         logger.debug(f"Ensured directory exists for USearch index: {index_path.parent}")
     except OSError as e:
-        logger.error(f"Failed to create directory for USearch index at {index_path.parent}: {e}")
+        logger.error(
+            f"Failed to create directory for USearch index at {index_path.parent}: {e}"
+        )
         raise VectorStoreError(
             f"Could not create directory for USearch index at {index_path.parent}"
         ) from e
@@ -261,36 +279,58 @@ def save_persistent_index(index: usearch.index.Index, index_path: Path) -> None:
     try:
         logger.info(f"Saving USearch index to temporary file {temp_index_path}")
         index.save(str(temp_index_path))
-        logger.info(f"Successfully saved USearch index to temporary file {temp_index_path}")
+        logger.info(
+            f"Successfully saved USearch index to temporary file {temp_index_path}"
+        )
 
         try:
             os.replace(temp_index_path, index_path)
-            logger.info(f"Atomically moved temporary index from {temp_index_path} to {index_path}")
+            logger.info(
+                f"Atomically moved temporary index from {temp_index_path} to {index_path}"
+            )
         except OSError as e_move:
-            logger.error(f"Failed to move temporary index {temp_index_path} to {index_path}: {e_move}")
+            logger.error(
+                f"Failed to move temporary index {temp_index_path} to {index_path}: {e_move}"
+            )
             if temp_index_path.exists():
                 try:
                     temp_index_path.unlink()
-                    logger.debug(f"Cleaned up temporary index file {temp_index_path} after move failure.")
+                    logger.debug(
+                        f"Cleaned up temporary index file {temp_index_path} after move failure."
+                    )
                 except OSError as e_unlink:
-                    logger.error(f"Failed to clean up temporary index file {temp_index_path} after move failure: {e_unlink}")
-            raise VectorStoreError(f"Failed to finalize saving index to {index_path}") from e_move
+                    logger.error(
+                        f"Failed to clean up temporary index file {temp_index_path} after move failure: {e_unlink}"
+                    )
+            raise VectorStoreError(
+                f"Failed to finalize saving index to {index_path}"
+            ) from e_move
 
-    except Exception as e: # Covers index.save() errors
-        logger.error(f"Failed to save USearch index to temporary file {temp_index_path}: {e}")
+    except Exception as e:  # Covers index.save() errors
+        logger.error(
+            f"Failed to save USearch index to temporary file {temp_index_path}: {e}"
+        )
         # Ensure temp file is cleaned up if save failed partway and left a file
         if temp_index_path.exists():
             try:
                 temp_index_path.unlink()
-                logger.debug(f"Cleaned up temporary index file {temp_index_path} after save failure.")
+                logger.debug(
+                    f"Cleaned up temporary index file {temp_index_path} after save failure."
+                )
             except OSError as e_unlink:
-                logger.error(f"Failed to clean up temporary index file {temp_index_path} after save failure: {e_unlink}")
+                logger.error(
+                    f"Failed to clean up temporary index file {temp_index_path} after save failure: {e_unlink}"
+                )
         raise VectorStoreError(f"Failed to save index to {temp_index_path}") from e
     finally:
         # Final check for temp file, in case an error occurred before os.replace but after save
         if temp_index_path.exists():
             try:
                 temp_index_path.unlink()
-                logger.warning(f"Lingering temporary index file {temp_index_path} found and removed in finally block.")
+                logger.warning(
+                    f"Lingering temporary index file {temp_index_path} found and removed in finally block."
+                )
             except OSError as e_unlink:
-                logger.error(f"Failed to clean up lingering temporary index file {temp_index_path} in finally block: {e_unlink}")
+                logger.error(
+                    f"Failed to clean up lingering temporary index file {temp_index_path} in finally block: {e_unlink}"
+                )

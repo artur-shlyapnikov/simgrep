@@ -1,42 +1,40 @@
+import sys  # For printing to stderr in case of config error
 import warnings
+from enum import Enum
 from pathlib import Path
 from typing import (
-    List,
-    Tuple,
-    Any,
     Dict,
+    List,
     Optional,
+    Tuple,
 )
-from enum import Enum
 
+import duckdb  # Added duckdb
 import numpy as np
 import typer
-from rich.console import Console
 import usearch.index
-import duckdb # Added duckdb
-import sys # For printing to stderr in case of config error
-
+from rich.console import Console
 
 # Assuming simgrep is installed or path is correctly set for sibling imports
 try:
-    from .models import ChunkData # SimgrepConfig will be loaded by .config
+    from .config import SimgrepConfigError, load_or_create_global_config
+    from .formatter import format_paths, format_show_basic
+    from .metadata_db import (
+        batch_insert_chunks,
+        batch_insert_files,
+        create_inmemory_db_connection,
+        retrieve_chunk_for_display,
+        setup_ephemeral_tables,
+    )
+    from .models import ChunkData  # SimgrepConfig will be loaded by .config
     from .processor import (
+        ProcessedChunkInfo,
+        chunk_text_by_tokens,
         extract_text_from_file,
         generate_embeddings,
         load_tokenizer,
-        chunk_text_by_tokens,
-        ProcessedChunkInfo,
     )
     from .vector_store import create_inmemory_index, search_inmemory_index
-    from .formatter import format_show_basic, format_paths
-    from .metadata_db import (
-        create_inmemory_db_connection,
-        setup_ephemeral_tables,
-        batch_insert_files,
-        batch_insert_chunks,
-        retrieve_chunk_for_display
-    )
-    from .config import load_or_create_global_config, SimgrepConfigError
 except ImportError:
     # Fallback for running main.py directly during development
     if __name__ == "__main__":
@@ -46,24 +44,24 @@ except ImportError:
         sys.path.insert(
             0, os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         )
+        from simgrep.config import SimgrepConfigError, load_or_create_global_config
+        from simgrep.formatter import format_paths, format_show_basic
+        from simgrep.metadata_db import (
+            batch_insert_chunks,
+            batch_insert_files,
+            create_inmemory_db_connection,
+            retrieve_chunk_for_display,
+            setup_ephemeral_tables,
+        )
         from simgrep.models import ChunkData
         from simgrep.processor import (
+            ProcessedChunkInfo,
+            chunk_text_by_tokens,
             extract_text_from_file,
             generate_embeddings,
             load_tokenizer,
-            chunk_text_by_tokens,
-            ProcessedChunkInfo,
         )
         from simgrep.vector_store import create_inmemory_index, search_inmemory_index
-        from simgrep.formatter import format_show_basic, format_paths
-        from simgrep.metadata_db import (
-            create_inmemory_db_connection,
-            setup_ephemeral_tables,
-            batch_insert_files,
-            batch_insert_chunks,
-            retrieve_chunk_for_display
-        )
-        from simgrep.config import load_or_create_global_config, SimgrepConfigError
     else:
         raise
 
@@ -115,7 +113,7 @@ def main_callback(
     simgrep CLI application.
     Initializes global configuration, ensuring necessary directories are created.
     """
-    if version: # If --version is passed, version_callback handles exit.
+    if version:  # If --version is passed, version_callback handles exit.
         return
 
     try:
@@ -124,12 +122,14 @@ def main_callback(
         # the ephemeral search command in *this deliverable*.
         # It will be crucial for persistent indexing commands later.
         _config = load_or_create_global_config()
-    except SimgrepConfigError as e:
+    except SimgrepConfigError:
         # Error already printed by load_or_create_global_config
         # console.print(f"[bold red]Fatal Configuration Error:[/bold red]\n{e}") # Redundant if config prints
         raise typer.Exit(code=1)
-    except Exception as e: # Catch any other unexpected errors during config load
-        console.print(f"[bold red]An unexpected error occurred during Simgrep initialization:[/bold red]\n{e}")
+    except Exception as e:  # Catch any other unexpected errors during config load
+        console.print(
+            f"[bold red]An unexpected error occurred during Simgrep initialization:[/bold red]\n{e}"
+        )
         raise typer.Exit(code=1)
 
 
@@ -142,11 +142,11 @@ def search(
         file_okay=True,
         dir_okay=True,
         readable=True,
-        resolve_path=True, # Ensures path_to_search is absolute and symlinks resolved
+        resolve_path=True,  # Ensures path_to_search is absolute and symlinks resolved
         help="The path to the text file or directory to search within.",
     ),
     output: OutputMode = typer.Option(
-        OutputMode.show, # Default output mode
+        OutputMode.show,  # Default output mode
         "--output",
         "-o",
         help="Output mode. 'paths' mode lists unique, sorted file paths containing matches.",
@@ -154,13 +154,13 @@ def search(
     ),
     relative_paths: bool = typer.Option(
         False,
-        "--relative-paths/--absolute-paths", # Provides --no-relative-paths as well
+        "--relative-paths/--absolute-paths",  # Provides --no-relative-paths as well
         help=(
             "Display relative file paths. "
             "Paths are relative to the initial search target directory, or its parent if the target is a file. "
             "Only used with '--output paths'."
         ),
-    )
+    ),
 ) -> None:
     """
     Searches for a query within a specified text file or files in a directory using token-based chunking
@@ -179,7 +179,7 @@ def search(
         console.print("  In-memory database and tables created.")
 
         # --- Load Tokenizer ---
-        console.print(f"\n[bold]Setup: Loading Tokenizer[/bold]")
+        console.print("\n[bold]Setup: Loading Tokenizer[/bold]")
         console.print(f"  Loading tokenizer for model: '{EMBEDDING_MODEL_NAME}'...")
         try:
             tokenizer = load_tokenizer(EMBEDDING_MODEL_NAME)
@@ -210,7 +210,9 @@ def search(
                     f"[yellow]No '.txt' files found in directory: {path_to_search}[/yellow]"
                 )
             else:
-                console.print(f"Found {len(files_to_process)} '.txt' file(s) to process.")
+                console.print(
+                    f"Found {len(files_to_process)} '.txt' file(s) to process."
+                )
 
         if not files_to_process:
             console.print("No files selected for processing. Exiting.")
@@ -236,11 +238,13 @@ def search(
                     files_skipped.append((file_path_item, "Empty or whitespace-only"))
                     continue
 
-                intermediate_chunks_info: List[ProcessedChunkInfo] = chunk_text_by_tokens(
-                    full_text=extracted_content,
-                    tokenizer=tokenizer,
-                    chunk_size_tokens=CHUNK_SIZE_TOKENS,
-                    overlap_tokens=OVERLAP_TOKENS,
+                intermediate_chunks_info: List[ProcessedChunkInfo] = (
+                    chunk_text_by_tokens(
+                        full_text=extracted_content,
+                        tokenizer=tokenizer,
+                        chunk_size_tokens=CHUNK_SIZE_TOKENS,
+                        overlap_tokens=OVERLAP_TOKENS,
+                    )
                 )
 
                 if intermediate_chunks_info:
@@ -261,7 +265,8 @@ def search(
                     )
                 else:
                     console.print(
-                        f"    [yellow]No token-based chunks generated for '{file_path_item}' (text might be too short or empty for current parameters).[/yellow]"
+                        f"    [yellow]No token-based chunks generated for '{file_path_item}' "
+                        f"(text might be too short or empty for current parameters).[/yellow]"
                     )
                     files_skipped.append(
                         (file_path_item, "No token-based chunks generated")
@@ -269,9 +274,12 @@ def search(
 
             except FileNotFoundError:
                 console.print(
-                    f"    [bold red]Error: File not found during processing loop: {file_path_item}. Skipping.[/bold red]"
+                    f"    [bold red]Error: File not found during processing loop: {file_path_item}. "
+                    "Skipping.[/bold red]"
                 )
-                files_skipped.append((file_path_item, "File not found during processing"))
+                files_skipped.append(
+                    (file_path_item, "File not found during processing")
+                )
             except RuntimeError as e:
                 console.print(
                     f"    [bold red]Error processing or chunking file '{file_path_item}': {e}. Skipping.[/bold red]"
@@ -279,7 +287,8 @@ def search(
                 files_skipped.append((file_path_item, str(e)))
             except ValueError as ve:
                 console.print(
-                    f"    [bold red]Error with chunking parameters for file '{file_path_item}': {ve}. Skipping.[/bold red]"
+                    f"    [bold red]Error with chunking parameters for file '{file_path_item}': {ve}. "
+                    "Skipping.[/bold red]"
                 )
                 files_skipped.append((file_path_item, str(ve)))
             except Exception as e:
@@ -304,19 +313,22 @@ def search(
         unique_files_metadata_dict: Dict[int, Path] = {}
         for cd_item in all_chunkdata_objects:
             if cd_item.source_file_id not in unique_files_metadata_dict:
-                unique_files_metadata_dict[cd_item.source_file_id] = cd_item.source_file_path
-        
+                unique_files_metadata_dict[cd_item.source_file_id] = (
+                    cd_item.source_file_path
+                )
+
         processed_files_metadata_for_db: List[Tuple[int, Path]] = [
             (fid, fpath) for fid, fpath in unique_files_metadata_dict.items()
         ]
 
         if processed_files_metadata_for_db:
             batch_insert_files(db_conn, processed_files_metadata_for_db)
-            console.print(f"  Inserted metadata for {len(processed_files_metadata_for_db)} file(s) into DB.")
-        
+            console.print(
+                f"  Inserted metadata for {len(processed_files_metadata_for_db)} file(s) into DB."
+            )
+
         batch_insert_chunks(db_conn, all_chunkdata_objects)
         console.print(f"  Inserted {len(all_chunkdata_objects)} chunk(s) into DB.")
-
 
         # --- Embedding Generation ---
         query_embedding: np.ndarray
@@ -338,7 +350,9 @@ def search(
             )
             console.print(f"    Query embedding shape: {query_embedding.shape}")
 
-            chunk_texts_for_embedding: List[str] = [cd.text for cd in all_chunkdata_objects]
+            chunk_texts_for_embedding: List[str] = [
+                cd.text for cd in all_chunkdata_objects
+            ]
             console.print(
                 f"  Embedding {len(chunk_texts_for_embedding)} text chunk(s) using model '{EMBEDDING_MODEL_NAME}'..."
             )
@@ -378,7 +392,9 @@ def search(
                 console.print(
                     f"  Creating in-memory index for {chunk_embeddings.shape[0]} chunk embedding(s)..."
                 )
-                usearch_labels_np = np.array([cd.usearch_label for cd in all_chunkdata_objects], dtype=np.int64)
+                usearch_labels_np = np.array(
+                    [cd.usearch_label for cd in all_chunkdata_objects], dtype=np.int64
+                )
                 vector_index: usearch.index.Index = create_inmemory_index(
                     embeddings=chunk_embeddings, labels_for_usearch=usearch_labels_np
                 )
@@ -397,7 +413,9 @@ def search(
                 )
 
                 if not search_matches:
-                    console.print("  No matches found in the vector index for the query.")
+                    console.print(
+                        "  No matches found in the vector index for the query."
+                    )
 
             except ValueError as ve:
                 console.print(
@@ -420,8 +438,10 @@ def search(
 
         if not search_matches:
             if output == OutputMode.paths:
-                console.print(format_paths(file_paths=[], use_relative=False, base_path=None)) # Handles "No matching files found."
-            else: # OutputMode.show or other future modes that might show "no results"
+                console.print(
+                    format_paths(file_paths=[], use_relative=False, base_path=None)
+                )  # Handles "No matching files found."
+            else:  # OutputMode.show or other future modes that might show "no results"
                 console.print(
                     "  No relevant chunks found for your query in the processed file(s)."
                 )
@@ -429,26 +449,32 @@ def search(
             if output == OutputMode.paths:
                 paths_from_matches: List[Path] = []
                 for matched_chunk_id, _similarity_score in search_matches:
-                    retrieved_details = retrieve_chunk_for_display(db_conn, matched_chunk_id)
+                    retrieved_details = retrieve_chunk_for_display(
+                        db_conn, matched_chunk_id
+                    )
                     if retrieved_details:
-                        _text_content, retrieved_path, _start_char, _end_char = retrieved_details
+                        _text_content, retrieved_path, _start_char, _end_char = (
+                            retrieved_details
+                        )
                         paths_from_matches.append(retrieved_path)
                     else:
-                        console.print(f"[yellow]Warning: Could not retrieve path for chunk_id {matched_chunk_id}.[/yellow]")
-                
+                        console.print(
+                            f"[yellow]Warning: Could not retrieve path for chunk_id {matched_chunk_id}.[/yellow]"
+                        )
+
                 current_base_path_for_relativity: Optional[Path] = None
                 actual_use_relative = relative_paths
 
                 if actual_use_relative:
                     if path_to_search.is_dir():
                         current_base_path_for_relativity = path_to_search
-                    else: # path_to_search is a file
+                    else:  # path_to_search is a file
                         current_base_path_for_relativity = path_to_search.parent
-                
+
                 output_string = format_paths(
                     file_paths=paths_from_matches,
                     use_relative=actual_use_relative,
-                    base_path=current_base_path_for_relativity
+                    base_path=current_base_path_for_relativity,
                 )
                 if output_string:
                     console.print(output_string)
@@ -458,10 +484,14 @@ def search(
                     f"\n[bold cyan]Search Results (Top {len(search_matches)}):[/bold cyan]"
                 )
                 for matched_chunk_id, similarity_score in search_matches:
-                    retrieved_details = retrieve_chunk_for_display(db_conn, matched_chunk_id)
-                    
+                    retrieved_details = retrieve_chunk_for_display(
+                        db_conn, matched_chunk_id
+                    )
+
                     if retrieved_details:
-                        retrieved_text, retrieved_path, _start_offset, _end_offset = retrieved_details
+                        retrieved_text, retrieved_path, _start_offset, _end_offset = (
+                            retrieved_details
+                        )
                         output_string = format_show_basic(
                             file_path=retrieved_path,
                             chunk_text=retrieved_text,
@@ -471,7 +501,8 @@ def search(
                         console.print(output_string)
                     else:
                         console.print(
-                            f"[bold yellow]Warning: Could not retrieve details for chunk_id {matched_chunk_id} from DB.[/bold yellow]"
+                            f"[bold yellow]Warning: Could not retrieve details for chunk_id {matched_chunk_id} "
+                            f"from DB.[/bold yellow]"
                         )
 
     finally:
