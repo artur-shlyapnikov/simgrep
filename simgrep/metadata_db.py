@@ -1,16 +1,16 @@
-import datetime # Added for timestamp conversion
+import datetime
 import logging
 import pathlib
-from typing import Any, Dict, List, Optional, Tuple # Added Any, Dict
+from typing import Any, Dict, List, Optional, Tuple
 
 import duckdb
 
-# Assuming models.py is in the same directory or simgrep is installed
+# assuming models.py is in the same directory or simgrep is installed
 try:
     from .exceptions import MetadataDBError
     from .models import ChunkData
 except ImportError:
-    # This fallback might be needed if running scripts directly from the simgrep folder
+    # this fallback might be needed if running scripts directly from the simgrep folder
     # or if the package structure is not fully resolved in some contexts.
     from simgrep.exceptions import MetadataDBError  # type: ignore
     from simgrep.models import ChunkData  # type: ignore
@@ -23,8 +23,8 @@ def create_inmemory_db_connection() -> duckdb.DuckDBPyConnection:
     logger.info("Creating in-memory DuckDB connection.")
     try:
         conn = duckdb.connect(database=":memory:", read_only=False)
-        # DuckDB enforces foreign keys by default if defined in schema.
-        # The PRAGMA foreign_keys = ON; is SQLite syntax.
+        # duckdb enforces foreign keys by default if defined in schema.
+        # the pragma foreign_keys = on; is sqlite syntax.
         logger.info("In-memory DuckDB connection established.")
         return conn
     except duckdb.Error as e:
@@ -39,24 +39,24 @@ def setup_ephemeral_tables(conn: duckdb.DuckDBPyConnection) -> None:
     """
     logger.info("Setting up ephemeral tables (temp_files, temp_chunks).")
     try:
-        # temp_files: Stores information about each unique file processed.
+        # temp_files: stores information about each unique file processed.
         conn.execute(
             """
             CREATE TABLE temp_files (
-                file_id INTEGER PRIMARY KEY,    -- Ephemeral ID for the file in this run
-                file_path TEXT NOT NULL UNIQUE  -- Absolute path to the file
+                file_id INTEGER PRIMARY KEY,    -- ephemeral id for the file in this run
+                file_path TEXT NOT NULL UNIQUE  -- absolute path to the file
             );
         """
         )
         logger.debug("Table 'temp_files' created for ephemeral use.")
 
-        # temp_chunks: Stores detailed information about each chunk.
+        # temp_chunks: stores detailed information about each chunk.
         conn.execute(
             """
             CREATE TABLE temp_chunks (
-                chunk_id INTEGER PRIMARY KEY,         -- Corresponds to ChunkData.usearch_label
-                file_id INTEGER NOT NULL,             -- FK to temp_files.file_id
-                text_content TEXT NOT NULL,           -- Full text of the chunk
+                chunk_id INTEGER PRIMARY KEY,         -- corresponds to chunkdata.usearch_label
+                file_id INTEGER NOT NULL,             -- fk to temp_files.file_id
+                text_content TEXT NOT NULL,           -- full text of the chunk
                 start_char_offset INTEGER NOT NULL,
                 end_char_offset INTEGER NOT NULL,
                 token_count INTEGER NOT NULL,
@@ -160,8 +160,8 @@ def retrieve_chunk_for_display(
         return None
     except duckdb.Error as e:
         logger.error(f"DuckDB error retrieving chunk {chunk_id}: {e}")
-        # Not raising MetadataDBError here as it's a query, not a structural/connection issue.
-        # Caller should handle Optional return.
+        # not raising metadatadberror here as it's a query, not a structural/connection issue.
+        # caller should handle optional return.
         return None
 
 
@@ -194,7 +194,7 @@ def retrieve_chunk_details_persistent(
         return None
     except duckdb.Error as e:
         logger.error(f"DuckDB error retrieving persistent chunk (label {usearch_label}): {e}")
-        # Re-raise as MetadataDBError to signal a problem with DB interaction
+        # re-raise as metadatadberror to signal a problem with db interaction
         raise MetadataDBError(f"Failed to retrieve persistent chunk details for label {usearch_label}") from e
 
 
@@ -234,11 +234,11 @@ def _create_persistent_tables_if_not_exist(conn: duckdb.DuckDBPyConnection) -> N
                 chunk_id BIGINT PRIMARY KEY DEFAULT nextval('text_chunks_chunk_id_seq'),
                 file_id BIGINT NOT NULL REFERENCES indexed_files(file_id),
                 usearch_label BIGINT UNIQUE NOT NULL,
-                chunk_text_snippet VARCHAR NOT NULL, -- Store empty string if no snippet
+                chunk_text_snippet VARCHAR NOT NULL, -- store empty string if no snippet
                 start_char_offset INTEGER NOT NULL,
                 end_char_offset INTEGER NOT NULL,
                 token_count INTEGER NOT NULL,
-                embedding_hash VARCHAR -- Nullable
+                embedding_hash VARCHAR -- nullable
             );
             """
         )
@@ -267,8 +267,8 @@ def connect_persistent_db(db_path: pathlib.Path) -> duckdb.DuckDBPyConnection:
     try:
         conn = duckdb.connect(database=str(db_path), read_only=False)
         logger.info(f"Successfully connected to persistent DB at {db_path}")
-        # DuckDB enforces foreign keys by default if defined in schema.
-        # The PRAGMA foreign_keys = ON; is SQLite syntax.
+        # duckdb enforces foreign keys by default if defined in schema.
+        # the pragma foreign_keys = on; is sqlite syntax.
         logger.debug(
             f"Foreign key constraints are enforced by default in DuckDB for DB at {db_path}"
         )
@@ -285,7 +285,7 @@ def connect_persistent_db(db_path: pathlib.Path) -> duckdb.DuckDBPyConnection:
 def clear_persistent_project_data(conn: duckdb.DuckDBPyConnection) -> None:
     logger.info("Clearing all data from 'text_chunks' and 'indexed_files' tables for persistent project.")
     try:
-        # Using an explicit transaction for atomicity of DDL-like operations and DML
+        # using an explicit transaction for atomicity of ddl-like operations and dml
         with conn.cursor() as cursor:
             cursor.execute("BEGIN TRANSACTION;")
             cursor.execute("DELETE FROM text_chunks;")
@@ -293,16 +293,16 @@ def clear_persistent_project_data(conn: duckdb.DuckDBPyConnection) -> None:
             cursor.execute("DELETE FROM indexed_files;")
             logger.debug("Deleted all records from 'indexed_files'.")
             
-            # Resetting sequences with ALTER SEQUENCE ... RESTART is not supported in DuckDB 0.10.0
-            # For the purpose of wiping data, simply deleting records is sufficient.
-            # Primary keys will continue from their last value, which is acceptable.
+            # resetting sequences with alter sequence ... restart is not supported in duckdb 0.10.0
+            # for the purpose of wiping data, simply deleting records is sufficient.
+            # primary keys will continue from their last value, which is acceptable.
             logger.info("Sequence reset skipped as 'ALTER SEQUENCE ... RESTART' is not supported in this DuckDB version.")
             
             cursor.execute("COMMIT;")
-        logger.info("Persistent project data cleared.") # Updated log message
+        logger.info("Persistent project data cleared.")
     except duckdb.Error as e:
         logger.error(f"Error clearing persistent project data: {e}")
-        # Attempt to rollback if transaction was started and failed
+        # attempt to rollback if transaction was started and failed
         try:
             conn.execute("ROLLBACK;")
             logger.info("Rolled back transaction after error in clear_persistent_project_data.")
@@ -313,10 +313,10 @@ def clear_persistent_project_data(conn: duckdb.DuckDBPyConnection) -> None:
 
 def insert_indexed_file_record(
     conn: duckdb.DuckDBPyConnection,
-    file_path: str, # Absolute, resolved path
+    file_path: str, # absolute, resolved path
     content_hash: str,
     file_size_bytes: int,
-    last_modified_os_timestamp: float, # From file_path.stat().st_mtime
+    last_modified_os_timestamp: float, # from file_path.stat().st_mtime
 ) -> Optional[int]:
     logger.debug(f"Attempting to insert metadata for file: {file_path}")
     
@@ -366,7 +366,7 @@ def batch_insert_text_chunks(conn: duckdb.DuckDBPyConnection, chunk_records: Lis
     
     logger.info(f"Batch inserting {len(data_to_insert)} chunk record(s) into persistent 'text_chunks'.")
     try:
-        # Using an explicit transaction for batch insert
+        # using an explicit transaction for batch insert
         with conn.cursor() as cursor:
             cursor.execute("BEGIN TRANSACTION;")
             cursor.executemany(

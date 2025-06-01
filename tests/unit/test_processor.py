@@ -81,7 +81,7 @@ def file_with_unicode_name(tmp_path: Path) -> Path:
     return file_path
 
 
-# Tests for extract_text_from_file
+# tests for extract_text_from_file
 class TestExtractTextFromFile:
     def test_extract_from_existing_file(self, temp_text_file: Path) -> None:
         expected_content = "Hello World.\nThis is a test file.\nSimgrep is cool."
@@ -127,7 +127,7 @@ class TestExtractTextFromFile:
                 f"extract_text_from_file failed unexpectedly on binary (zip) file: {e}"
             )
 
-    @pytest.mark.timeout(20)  # Allow more time for larger file
+    @pytest.mark.timeout(20)  # allow more time for larger file
     def test_very_large_repetitive_file(self, large_repetitive_file: Path) -> None:
         try:
             content = extract_text_from_file(large_repetitive_file)
@@ -160,9 +160,9 @@ class TestExtractTextFromFile:
             pytest.fail(f"extract_text_from_file failed on UTF-8 file with BOM: {e}")
 
 
-# Tests for load_tokenizer
+# tests for load_tokenizer
 class TestLoadTokenizer:
-    VALID_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"  # A common small model
+    VALID_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"  # a common small model
     INVALID_MODEL_NAME = "this-model-does-not-exist-ever-12345"
 
     def test_load_valid_tokenizer(self) -> None:
@@ -173,7 +173,7 @@ class TestLoadTokenizer:
         try:
             tokenizer = load_tokenizer(self.VALID_MODEL_NAME)
             assert isinstance(tokenizer, PreTrainedTokenizerBase)
-            # Simple check if tokenizer works
+            # simple check if tokenizer works
             assert tokenizer.encode("hello world") is not None
         except RuntimeError as e:
             pytest.fail(f"Failed to load a valid tokenizer: {e}")
@@ -188,9 +188,9 @@ class TestLoadTokenizer:
             load_tokenizer(self.INVALID_MODEL_NAME)
 
 
-# Tests for chunk_text_by_tokens
+# tests for chunk_text_by_tokens
 class TestChunkTextByTokens:
-    MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"  # For consistency
+    MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"  # for consistency
 
     @pytest.fixture(scope="class")
     def tokenizer(self) -> PreTrainedTokenizerBase:
@@ -209,10 +209,10 @@ class TestChunkTextByTokens:
     ) -> None:
         from simgrep.processor import chunk_text_by_tokens
 
-        text = "Short text."  # This text will likely be 3-4 tokens
+        text = "Short text."  # this text will likely be 3-4 tokens
         chunks = chunk_text_by_tokens(text, tokenizer, 10, 2)
         assert len(chunks) == 1
-        # all-MiniLM-L6-v2 is uncased, so output text will be lowercased.
+        # all-minilm-l6-v2 is uncased, so output text will be lowercased.
         assert chunks[0]["text"] == text.strip().lower()
         assert chunks[0]["start_char_offset"] == 0
         assert chunks[0]["end_char_offset"] == len(text)
@@ -223,22 +223,22 @@ class TestChunkTextByTokens:
     def test_text_equals_chunk_size(self, tokenizer: PreTrainedTokenizerBase) -> None:
         from simgrep.processor import chunk_text_by_tokens
 
-        # Craft text that is exactly chunk_size_tokens tokens
-        # This is model specific, so we'll approximate.
-        # Let's aim for 5 tokens with chunk_size 5.
+        # craft text that is exactly chunk_size_tokens tokens
+        # this is model specific, so we'll approximate.
+        # let's aim for 5 tokens with chunk_size 5.
         text_tokens = ["This", "is", "five", "tokens", "exactly"]
         text = tokenizer.convert_tokens_to_string(text_tokens)
 
-        # Verify token count with the tokenizer
+        # verify token count with the tokenizer
         actual_token_ids = tokenizer.encode(text, add_special_tokens=False)
-        # This assertion might be fragile if the model tokenizes differently than expected.
-        # For this test, we assume it tokenizes as one token per word here.
+        # this assertion might be fragile if the model tokenizes differently than expected.
+        # for this test, we assume it tokenizes as one token per word here.
 
         chunks = chunk_text_by_tokens(
             text, tokenizer, len(actual_token_ids), 0
-        )  # No overlap
+        )  # no overlap
         assert len(chunks) == 1
-        # all-MiniLM-L6-v2 is uncased, so output text will be lowercased.
+        # all-minilm-l6-v2 is uncased, so output text will be lowercased.
         assert chunks[0]["text"].strip() == text.strip().lower()
         assert chunks[0]["token_count"] == len(actual_token_ids)
 
@@ -247,9 +247,9 @@ class TestChunkTextByTokens:
     ) -> None:
         from simgrep.processor import chunk_text_by_tokens
 
-        # Approx 10 tokens. "This is a slightly longer sentence for testing purposes."
+        # approx 10 tokens. "this is a slightly longer sentence for testing purposes."
         text = "This is a test sentence. Here is another one for good measure."
-        # Tokenize to get actual token count
+        # tokenize to get actual token count
         token_ids = tokenizer.encode(text, add_special_tokens=False)
 
         chunk_size = 5
@@ -258,7 +258,7 @@ class TestChunkTextByTokens:
 
         expected_num_chunks = (
             len(token_ids) + chunk_size - 1
-        ) // chunk_size  # Ceiling division
+        ) // chunk_size  # ceiling division
         assert len(chunks) == expected_num_chunks
 
         reconstructed_token_ids = []
@@ -266,12 +266,12 @@ class TestChunkTextByTokens:
             chunk_token_ids = tokenizer.encode(chunk["text"], add_special_tokens=False)
             reconstructed_token_ids.extend(chunk_token_ids)
 
-        # We can't directly compare token_ids list due to how chunking might split words/subwords
-        # But we can check character offsets
+        # we can't directly compare token_ids list due to how chunking might split words/subwords
+        # but we can check character offsets
         assert chunks[0]["start_char_offset"] == 0
         if len(chunks) > 1:
-            # The start of the second chunk should be the end of the first token sequence of the first chunk
-            # This is also tricky. Let's check total length.
+            # the start of the second chunk should be the end of the first token sequence of the first chunk
+            # this is also tricky. let's check total length.
             assert chunks[-1]["end_char_offset"] == len(text)
 
     def test_multiple_chunks_with_overlap(
@@ -285,12 +285,12 @@ class TestChunkTextByTokens:
         chunks = chunk_text_by_tokens(text, tokenizer, chunk_size, overlap)
 
         assert len(chunks) > 1
-        # Check overlap: end of first chunk's tokens should overlap with start of second chunk's tokens
+        # check overlap: end of first chunk's tokens should overlap with start of second chunk's tokens
         if len(chunks) > 1:
-            # The last `overlap` tokens of the first chunk's *token source* should match
+            # the last `overlap` tokens of the first chunk's *token source* should match
             # the first `overlap` tokens of the second chunk's *token source*.
-            # This is hard to verify perfectly without knowing the exact token boundaries from original.
-            # A simpler check: the start_char_offset of chunk2 should be less than end_char_offset of chunk1
+            # this is hard to verify perfectly without knowing the exact token boundaries from original.
+            # a simpler check: the start_char_offset of chunk2 should be less than end_char_offset of chunk1
             assert chunks[1]["start_char_offset"] < chunks[0]["end_char_offset"]
 
     def test_invalid_chunk_size(self, tokenizer: PreTrainedTokenizerBase) -> None:
@@ -326,14 +326,14 @@ class TestChunkTextByTokens:
     ) -> None:
         from simgrep.processor import chunk_text_by_tokens
 
-        # Some tokenizers might return empty for only special characters or whitespace.
-        # However, HF tokenizers usually handle this. Let's use empty string after stripping.
-        text = "      "  # Only whitespace
+        # some tokenizers might return empty for only special characters or whitespace.
+        # however, hf tokenizers usually handle this. let's use empty string after stripping.
+        text = "      "  # only whitespace
         chunks = chunk_text_by_tokens(text, tokenizer, 10, 2)
-        assert chunks == []  # Because full_text.strip() will be empty
+        assert chunks == []  # because full_text.strip() will be empty
 
 
-# Tests for generate_embeddings
+# tests for generate_embeddings
 class TestGenerateEmbeddings:
     VALID_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
     INVALID_MODEL_NAME = "this-model-does-not-exist-ever-12345"
@@ -348,7 +348,7 @@ class TestGenerateEmbeddings:
             embeddings = generate_embeddings(texts, model_name=self.VALID_MODEL_NAME)
             assert isinstance(embeddings, np.ndarray)
             assert embeddings.shape[0] == len(texts)
-            assert embeddings.shape[1] > 0  # Embedding dimension
+            assert embeddings.shape[1] > 0  # embedding dimension
         except RuntimeError as e:
             pytest.fail(f"Failed to generate embeddings with a valid model: {e}")
 
@@ -361,16 +361,16 @@ class TestGenerateEmbeddings:
         try:
             embeddings = generate_embeddings(texts, model_name=self.VALID_MODEL_NAME)
             assert isinstance(embeddings, np.ndarray)
-            # SentenceTransformer usually returns a 0-dim array or specific shape for empty list.
-            # For `encode([])` it returns `array([], shape=(0, 384), dtype=float32)` for MiniLM
+            # sentencetransformer usually returns a 0-dim array or specific shape for empty list.
+            # for `encode([])` it returns `array([], shape=(0, 384), dtype=float32)` for minilm
             assert embeddings.shape[0] == 0
             if embeddings.ndim == 1:
-                # Handles cases like np.array([]) which has shape (0,)
-                # This means zero embeddings, dimension info is lost from shape.
+                # handles cases like np.array([]) which has shape (0,)
+                # this means zero embeddings, dimension info is lost from shape.
                 assert embeddings.shape == (0,)
             elif embeddings.ndim == 2:
-                # Handles cases like np.empty((0, 384))
-                assert embeddings.shape[1] > 0  # Dimension should still be there
+                # handles cases like np.empty((0, 384))
+                assert embeddings.shape[1] > 0  # dimension should still be there
             else:
                 pytest.fail(
                     f"Unexpected ndim {embeddings.ndim} for empty list embedding, shape: {embeddings.shape}"

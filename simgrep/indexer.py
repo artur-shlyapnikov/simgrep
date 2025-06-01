@@ -1,7 +1,7 @@
 import datetime
 import hashlib
 import os
-import pathlib  # Use pathlib consistently
+import pathlib  # use pathlib consistently
 from typing import Any, Dict, List, Optional, Tuple
 
 import duckdb
@@ -22,7 +22,7 @@ from transformers import PreTrainedTokenizerBase
 from .exceptions import (
     MetadataDBError,
     VectorStoreError,
-)  # Assuming these are in .exceptions
+)  # assuming these are in .exceptions
 from .metadata_db import (
     batch_insert_text_chunks,
     clear_persistent_project_data,
@@ -61,7 +61,7 @@ class Indexer:
         self.console = console
         self.db_conn: Optional[duckdb.DuckDBPyConnection] = None
         self.usearch_index: Optional[usearch.index.Index] = None
-        self._current_usearch_label: int = 0  # Global counter for unique USearch labels
+        self._current_usearch_label: int = 0  # global counter for unique usearch labels
 
         try:
             self.console.print(
@@ -76,7 +76,7 @@ class Indexer:
 
         try:
             self.console.print("Determining embedding dimension...")
-            # Determine embedding dimension
+            # determine embedding dimension
             dummy_emb = generate_embeddings(
                 ["simgrep_test_string"], self.config.embedding_model_name
             )
@@ -100,7 +100,7 @@ class Indexer:
         sha256_hash = hashlib.sha256()
         try:
             with open(file_path, "rb") as f:
-                # Read and update hash string value in blocks of 4K
+                # read and update hash string value in blocks of 4k
                 for byte_block in iter(lambda: f.read(4096), b""):
                     sha256_hash.update(byte_block)
             return sha256_hash.hexdigest()
@@ -117,7 +117,7 @@ class Indexer:
 
     def _prepare_data_stores(self, wipe_existing: bool) -> None:
         self.console.print("Preparing data stores (database and vector index)...")
-        # Database
+        # database
         try:
             self.db_conn = connect_persistent_db(self.config.db_path)
             self.console.print(f"Connected to database: {self.config.db_path}")
@@ -127,17 +127,17 @@ class Indexer:
                     f"Wiping existing data from database: {self.config.db_path}..."
                 )
                 clear_persistent_project_data(self.db_conn)
-                self._current_usearch_label = 0  # Reset label counter when wiping
+                self._current_usearch_label = 0  # reset label counter when wiping
                 self.console.print("Database wiped.")
         except MetadataDBError as e:
-            self.db_conn = None # Ensure it's None if setup failed
+            self.db_conn = None # ensure it's none if setup failed
             raise IndexerError(f"Database preparation failed: {e}") from e
-        except Exception as e_db_unexpected: # Catch-all for unexpected DB errors
-            self.db_conn = None # Ensure it's None if setup failed unexpectedly
+        except Exception as e_db_unexpected: # catch-all for unexpected db errors
+            self.db_conn = None # ensure it's none if setup failed unexpectedly
             raise IndexerError(f"Unexpected error during database preparation: {e_db_unexpected}") from e_db_unexpected
 
 
-        # Vector Store
+        # vector store
         try:
             if wipe_existing:
                 self.console.print(
@@ -147,10 +147,10 @@ class Indexer:
                 self.usearch_index = usearch.index.Index(
                     ndim=self.embedding_ndim,
                     metric="cos",
-                    dtype="f32",  # TODO: Make metric/dtype configurable
+                    dtype="f32",  # todo: make metric/dtype configurable
                 )
                 self.console.print("New empty vector index created.")
-            else:  # For future incremental logic
+            else:  # for future incremental logic
                 self.console.print(
                     f"Loading vector index from: {self.config.usearch_index_path}..."
                 )
@@ -177,13 +177,13 @@ class Indexer:
                         self._current_usearch_label = 0
 
         except VectorStoreError as e:
-            self.usearch_index = None # Ensure it's None if setup failed
+            self.usearch_index = None # ensure it's none if setup failed
             raise IndexerError(f"Vector store preparation failed: {e}") from e
-        except Exception as e_vs_unexpected: # Catch-all for unexpected VS errors
-            self.usearch_index = None # Ensure it's None if setup failed
+        except Exception as e_vs_unexpected: # catch-all for unexpected vs errors
+            self.usearch_index = None # ensure it's none if setup failed
             raise IndexerError(f"Unexpected error during vector store preparation: {e_vs_unexpected}") from e_vs_unexpected
 
-        # Final checks
+        # final checks
         if self.usearch_index is None:
             raise IndexerError(
                 "USearch index is None at the end of _prepare_data_stores."
@@ -201,7 +201,7 @@ class Indexer:
 
         progress.update(task_id, description=f"Processing: {file_display_name}...")
 
-        if not self.db_conn:  # Should be set by _prepare_data_stores
+        if not self.db_conn:  # should be set by _prepare_data_stores
             self.console.print(
                 f"[bold red]Error: DB connection not available for file {file_path}. Skipping.[/bold red]"
             )
@@ -214,7 +214,7 @@ class Indexer:
             return num_chunks_this_file, errors_this_file
 
         try:
-            # File Metadata
+            # file metadata
             content_hash = self._calculate_file_content_hash(file_path)
             file_stat = file_path.stat()
             file_size = file_stat.st_size
@@ -240,7 +240,7 @@ class Indexer:
                 )
                 return num_chunks_this_file, errors_this_file
 
-            # Text Extraction & Chunking
+            # text extraction & chunking
             text_content = extract_text_from_file(file_path)
             if not text_content.strip():
                 self.console.print(
@@ -271,7 +271,7 @@ class Indexer:
                 )
                 return num_chunks_this_file, errors_this_file
 
-            # Embedding & Storing Chunks
+            # embedding & storing chunks
             chunk_texts = [chunk["text"] for chunk in processed_chunks]
             embeddings_np = generate_embeddings(
                 chunk_texts, self.config.embedding_model_name
@@ -290,18 +290,18 @@ class Indexer:
                         "usearch_label": current_label,
                         "chunk_text_snippet": chunk_info["text"][
                             :255
-                        ],  # Truncate for snippet
+                        ],  # truncate for snippet
                         "start_char_offset": chunk_info["start_char_offset"],
                         "end_char_offset": chunk_info["end_char_offset"],
                         "token_count": chunk_info["token_count"],
-                        "embedding_hash": None,  # Placeholder for V1
+                        "embedding_hash": None,  # placeholder for v1
                     }
                 )
                 self._current_usearch_label += 1
 
             batch_insert_text_chunks(self.db_conn, chunk_db_records)
 
-            if self.usearch_index is None:  # Should be initialized
+            if self.usearch_index is None:  # should be initialized
                 raise IndexerError("USearch index is None during file processing.")
             self.usearch_index.add(
                 keys=np.array(usearch_labels_for_batch, dtype=np.int64),
@@ -314,7 +314,7 @@ class Indexer:
                 description=f"Processed: {file_display_name} ({num_chunks_this_file} chunks)",
             )
 
-        except FileNotFoundError as e:  # From _calculate_file_content_hash or stat()
+        except FileNotFoundError as e:  # from _calculate_file_content_hash or stat()
             self.console.print(
                 f"[bold red]Error: File not found processing {file_path}: {e}[/bold red]"
             )
@@ -324,7 +324,7 @@ class Indexer:
                 advance=1,
                 description=f"Skipped (Not Found): {file_display_name}",
             )
-        except RuntimeError as e:  # From processor functions
+        except RuntimeError as e:  # from processor functions
             self.console.print(
                 f"[bold red]Error: Runtime error processing {file_path}: {e}[/bold red]"
             )
@@ -344,7 +344,7 @@ class Indexer:
                 advance=1,
                 description=f"Skipped (Store Err): {file_display_name}",
             )
-        except IOError as e:  # General IO
+        except IOError as e:  # general io
             self.console.print(
                 f"[bold red]Error: I/O error processing {file_path}: {e}[/bold red]"
             )
@@ -364,7 +364,7 @@ class Indexer:
                 advance=1,
                 description=f"Skipped (Unexpected): {file_display_name}",
             )
-            # Optionally re-raise for critical unexpected errors or log traceback
+            # optionally re-raise for critical unexpected errors or log traceback
             # import traceback; self.console.print(traceback.format_exc())
 
         return num_chunks_this_file, errors_this_file
@@ -376,10 +376,10 @@ class Indexer:
 
         try:
             self._prepare_data_stores(wipe_existing)
-            if self.db_conn is None or self.usearch_index is None:  # Guard
+            if self.db_conn is None or self.usearch_index is None:  # guard
                 raise IndexerError("Data stores were not properly initialized (db_conn or usearch_index is None).")
 
-            # File Discovery
+            # file discovery
             files_to_process: List[pathlib.Path] = []
             if target_path.is_file():
                 files_to_process.append(target_path)
@@ -390,21 +390,21 @@ class Indexer:
                 found_files_set = set()
                 for pattern in self.config.file_scan_patterns:
                     for file_p in target_path.rglob(pattern):
-                        if file_p.is_file():  # Ensure it's a file
+                        if file_p.is_file():  # ensure it's a file
                             found_files_set.add(
                                 file_p.resolve()
-                            )  # Resolve for uniqueness
+                            )  # resolve for uniqueness
                 files_to_process = sorted(list(found_files_set))
 
             if not files_to_process:
                 self.console.print(
                     f"[yellow]No files found to index at '{target_path}' with current patterns.[/yellow]"
                 )
-                # Removed early return here to allow summary to print
+                # removed early return here to allow summary to print
             else:
                 self.console.print(f"Found {len(files_to_process)} file(s) to process.")
 
-            # Rich Progress Bar Setup
+            # rich progress bar setup
             progress_columns = [
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
@@ -428,12 +428,12 @@ class Indexer:
                     total_errors += num_e
                     if (
                         num_e == 0 and num_c >= 0
-                    ):  # Successfully processed or skipped empty/no chunks
+                    ):  # successfully processed or skipped empty/no chunks
                         total_files_processed += 1
-                    # If num_e > 0, it's an error, file not fully processed.
+                    # if num_e > 0, it's an error, file not fully processed.
                     # progress.update advances automatically in _process_and_index_file
 
-            # Finalization
+            # finalization
             if self.usearch_index is not None and len(self.usearch_index) > 0:
                 self.console.print(
                     f"Saving vector index with {len(self.usearch_index)} items..."
@@ -444,7 +444,7 @@ class Indexer:
                 self.console.print("Vector index saved.")
             elif self.usearch_index is not None and len(self.usearch_index) == 0:
                 self.console.print("Vector index is empty. Not saving.")
-                # Optionally delete an old index file if it exists and current one is empty after wipe
+                # optionally delete an old index file if it exists and current one is empty after wipe
                 self.config.usearch_index_path.unlink(missing_ok=True)
 
             self.console.print(
@@ -457,9 +457,9 @@ class Indexer:
 
         except (
             IndexerError
-        ) as e:  # Catch errors from _prepare_data_stores or other Indexer logic
+        ) as e:  # catch errors from _prepare_data_stores or other indexer logic
             self.console.print(f"[bold red]Indexer Error: {e}[/bold red]")
-            raise  # Re-raise for main.py to catch
+            raise  # re-raise for main.py to catch
         except Exception as e:
             self.console.print(
                 f"[bold red]Unexpected critical error during indexing: {e}[/bold red]"
@@ -467,12 +467,12 @@ class Indexer:
             # import traceback; self.console.print(traceback.format_exc())
             raise IndexerError(
                 f"Unexpected critical error: {e}"
-            ) from e  # Wrap in IndexerError
+            ) from e  # wrap in indexererror
         finally:
             if self.db_conn is not None:
                 try:
-                    # DuckDB auto-commits by default unless explicit transaction started.
-                    # self.db_conn.commit() # Generally not needed for DuckDB auto-commit mode
+                    # duckdb auto-commits by default unless explicit transaction started.
+                    # self.db_conn.commit() # generally not needed for duckdb auto-commit mode
                     self.db_conn.close()
                 except Exception as e:
                     self.console.print(

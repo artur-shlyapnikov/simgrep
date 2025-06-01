@@ -17,7 +17,7 @@ from simgrep.models import ChunkData
 
 @pytest.fixture
 def db_conn() -> Iterator[duckdb.DuckDBPyConnection]:
-    """Fixture to provide an in-memory DuckDB connection with ephemeral tables set up."""
+    """fixture to provide an in-memory DuckDB connection with ephemeral tables set up."""
     conn = create_inmemory_db_connection()
     setup_ephemeral_tables(conn)
     yield conn
@@ -87,7 +87,7 @@ class TestMetadataDB:
                 conn.close()
 
     def test_setup_ephemeral_tables(self, db_conn: duckdb.DuckDBPyConnection) -> None:
-        # Check if tables exist
+        # check if tables exist
         tables = db_conn.execute("SHOW TABLES;").fetchall()
         table_names = [table[0] for table in tables]
         assert "temp_files" in table_names
@@ -139,10 +139,10 @@ class TestMetadataDB:
         metadata1 = [(0, file_path)]
         batch_insert_files(db_conn, metadata1)
 
-        # Attempt to insert the same file path with a different ID (should also fail due to unique path)
-        # Or, more directly for testing UNIQUE on file_path:
-        metadata2 = [(1, file_path)] # Different ID, same path
-        # temp_files.file_path has a UNIQUE constraint
+        # attempt to insert the same file path with a different id (should also fail due to unique path)
+        # or, more directly for testing unique on file_path:
+        metadata2 = [(1, file_path)] # different id, same path
+        # temp_files.file_path has a unique constraint
         with pytest.raises(MetadataDBError, match="Failed during batch file insert"):
             batch_insert_files(db_conn, metadata2)
 
@@ -155,10 +155,10 @@ class TestMetadataDB:
         file_path2.touch()
 
         metadata1 = [(0, file_path1)]
-        metadata2 = [(0, file_path2)]  # Same file_id, different path
+        metadata2 = [(0, file_path2)]  # same file_id, different path
 
         batch_insert_files(db_conn, metadata1)
-        # temp_files.file_id is PRIMARY KEY
+        # temp_files.file_id is primary key
         with pytest.raises(MetadataDBError, match="Failed during batch file insert"):
             batch_insert_files(db_conn, metadata2)
 
@@ -168,7 +168,7 @@ class TestMetadataDB:
         sample_files_metadata: list[tuple[int, pathlib.Path]],
         sample_chunk_data_list: list[ChunkData],
     ) -> None:
-        # Insert files first to satisfy the foreign key constraint for chunks
+        # insert files first to satisfy the foreign key constraint for chunks
         batch_insert_files(db_conn, sample_files_metadata)
         batch_insert_chunks(db_conn, sample_chunk_data_list)
 
@@ -199,7 +199,7 @@ class TestMetadataDB:
         db_conn: duckdb.DuckDBPyConnection,
         sample_chunk_data_list: list[ChunkData],
     ) -> None:
-        # Files are not inserted, so FK constraint on temp_chunks.file_id will fail
+        # files are not inserted, so fk constraint on temp_chunks.file_id will fail
         with pytest.raises(MetadataDBError, match="Failed during batch chunk insert"):
             batch_insert_chunks(db_conn, sample_chunk_data_list)
 
@@ -211,19 +211,19 @@ class TestMetadataDB:
     ) -> None:
         batch_insert_files(db_conn, sample_files_metadata)
 
-        # Create a duplicate chunk_id (usearch_label)
+        # create a duplicate chunk_id (usearch_label)
         chunk_with_duplicate_id = ChunkData(
             text="Chunk 1 from file 1",
             source_file_path=sample_chunk_data_list[0].source_file_path,
             source_file_id=sample_chunk_data_list[0].source_file_id,
-            usearch_label=sample_chunk_data_list[0].usearch_label,  # Duplicate ID
+            usearch_label=sample_chunk_data_list[0].usearch_label,  # duplicate id
             start_char_offset=100,
             end_char_offset=110,
             token_count=3,
         )
         extended_chunk_list = sample_chunk_data_list + [chunk_with_duplicate_id]
 
-        # temp_chunks.chunk_id is PRIMARY KEY
+        # temp_chunks.chunk_id is primary key
         with pytest.raises(MetadataDBError, match="Failed during batch chunk insert"):
             batch_insert_chunks(db_conn, extended_chunk_list)
 
@@ -249,7 +249,7 @@ class TestMetadataDB:
     def test_retrieve_chunk_for_display_invalid_id(
         self, db_conn: duckdb.DuckDBPyConnection
     ) -> None:
-        retrieved = retrieve_chunk_for_display(db_conn, 99999)  # Non-existent ID
+        retrieved = retrieve_chunk_for_display(db_conn, 99999)  # non-existent id
         assert retrieved is None
 
     def test_retrieve_chunk_for_display_chunk_exists_file_missing_in_db(
@@ -258,37 +258,37 @@ class TestMetadataDB:
         sample_files_metadata: list[tuple[int, pathlib.Path]],
         sample_chunk_data_list: list[ChunkData],
     ) -> None:
-        # This scenario should ideally be prevented by FK constraints if data is inserted correctly.
-        # However, this tests robustness if the DB state is somehow inconsistent.
+        # this scenario should ideally be prevented by fk constraints if data is inserted correctly.
+        # however, this tests robustness if the db state is somehow inconsistent.
 
-        # Insert only the first file
+        # insert only the first file
         batch_insert_files(db_conn, [sample_files_metadata[0]])
 
-        # Insert all chunks. Chunks referring to file_id 1 will have a dangling FK if we didn't have constraints.
-        # DuckDB's default behavior with FKs will prevent inserting chunks for file_id 1.
-        # So, we'll only insert chunks for file_id 0.
+        # insert all chunks. chunks referring to file_id 1 will have a dangling fk if we didn't have constraints.
+        # duckdb's default behavior with fks will prevent inserting chunks for file_id 1.
+        # so, we'll only insert chunks for file_id 0.
         chunks_for_file0 = [c for c in sample_chunk_data_list if c.source_file_id == 0]
         batch_insert_chunks(db_conn, chunks_for_file0)
 
-        # Now, manually remove the file from temp_files after chunks are inserted
-        # This simulates an inconsistent state not achievable via normal API if FKs are active.
-        # To do this, we must temporarily disable FK checks or drop the constraint.
-        # For simplicity in a unit test, we'll assume the query in retrieve_chunk_for_display
+        # now, manually remove the file from temp_files after chunks are inserted
+        # this simulates an inconsistent state not achievable via normal api if fks are active.
+        # to do this, we must temporarily disable fk checks or drop the constraint.
+        # for simplicity in a unit test, we'll assume the query in retrieve_chunk_for_display
         # might encounter this if, for example, a file was deleted from temp_files
-        # *after* a chunk was inserted (which is bad DB management).
+        # *after* a chunk was inserted (which is bad db management).
 
-        # Store the label of a chunk we expect to be deleted
+        # store the label of a chunk we expect to be deleted
         chunk_to_retrieve_label = chunks_for_file0[0].usearch_label
 
-        # First, delete the chunks that reference file_id = 0
+        # first, delete the chunks that reference file_id = 0
         db_conn.execute("DELETE FROM temp_chunks WHERE file_id = 0;")
-        # Then, delete the file itself. This should now succeed.
+        # then, delete the file itself. this should now succeed.
         db_conn.execute("DELETE FROM temp_files WHERE file_id = 0;")
 
-        # Try to retrieve a chunk that was linked to the now-deleted file_id 0 and whose record was deleted
+        # try to retrieve a chunk that was linked to the now-deleted file_id 0 and whose record was deleted
         retrieved = retrieve_chunk_for_display(db_conn, chunk_to_retrieve_label)
 
-        # The JOIN should fail to find a match in temp_files (and temp_chunks), so result should be None
+        # the join should fail to find a match in temp_files (and temp_chunks), so result should be none
         assert (
             retrieved is None
         ), "Should not retrieve chunk if its corresponding file_id is missing from temp_files or chunk itself is deleted"

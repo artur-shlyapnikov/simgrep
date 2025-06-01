@@ -15,7 +15,7 @@ def format_show_basic(file_path: Path, chunk_text: str, score: float) -> str:
     Returns:
         A formatted string representing the search result.
     """
-    formatted_score = f"{score:.4f}"  # Format score to 4 decimal places
+    formatted_score = f"{score:.4f}"  # format score to 4 decimal places
     return f"File: {str(file_path)}\nScore: {formatted_score}\nChunk: {chunk_text}"
 
 
@@ -39,8 +39,8 @@ def format_paths(
     if not file_paths:
         return "No matching files found."
 
-    # Ensure all paths are absolute, then unique and sorted.
-    # Paths from retrieve_chunk_for_display should already be absolute and resolved.
+    # ensure all paths are absolute, then unique and sorted.
+    # paths from retrieve_chunk_for_display should already be absolute and resolved.
     unique_absolute_paths = sorted(list(set(p.resolve() for p in file_paths)))
     
     output_paths_str_list: List[str] = []
@@ -52,20 +52,20 @@ def format_paths(
                 "when use_relative was True. Defaulting to absolute paths.",
                 file=sys.stderr
             )
-            # Fallback to absolute paths for this call
+            # fallback to absolute paths for this call
             for p_abs in unique_absolute_paths:
                 output_paths_str_list.append(str(p_abs))
         else:
             abs_base_path = base_path.resolve()
             for p_abs in unique_absolute_paths:
                 try:
-                    # Ensure p_abs is also resolved before making it relative
+                    # ensure p_abs is also resolved before making it relative
                     output_paths_str_list.append(str(p_abs.resolve().relative_to(abs_base_path)))
                 except ValueError:
-                    # Fallback to absolute path if it cannot be made relative
-                    # (e.g., different drive on Windows, or not a subpath)
+                    # fallback to absolute path if it cannot be made relative
+                    # (e.g., different drive on windows, or not a subpath)
                     output_paths_str_list.append(str(p_abs.resolve()))
-    else: # use_relative is False
+    else: # use_relative is false
         for p_abs in unique_absolute_paths:
             output_paths_str_list.append(str(p_abs.resolve()))
     
