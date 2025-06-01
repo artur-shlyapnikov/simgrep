@@ -1,16 +1,11 @@
 import pathlib
-import shutil  # For cleaning up directories if needed
-from typing import Generator
 
 import pytest
 from rich.console import Console
 
 from simgrep.indexer import Indexer, IndexerConfig, IndexerError
-from simgrep.metadata_db import connect_persistent_db  # Corrected import
-from simgrep.models import (
-    SimgrepConfig,
-)  # Assuming SimgrepConfig might be needed for defaults
-from simgrep.vector_store import load_persistent_index  # Corrected import
+from simgrep.metadata_db import connect_persistent_db
+from simgrep.vector_store import load_persistent_index
 
 
 @pytest.fixture
@@ -24,8 +19,6 @@ def temp_project_dir(tmp_path: pathlib.Path) -> pathlib.Path:
 @pytest.fixture
 def indexer_config(temp_project_dir: pathlib.Path) -> IndexerConfig:
     """Provides a basic IndexerConfig for testing."""
-    # Use defaults from SimgrepConfig if applicable, or define directly
-    global_config = SimgrepConfig()
     return IndexerConfig(
         project_name="test_persistent_project",
         db_path=temp_project_dir / "metadata.duckdb",
@@ -73,7 +66,7 @@ class TestIndexerPersistent:
 
     def test_indexer_initialization(
         self, indexer_config: IndexerConfig, test_console: Console
-    ):
+    ) -> None:
         """Test if the Indexer initializes correctly."""
         try:
             indexer = Indexer(config=indexer_config, console=test_console)
@@ -88,7 +81,7 @@ class TestIndexerPersistent:
         indexer_config: IndexerConfig,
         test_console: Console,
         sample_files_dir: pathlib.Path,
-    ):
+    ) -> None:
         """Test indexing a path from scratch with wipe_existing=True."""
         indexer = Indexer(config=indexer_config, console=test_console)
 
@@ -170,7 +163,7 @@ class TestIndexerPersistent:
         indexer_config: IndexerConfig,
         test_console: Console,
         sample_files_dir: pathlib.Path,
-    ):
+    ) -> None:
         """Test indexing a single file."""
         indexer = Indexer(config=indexer_config, console=test_console)
         single_file_to_index = sample_files_dir / "file1.txt"
@@ -207,7 +200,7 @@ class TestIndexerPersistent:
         indexer_config: IndexerConfig,
         test_console: Console,
         tmp_path: pathlib.Path,
-    ):
+    ) -> None:
         """Test indexing an empty directory."""
         indexer = Indexer(config=indexer_config, console=test_console)
         empty_dir = tmp_path / "empty_test_dir"
@@ -248,7 +241,7 @@ class TestIndexerPersistent:
         indexer_config: IndexerConfig,
         test_console: Console,
         tmp_path: pathlib.Path,
-    ):
+    ) -> None:
         """Test indexing a non-existent path (should be caught by Typer usually, but test Indexer robustness)."""
         indexer = Indexer(config=indexer_config, console=test_console)
         non_existent_path = tmp_path / "does_not_exist_dir"

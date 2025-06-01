@@ -182,7 +182,9 @@ class TestPersistentMetadataDB:
             file_path1 = "/path/to/file1.txt"
             content_hash1 = "abc"
             conn.execute(
-                "INSERT INTO indexed_files (file_path, content_hash, file_size_bytes, last_modified_os) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
+                "INSERT INTO indexed_files "
+                "(file_path, content_hash, file_size_bytes, last_modified_os) "
+                "VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
                 [file_path1, content_hash1, 1024],
             )
             file1_id_result = conn.execute(
@@ -193,40 +195,56 @@ class TestPersistentMetadataDB:
 
             # insert into text_chunks referencing file1_id
             conn.execute(
-                "INSERT INTO text_chunks (file_id, usearch_label, chunk_text_snippet, start_char_offset, end_char_offset, token_count) VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO text_chunks "
+                "(file_id, usearch_label, chunk_text_snippet, "
+                "start_char_offset, end_char_offset, token_count) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
                 [file1_id, 1001, "snippet1", 0, 10, 5],
             )
 
             # try inserting a chunk with a non-existent file_id (fk violation)
             with pytest.raises(
                 duckdb.ConstraintException,
-                match=r"foreign key constraint|violates foreign key constraint|FOREIGN KEY constraint failed|Violates foreign key constraint",
+                match=(
+                    r"foreign key constraint|violates foreign key constraint|"
+                    r"FOREIGN KEY constraint failed|Violates foreign key constraint"
+                ),
             ):
                 conn.execute(
-                    "INSERT INTO text_chunks (file_id, usearch_label, chunk_text_snippet, start_char_offset, end_char_offset, token_count) VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO text_chunks (file_id, usearch_label, chunk_text_snippet, "
+                    "start_char_offset, end_char_offset, token_count) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
                     [9999, 1002, "snippet2", 0, 10, 5],
                 )  # 9999 is a non-existent file_id
 
             # try inserting duplicate file_path (unique constraint violation)
             with pytest.raises(
                 duckdb.ConstraintException,
-                match=r"UNIQUE constraint failed: indexed_files.file_path|violates unique constraint|duplicate key|Duplicate key",
+                match=(
+                    r"UNIQUE constraint failed: indexed_files.file_path|"
+                    r"violates unique constraint|duplicate key|Duplicate key"
+                ),
             ):
                 conn.execute(
-                    "INSERT INTO indexed_files (file_path, content_hash, file_size_bytes) VALUES (?, ?, ?)",
+                    "INSERT INTO indexed_files (file_path, content_hash, file_size_bytes) "
+                    "VALUES (?, ?, ?)",
                     [file_path1, "def", 2048],
                 )  # same file_path1
 
             # try inserting duplicate usearch_label (unique constraint violation)
             with pytest.raises(
                 duckdb.ConstraintException,
-                match=r"UNIQUE constraint failed: text_chunks.usearch_label|violates unique constraint|duplicate key|Duplicate key",
+                match=(
+                    r"UNIQUE constraint failed: text_chunks.usearch_label|"
+                    r"violates unique constraint|duplicate key|Duplicate key"
+                ),
             ):
-                conn.execute(
-                    "INSERT INTO text_chunks (file_id, usearch_label, chunk_text_snippet, start_char_offset, end_char_offset, token_count) VALUES (?, ?, ?, ?, ?, ?)",
-                    [file1_id, 1001, "snippet3", 10, 20, 6],
-                )  # same usearch_label 1001
-            conn.commit()
+                insert_sql = (
+                    "INSERT INTO text_chunks (file_id, usearch_label, chunk_text_snippet, "
+                    "start_char_offset, end_char_offset, token_count) "
+                    "VALUES (?, ?, ?, ?, ?, ?)"
+                )
+                conn.execute(insert_sql, [file1_id, 1001, "snippet3", 10, 20, 6])
         finally:
             if conn:
                 conn.close()

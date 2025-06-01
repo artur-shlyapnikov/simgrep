@@ -2,7 +2,7 @@ import os
 import pathlib
 import subprocess
 import sys
-from typing import Dict, List, Optional
+from typing import Dict, Generator, List, Optional
 
 import pytest
 from rich.console import Console
@@ -45,7 +45,9 @@ def run_simgrep_command(
 
 
 @pytest.fixture
-def temp_simgrep_home(tmp_path: pathlib.Path, monkeypatch) -> pathlib.Path:
+def temp_simgrep_home(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> Generator[pathlib.Path, None, None]:
     """
     Creates a temporary home directory for simgrep E2E tests.
     This fixture ensures that simgrep's configuration and data (like default project)
@@ -75,9 +77,9 @@ def temp_simgrep_home(tmp_path: pathlib.Path, monkeypatch) -> pathlib.Path:
 
 
 @pytest.fixture(scope="session")
-def sample_docs_dir_session(tmp_path_factory) -> pathlib.Path:
+def sample_docs_dir_session(tmp_path_factory: pytest.TempPathFactory) -> pathlib.Path:
     """Creates a sample documents directory for the test session."""
-    docs_dir = tmp_path_factory.mktemp("sample_docs_e2e")
+    docs_dir = pathlib.Path(tmp_path_factory.mktemp("sample_docs_e2e"))
     (docs_dir / "doc1.txt").write_text("This is a document about apples and bananas.")
     (docs_dir / "doc2.txt").write_text(
         "Another document, this one mentions oranges and apples."
@@ -102,7 +104,7 @@ class TestCliPersistentE2E:
 
     def test_index_and_search_persistent_show_mode(
         self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path
-    ):
+    ) -> None:
         env_vars = {"HOME": str(temp_simgrep_home)}
 
         # 1. Index the sample documents
@@ -141,7 +143,7 @@ class TestCliPersistentE2E:
 
     def test_index_and_search_persistent_paths_mode(
         self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path
-    ):
+    ) -> None:
         env_vars = {"HOME": str(temp_simgrep_home)}
 
         # 1. Index (assuming it's clean or wiped by indexer logic)
@@ -157,16 +159,13 @@ class TestCliPersistentE2E:
 
         # Output should be a list of paths, sorted.
         # Paths are absolute from the indexer's perspective.
-        expected_path1 = str((sample_docs_dir_session / "doc1.txt").resolve())
-        expected_path2 = str((sample_docs_dir_session / "doc2.txt").resolve())
-
         # The output may be line-wrapped, so check for substrings
         assert "doc1.txt" in search_result.stdout
         assert "doc2.txt" in search_result.stdout
 
     def test_search_persistent_no_matches(
         self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path
-    ):
+    ) -> None:
         env_vars = {"HOME": str(temp_simgrep_home)}
         run_simgrep_command(["index", str(sample_docs_dir_session)], env=env_vars)
 
@@ -186,7 +185,9 @@ class TestCliPersistentE2E:
         assert search_paths_result.returncode == 0
         assert "No matching files found." in search_paths_result.stdout
 
-    def test_search_persistent_index_not_exists(self, temp_simgrep_home: pathlib.Path):
+    def test_search_persistent_index_not_exists(
+        self, temp_simgrep_home: pathlib.Path
+    ) -> None:
         env_vars = {"HOME": str(temp_simgrep_home)}
         # Do not run index command
         search_result = run_simgrep_command(["search", "anything"], env=env_vars)
@@ -196,7 +197,7 @@ class TestCliPersistentE2E:
 
     def test_index_empty_directory(
         self, temp_simgrep_home: pathlib.Path, tmp_path: pathlib.Path
-    ):
+    ) -> None:
         env_vars = {"HOME": str(temp_simgrep_home)}
         empty_dir = tmp_path / "empty_docs_for_e2e"
         empty_dir.mkdir()
@@ -219,7 +220,7 @@ class TestCliPersistentE2E:
 
     def test_index_non_txt_files_are_ignored_by_default(
         self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path
-    ):
+    ) -> None:
         env_vars = {"HOME": str(temp_simgrep_home)}
 
         index_result = run_simgrep_command(

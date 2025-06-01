@@ -341,12 +341,14 @@ class TestGenerateEmbeddings:
     @pytest.fixture(scope="class")
     def sentence_transformer_model(self) -> "SentenceTransformer": # type: ignore # noqa: F821
         from sentence_transformers import SentenceTransformer
+
         # This relies on the model being pre-cached by CI/Makefile scripts
         # or downloaded during the first run of this fixture.
         return SentenceTransformer(self.VALID_MODEL_NAME)
 
     def test_generate_valid_embeddings(self, sentence_transformer_model: "SentenceTransformer") -> None: # type: ignore # noqa: F821
         import numpy as np
+
         from simgrep.processor import generate_embeddings
 
         texts = ["Hello world", "Simgrep is amazing"]
@@ -361,6 +363,7 @@ class TestGenerateEmbeddings:
 
     def test_generate_embeddings_empty_list(self, sentence_transformer_model: "SentenceTransformer") -> None: # type: ignore # noqa: F821
         import numpy as np
+
         from simgrep.processor import generate_embeddings
 
         texts: List[str] = []

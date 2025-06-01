@@ -121,10 +121,12 @@ def batch_insert_chunks(
     ]
     logger.info(f"Batch inserting {len(data_to_insert)} chunk(s) into temp_chunks.")
     try:
-        conn.executemany(
-            "INSERT INTO temp_chunks (chunk_id, file_id, text_content, start_char_offset, end_char_offset, token_count) VALUES (?, ?, ?, ?, ?, ?)",
-            data_to_insert,
+        sql = (
+            "INSERT INTO temp_chunks (chunk_id, file_id, text_content, "
+            "start_char_offset, end_char_offset, token_count) "
+            "VALUES (?, ?, ?, ?, ?, ?)"
         )
+        conn.executemany(sql, data_to_insert)
         logger.debug(f"Successfully inserted {len(data_to_insert)} chunk(s).")
     except duckdb.Error as e:
         logger.error(f"DuckDB error during batch chunk insert: {e}")

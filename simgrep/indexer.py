@@ -1,6 +1,4 @@
-import datetime
 import hashlib
-import os
 import pathlib  # use pathlib consistently
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -13,6 +11,7 @@ from rich.progress import (
     BarColumn,
     Progress,
     SpinnerColumn,
+    TaskID,
     TextColumn,
     TimeElapsedColumn,
     TimeRemainingColumn,
@@ -22,7 +21,9 @@ from transformers import PreTrainedTokenizerBase
 from .exceptions import (
     MetadataDBError,
     VectorStoreError,
-)  # assuming these are in .exceptions
+)
+
+# assuming these are in .exceptions
 from .metadata_db import (
     batch_insert_text_chunks,
     clear_persistent_project_data,
@@ -80,6 +81,7 @@ class Indexer:
             )
             # Import SentenceTransformer here or at the top of the file
             from sentence_transformers import SentenceTransformer
+
             self.embedding_model: SentenceTransformer = SentenceTransformer(
                 self.config.embedding_model_name
             )
@@ -104,11 +106,12 @@ class Indexer:
             raise IndexerError(
                 f"Failed to load embedding model or generate dummy embedding for ndim: {e}"
             ) from e
-        except Exception as e_model_load: # Catch other potential errors from SentenceTransformer
+        except (
+            Exception
+        ) as e_model_load:  # Catch other potential errors from SentenceTransformer
             raise IndexerError(
                 f"Unexpected error loading embedding model '{self.config.embedding_model_name}': {e_model_load}"
             ) from e_model_load
-
 
     def _calculate_file_content_hash(self, file_path: pathlib.Path) -> str:
         sha256_hash = hashlib.sha256()
@@ -144,12 +147,13 @@ class Indexer:
                 self._current_usearch_label = 0  # reset label counter when wiping
                 self.console.print("Database wiped.")
         except MetadataDBError as e:
-            self.db_conn = None # ensure it's none if setup failed
+            self.db_conn = None  # ensure it's none if setup failed
             raise IndexerError(f"Database preparation failed: {e}") from e
-        except Exception as e_db_unexpected: # catch-all for unexpected db errors
-            self.db_conn = None # ensure it's none if setup failed unexpectedly
-            raise IndexerError(f"Unexpected error during database preparation: {e_db_unexpected}") from e_db_unexpected
-
+        except Exception as e_db_unexpected:  # catch-all for unexpected db errors
+            self.db_conn = None  # ensure it's none if setup failed unexpectedly
+            raise IndexerError(
+                f"Unexpected error during database preparation: {e_db_unexpected}"
+            ) from e_db_unexpected
 
         # vector store
         try:
@@ -182,20 +186,31 @@ class Indexer:
                     self.console.print(
                         f"Loaded existing vector index with {len(self.usearch_index)} items."
                     )
-                    if (
-                        len(self.usearch_index) > 0
-                        and self.usearch_index.max_key() is not None
-                    ):
-                        self._current_usearch_label = self.usearch_index.max_key() + 1
+                    if len(self.usearch_index) > 0:
+                        # The USearch index is iterable and yields keys
+                        try:
+                            max_existing_label = max(self.usearch_index.keys)
+                            self._current_usearch_label = max_existing_label + 1
+                        except (
+                            ValueError
+                        ):  # Handles case where index is empty despite len > 0
+                            # (should not happen) or contains non-numeric keys (not expected)
+                            self.console.print(
+                                "[yellow]Warning: Could not determine max key from existing index, "
+                                "starting labels from 0.[/yellow]"
+                            )
+                            self._current_usearch_label = 0
                     else:
                         self._current_usearch_label = 0
-
         except VectorStoreError as e:
-            self.usearch_index = None # ensure it's none if setup failed
+            self.usearch_index = None  # ensure it's none if setup failed
             raise IndexerError(f"Vector store preparation failed: {e}") from e
-        except Exception as e_vs_unexpected: # catch-all for unexpected vs errors
-            self.usearch_index = None # ensure it's none if setup failed
-            raise IndexerError(f"Unexpected error during vector store preparation: {e_vs_unexpected}") from e_vs_unexpected
+        except Exception as e_vs_unexpected:  # catch-all for unexpected vs errors
+            self.usearch_index = None  # ensure it's none if setup failed
+            raise IndexerError(
+                "Unexpected error during vector store preparation: "
+                f"{e_vs_unexpected}"
+            ) from e_vs_unexpected
 
         # final checks
         if self.usearch_index is None:
@@ -203,11 +218,12 @@ class Indexer:
                 "USearch index is None at the end of _prepare_data_stores."
             )
         if self.db_conn is None:
-             raise IndexerError("DB connection is None at the end of _prepare_data_stores.")
-
+            raise IndexerError(
+                "DB connection is None at the end of _prepare_data_stores."
+            )
 
     def _process_and_index_file(
-        self, file_path: pathlib.Path, progress: Progress, task_id
+        self, file_path: pathlib.Path, progress: Progress, task_id: TaskID
     ) -> Tuple[int, int]:
         num_chunks_this_file = 0
         errors_this_file = 0
@@ -287,9 +303,7 @@ class Indexer:
 
             # embedding & storing chunks
             chunk_texts = [chunk["text"] for chunk in processed_chunks]
-            embeddings_np = generate_embeddings(
-                chunk_texts, model=self.embedding_model
-            )
+            embeddings_np = generate_embeddings(chunk_texts, model=self.embedding_model)
 
             chunk_db_records: List[Dict[str, Any]] = []
             usearch_labels_for_batch: List[int] = []
@@ -391,7 +405,9 @@ class Indexer:
         try:
             self._prepare_data_stores(wipe_existing)
             if self.db_conn is None or self.usearch_index is None:  # guard
-                raise IndexerError("Data stores were not properly initialized (db_conn or usearch_index is None).")
+                raise IndexerError(
+                    "Data stores were not properly initialized (db_conn or usearch_index is None)."
+                )
 
             # file discovery
             files_to_process: List[pathlib.Path] = []
