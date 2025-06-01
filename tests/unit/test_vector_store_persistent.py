@@ -13,7 +13,7 @@ def persistent_index_path(tmp_path: pathlib.Path) -> pathlib.Path:
     """provides a path for a persistent usearch index file within the temp directory."""
     return tmp_path / "persistent_indexes" / "test_simgrep.usearch"
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def sample_usearch_index() -> usearch.index.Index:
     """creates a sample, non-empty usearch index for testing save/load."""
     ndim = 10
@@ -23,7 +23,7 @@ def sample_usearch_index() -> usearch.index.Index:
     index.add(keys=keys, vectors=vectors)
     return index
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def empty_usearch_index() -> usearch.index.Index:
     """creates an empty usearch index."""
     return usearch.index.Index(ndim=5, metric="ip", dtype="f16")

@@ -35,8 +35,8 @@ format-check:
 	$(UV) run ruff format --check .
 
 test:
-	@echo "Running tests (Pytest)..."
-	$(UV) run pytest
+	@echo "Running tests (Pytest in parallel)..."
+	$(UV) run pytest -n auto
 
 typecheck:
 	@echo "Running static type checker (Mypy)..."

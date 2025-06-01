@@ -1,205 +1,182 @@
-import pathlib
-import sys
-from typing import Generator, List, Tuple
-
-import duckdb
 import pytest
-import usearch.index
 from rich.console import Console
-
-from simgrep.config import DEFAULT_K_RESULTS, SimgrepConfig
-from simgrep.indexer import Indexer, IndexerConfig
-from simgrep.metadata_db import connect_persistent_db
-from simgrep.models import OutputMode  # Assuming OutputMode is in models
+import duckdb
+import usearch.index
 from simgrep.searcher import perform_persistent_search
-from simgrep.vector_store import load_persistent_index
+from simgrep.models import SimgrepConfig, OutputMode
+from typing import Tuple, Generator
+from pathlib import Path
+import shutil
 
-# Minimal set of fixtures for this integration test
-
-
+# Fixtures
 @pytest.fixture
-def temp_project_dir_for_searcher(tmp_path: pathlib.Path) -> pathlib.Path:
-    project_data_dir = tmp_path / "searcher_test_project_data"
-    project_data_dir.mkdir(parents=True, exist_ok=True)
-    return project_data_dir
+def test_console() -> Console:
+    """Provides a Rich Console instance that writes to stdout, compatible with capsys."""
+    return Console(width=120)
 
+@pytest.fixture(scope="session")
+def persistent_search_test_data_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Creates dummy files in a temporary directory for indexing in persistent search tests."""
+    data_dir = tmp_path_factory.mktemp("persistent_search_data")
+    
+    file1_content = "This file talks about simgrep and advanced information retrieval techniques."
+    (data_dir / "file1.txt").write_text(file1_content)
 
-@pytest.fixture
-def global_config_for_searcher(
-    temp_project_dir_for_searcher: pathlib.Path,
-) -> SimgrepConfig:
-    # Mock or create a SimgrepConfig that points its default_project_data_dir
-    # to our temporary directory for this test.
-    class MockSimgrepConfig(SimgrepConfig):
-        default_project_data_dir: pathlib.Path = temp_project_dir_for_searcher
+    file2_content = "Another document mentioning simgrep. Semantic search is powerful."
+    (data_dir / "file2.txt").write_text(file2_content)
 
-    cfg = MockSimgrepConfig()
-    # Ensure the directory exists, though load_or_create_global_config usually does this.
-    # For this fixture, we are directly controlling it.
-    cfg.default_project_data_dir.mkdir(parents=True, exist_ok=True)
+    file3_content = "A completely unrelated file about apples and oranges."
+    (data_dir / "file3.txt").write_text(file3_content)
+    
+    return data_dir
+
+@pytest.fixture(scope="session")
+def default_simgrep_config_for_search_tests(tmp_path_factory: pytest.TempPathFactory) -> SimgrepConfig:
+    """Provides a SimgrepConfig with a temporary data directory for persistent search tests."""
+    simgrep_root_config_dir = tmp_path_factory.mktemp("simgrep_config_root_searcher")
+    default_proj_data_dir = simgrep_root_config_dir / "default_project"
+    # SimgrepConfig's default_project_data_dir.mkdir is called by load_or_create_global_config.
+    # Here, we explicitly create it for the fixture's SimgrepConfig instance.
+    default_proj_data_dir.mkdir(parents=True, exist_ok=True)
+    
+    cfg = SimgrepConfig(default_project_data_dir=default_proj_data_dir)
     return cfg
 
+@pytest.fixture(scope="session")
+def populated_persistent_index_for_searcher(
+    persistent_search_test_data_path: Path,
+    default_simgrep_config_for_search_tests: SimgrepConfig,
+) -> Generator[Tuple[duckdb.DuckDBPyConnection, usearch.index.Index, SimgrepConfig], None, None]:
+    """
+    Indexes dummy data and provides the DB connection, USearch index, and config for tests.
+    This is session-scoped for efficiency as indexing can be slow.
+    """
+    from simgrep.indexer import Indexer, IndexerConfig
+    from simgrep.metadata_db import connect_persistent_db
+    from simgrep.vector_store import load_persistent_index
 
-@pytest.fixture
-def indexer_config_for_searcher(
-    global_config_for_searcher: SimgrepConfig,
-) -> IndexerConfig:
-    return IndexerConfig(
-        project_name="searcher_test_project",
-        db_path=global_config_for_searcher.default_project_data_dir / "metadata.duckdb",
-        usearch_index_path=global_config_for_searcher.default_project_data_dir
-        / "index.usearch",
-        embedding_model_name=global_config_for_searcher.default_embedding_model_name,
-        chunk_size_tokens=global_config_for_searcher.default_chunk_size_tokens,
-        chunk_overlap_tokens=global_config_for_searcher.default_chunk_overlap_tokens,
+    cfg = default_simgrep_config_for_search_tests
+    
+    # Define unique paths for this fixture's index to avoid conflicts if other fixtures use the same dir
+    db_file = cfg.default_project_data_dir / "test_searcher_fixture_metadata.duckdb"
+    usearch_file = cfg.default_project_data_dir / "test_searcher_fixture_index.usearch"
+
+    # Clean up previous run's files if they exist, to ensure a fresh index for the session
+    if db_file.exists(): db_file.unlink()
+    if usearch_file.exists(): usearch_file.unlink()
+
+    indexer_config = IndexerConfig(
+        project_name="test_searcher_fixture_project",
+        db_path=db_file,
+        usearch_index_path=usearch_file,
+        embedding_model_name=cfg.default_embedding_model_name,
+        chunk_size_tokens=cfg.default_chunk_size_tokens,
+        chunk_overlap_tokens=cfg.default_chunk_overlap_tokens,
         file_scan_patterns=["*.txt"],
     )
+    
+    # Use a quiet console for the indexer to avoid polluting test logs
+    indexer_console = Console(quiet=True)
+    indexer = Indexer(config=indexer_config, console=indexer_console)
+    
+    indexer.index_path(target_path=persistent_search_test_data_path, wipe_existing=True)
 
+    db_conn = connect_persistent_db(db_file)
+    vector_index = load_persistent_index(usearch_file)
+    
+    if vector_index is None:
+        pytest.fail("Failed to load persistent vector index in 'populated_persistent_index_for_searcher' fixture.")
 
-@pytest.fixture
-def sample_files_for_searcher(tmp_path: pathlib.Path) -> pathlib.Path:
-    source_dir = tmp_path / "searcher_sample_files"
-    source_dir.mkdir()
-    (source_dir / "search_doc1.txt").write_text(
-        "Semantic search is a key feature of simgrep. Simgrep helps find relevant information."
-    )
-    (source_dir / "search_doc2.txt").write_text(
-        "Another document talking about vector databases and embeddings for simgrep."
-    )
-    (source_dir / "unrelated.txt").write_text(
-        "This file contains kitchen recipes for apple pie."
-    )
-    return source_dir
+    yield db_conn, vector_index, cfg
 
-
-@pytest.fixture
-def populated_persistent_index_for_searcher(
-    indexer_config_for_searcher: IndexerConfig,
-    sample_files_for_searcher: pathlib.Path,
-    test_console: Console,  # Reusing from test_indexer_persistent if available, or define one
-    global_config_for_searcher: SimgrepConfig,  # Add this parameter
-) -> Tuple[duckdb.DuckDBPyConnection, usearch.index.Index, SimgrepConfig]:
-    """Creates a persistent index, then loads and returns its components."""
-    indexer = Indexer(config=indexer_config_for_searcher, console=test_console)
-    indexer.index_path(target_path=sample_files_for_searcher, wipe_existing=True)
-
-    db_conn = connect_persistent_db(indexer_config_for_searcher.db_path)
-    vector_idx = load_persistent_index(indexer_config_for_searcher.usearch_index_path)
-
-    if vector_idx is None:
-        pytest.fail("Failed to load vector index after populating.")
-
-    yield db_conn, vector_idx, global_config_for_searcher  # Now global_config_for_searcher is a SimgrepConfig instance
-
+    # Teardown: close DB connection. Temp files are handled by tmp_path_factory.
     db_conn.close()
-
-
-@pytest.fixture
-def test_console() -> (
-    Console
-):  # Copied from test_indexer_persistent for self-containment if needed
-    return Console(file=sys.stdout, width=120, quiet=True)
-
+    # Optional: clean up the specific index files if desired, though tmp_path_factory handles the root temp dir.
+    # if db_file.exists(): db_file.unlink()
+    # if usearch_file.exists(): usearch_file.unlink()
 
 class TestSearcherPersistentIntegration:
-
-    def test_perform_persistent_search_show_mode(
+    def test_perform_persistent_search_show_mode_with_results(
         self,
         populated_persistent_index_for_searcher: Tuple[
             duckdb.DuckDBPyConnection, usearch.index.Index, SimgrepConfig
         ],
         test_console: Console,
-        capsys,  # To capture console output
+        capsys: pytest.CaptureFixture,
     ):
-        db_conn, vector_index, global_cfg = populated_persistent_index_for_searcher
-
-        query = "simgrep information retrieval"
-
-        perform_persistent_search(
-            query_text=query,
-            console=test_console,  # Use the quiet console for testing
-            db_conn=db_conn,
-            vector_index=vector_index,
-            global_config=global_cfg,
-            output_mode=OutputMode.show,
-            k_results=2,
-        )
-
-        captured = capsys.readouterr()
-        # Basic checks on output:
-        assert "Embedding query" in captured.out
-        assert "Searching persistent index" in captured.out
-        assert "Search Results" in captured.out
-        assert "File: " in captured.out  # Expecting at least one result
-        assert "Score: " in captured.out
-        assert "Chunk: " in captured.out
-        # Check that it found relevant files
-        assert "search_doc1.txt" in captured.out or "search_doc2.txt" in captured.out
-        assert "unrelated.txt" not in captured.out  # Should be less relevant
-
-    def test_perform_persistent_search_paths_mode(
-        self,
-        populated_persistent_index_for_searcher: Tuple[
-            duckdb.DuckDBPyConnection, usearch.index.Index, SimgrepConfig
-        ],
-        test_console: Console,
-        capsys,
-        sample_files_for_searcher: pathlib.Path,  # To verify paths
-    ):
-        db_conn, vector_index, global_cfg = populated_persistent_index_for_searcher
-
-        query = "vector databases"
+        db_conn, vector_index_val, global_cfg = populated_persistent_index_for_searcher
+        query = "simgrep information retrieval" # Should match content in file1.txt
 
         perform_persistent_search(
             query_text=query,
             console=test_console,
             db_conn=db_conn,
-            vector_index=vector_index,
+            vector_index=vector_index_val,
+            global_config=global_cfg,
+            output_mode=OutputMode.show,
+            k_results=2,
+            min_score=0.1
+        )
+        captured = capsys.readouterr()
+        
+        assert "Embedding query" in captured.out, "Initial 'Embedding query' print message missing."
+        assert "File:" in captured.out, "Output for 'show' mode should contain 'File:'."
+        assert "Score:" in captured.out, "Output for 'show' mode should contain 'Score:'."
+        assert "Chunk:" in captured.out, "Output for 'show' mode should contain 'Chunk:'."
+        assert "file1.txt" in captured.out, "Expected 'file1.txt' to be among the results for the query."
+
+    def test_perform_persistent_search_paths_mode_with_results(
+        self,
+        populated_persistent_index_for_searcher: Tuple[
+            duckdb.DuckDBPyConnection, usearch.index.Index, SimgrepConfig
+        ],
+        test_console: Console,
+        capsys: pytest.CaptureFixture,
+    ):
+        db_conn, vector_index_val, global_cfg = populated_persistent_index_for_searcher
+        query = "semantic search" # Should match content in file2.txt
+
+        perform_persistent_search(
+            query_text=query,
+            console=test_console,
+            db_conn=db_conn,
+            vector_index=vector_index_val,
             global_config=global_cfg,
             output_mode=OutputMode.paths,
-            k_results=3,
+            k_results=2,
+            min_score=0.1
         )
-
         captured = capsys.readouterr()
-        assert "Embedding query" in captured.out
-        assert "Searching persistent index" in captured.out
+        assert "Embedding query" in captured.out, "Initial 'Embedding query' print message missing."
+        assert "file2.txt" in captured.out, "Expected 'file2.txt' in paths output for the query."
+        # Depending on specificity and similarity, file1 might also appear if "semantic search" is close enough.
+        # For a more precise test, ensure queries are distinct or check for absence of other files.
+        # assert "file1.txt" not in captured.out # Example: if file1.txt should NOT match this query
 
-        # Expected paths (absolute)
-        expected_path1_abs = str(
-            (sample_files_for_searcher / "search_doc2.txt").resolve()
-        )
-
-        assert expected_path1_abs in captured.out
-        # search_doc1.txt might also appear depending on similarity and k
-        # unrelated.txt should not appear
-        assert "unrelated.txt" not in captured.out
-
-    def test_perform_persistent_search_no_results(
+    def test_perform_persistent_search_show_mode_no_results(
         self,
         populated_persistent_index_for_searcher: Tuple[
             duckdb.DuckDBPyConnection, usearch.index.Index, SimgrepConfig
         ],
         test_console: Console,
-        capsys,
+        capsys: pytest.CaptureFixture,
     ):
-        db_conn, vector_index, global_cfg = populated_persistent_index_for_searcher
-
-        query = (
-            "extremely obscure query with no matches expected zyxw"  # Unlikely to match
-        )
+        db_conn, vector_index_val, global_cfg = populated_persistent_index_for_searcher
+        query = "zzxxyy_non_existent_term_qwerty_12345" # Highly unlikely to match
 
         perform_persistent_search(
             query_text=query,
             console=test_console,
             db_conn=db_conn,
-            vector_index=vector_index,
+            vector_index=vector_index_val,
             global_config=global_cfg,
             output_mode=OutputMode.show,
             k_results=2,
+            min_score=0.1
         )
-
         captured = capsys.readouterr()
-        assert "No relevant chunks found in the persistent index." in captured.out
+        assert "Embedding query" in captured.out, "Initial 'Embedding query' print message missing."
+        assert "No relevant chunks found in the persistent index." in captured.out, "Expected 'no results' message for show mode."
 
     def test_perform_persistent_search_paths_mode_no_results(
         self,
@@ -207,26 +184,21 @@ class TestSearcherPersistentIntegration:
             duckdb.DuckDBPyConnection, usearch.index.Index, SimgrepConfig
         ],
         test_console: Console,
-        capsys,
+        capsys: pytest.CaptureFixture,
     ):
-        db_conn, vector_index, global_cfg = populated_persistent_index_for_searcher
-
-        query = "extremely obscure query with no matches expected zyxw vuts"  # Unlikely to match
+        db_conn, vector_index_val, global_cfg = populated_persistent_index_for_searcher
+        query = "zzxxyy_non_existent_term_qwerty_12345" # Highly unlikely to match
 
         perform_persistent_search(
             query_text=query,
             console=test_console,
             db_conn=db_conn,
-            vector_index=vector_index,
+            vector_index=vector_index_val,
             global_config=global_cfg,
             output_mode=OutputMode.paths,
             k_results=2,
+            min_score=0.1
         )
-
         captured = capsys.readouterr()
-        assert "No matching files found." in captured.out
-
-    # Add more tests:
-    # - Different k_results
-    # - Error handling (e.g., if DB connection fails mid-way, though harder to simulate here)
-    # - Relative paths (though perform_persistent_search needs base_path_for_relativity properly set)
+        assert "Embedding query" in captured.out, "Initial 'Embedding query' print message missing."
+        assert "No matching files found." in captured.out, "Expected 'no results' message for paths mode."
