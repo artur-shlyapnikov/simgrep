@@ -127,8 +127,3 @@ def perform_persistent_search(
         )
         # format_paths itself handles "no matching files found." if paths_from_matches is empty.
         console.print(output_string)
-            use_relative=display_relative_paths,
-            base_path=base_path_for_relativity,
-        )
-        # format_paths itself handles "No matching files found." if paths_from_matches is empty.
-        console.print(output_string)
