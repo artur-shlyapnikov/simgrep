@@ -23,10 +23,11 @@ dev-dependencies = [
     "mypy>=1.15.0",
     "pytest>=8.2.0",
     "ruff>=0.4.0,<0.5.0",
+    "pytest-timeout>=2.3.0",
 ]
 
 [tool.ruff]
-line-length = 120
+line-length = 130
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
@@ -45,4 +46,7 @@ disallow_untyped_calls = true
 [tool.pytest.ini_options]
 pythonpath = [
   "."
+]
+markers = [
+    "timeout: set timeout for a test (requires pytest-timeout)",
 ]
