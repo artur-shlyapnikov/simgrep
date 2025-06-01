@@ -165,6 +165,39 @@ def retrieve_chunk_for_display(
         return None
 
 
+def retrieve_chunk_details_persistent(
+    conn: duckdb.DuckDBPyConnection, usearch_label: int
+) -> Optional[Tuple[str, pathlib.Path, int, int]]:
+    """
+    Retrieves chunk details (snippet, file path, offsets) from persistent tables
+    using the usearch_label.
+    """
+    query = """
+        SELECT tc.chunk_text_snippet, f.file_path, tc.start_char_offset, tc.end_char_offset
+        FROM text_chunks tc
+        JOIN indexed_files f ON tc.file_id = f.file_id
+        WHERE tc.usearch_label = ?;
+    """
+    logger.debug(f"Retrieving persistent chunk details for usearch_label: {usearch_label}")
+    try:
+        result = conn.execute(query, [usearch_label]).fetchone()
+        if result:
+            text_snippet, file_path_str, start_offset, end_offset = result
+            logger.debug(f"Chunk with usearch_label {usearch_label} found: {file_path_str}")
+            return (
+                str(text_snippet),
+                pathlib.Path(file_path_str),
+                int(start_offset),
+                int(end_offset),
+            )
+        logger.debug(f"Chunk with usearch_label {usearch_label} not found in persistent DB.")
+        return None
+    except duckdb.Error as e:
+        logger.error(f"DuckDB error retrieving persistent chunk (label {usearch_label}): {e}")
+        # Re-raise as MetadataDBError to signal a problem with DB interaction
+        raise MetadataDBError(f"Failed to retrieve persistent chunk details for label {usearch_label}") from e
+
+
 def _create_persistent_tables_if_not_exist(conn: duckdb.DuckDBPyConnection) -> None:
     """
     Creates persistent tables (indexed_files, text_chunks) if they don't already exist.
@@ -260,22 +293,13 @@ def clear_persistent_project_data(conn: duckdb.DuckDBPyConnection) -> None:
             cursor.execute("DELETE FROM indexed_files;")
             logger.debug("Deleted all records from 'indexed_files'.")
             
-            # Reset sequences for auto-incrementing primary keys
-            sequences = [seq[0] for seq in cursor.execute("SELECT sequence_name FROM duckdb_sequences();").fetchall()]
-            if 'text_chunks_chunk_id_seq' in sequences:
-                cursor.execute("ALTER SEQUENCE text_chunks_chunk_id_seq RESTART WITH 1;")
-                logger.debug("Reset sequence 'text_chunks_chunk_id_seq'.")
-            else:
-                logger.warning("Sequence 'text_chunks_chunk_id_seq' not found for reset.")
-
-            if 'indexed_files_file_id_seq' in sequences:
-                cursor.execute("ALTER SEQUENCE indexed_files_file_id_seq RESTART WITH 1;")
-                logger.debug("Reset sequence 'indexed_files_file_id_seq'.")
-            else:
-                logger.warning("Sequence 'indexed_files_file_id_seq' not found for reset.")
+            # Resetting sequences with ALTER SEQUENCE ... RESTART is not supported in DuckDB 0.10.0
+            # For the purpose of wiping data, simply deleting records is sufficient.
+            # Primary keys will continue from their last value, which is acceptable.
+            logger.info("Sequence reset skipped as 'ALTER SEQUENCE ... RESTART' is not supported in this DuckDB version.")
             
             cursor.execute("COMMIT;")
-        logger.info("Persistent project data cleared and sequences reset.")
+        logger.info("Persistent project data cleared.") # Updated log message
     except duckdb.Error as e:
         logger.error(f"Error clearing persistent project data: {e}")
         # Attempt to rollback if transaction was started and failed

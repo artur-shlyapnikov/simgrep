@@ -1,6 +1,13 @@
+from enum import Enum
 from pathlib import Path
 
 from pydantic import BaseModel, Field  # Ensure Field is imported
+
+
+class OutputMode(str, Enum):
+    show = "show"
+    paths = "paths"
+    # Future: json, rag, copy-chunks, copy-files, count
 
 
 class ChunkData(BaseModel):
@@ -27,6 +34,7 @@ class SimgrepConfig(BaseModel):
     For Deliverable 3.1, this primarily establishes the directory for the default project's data
     and centralizes other global default settings.
     """
+
     # Core for Deliverable 3.1: Directory for the default project's database and vector index.
     # The path `~/.config/simgrep/default_project` will store data for the default project.
     # The parent `~/.config/simgrep/` will later hold the global config.toml and global metadata DB.
@@ -37,12 +45,11 @@ class SimgrepConfig(BaseModel):
     # Centralizing other global defaults from main.py constants / architecture doc:
     # These will be used by persistent indexing logic in later deliverables (e.g., 3.3, 3.4).
     # Ephemeral search in main.py might still use its local constants for now.
-    default_embedding_model_name: str = "all-MiniLM-L6-v2"
+    default_embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     default_chunk_size_tokens: int = 128
     default_chunk_overlap_tokens: int = 20
 
     # llm_api_key: Optional[str] = None # Deferred to a later phase (e.g., RAG implementation)
     # projects: List[ProjectConfig] = Field(default_factory=list) # Deferred to Deliverable 4.4
 
-    class Config:
-        validate_assignment = True # Good practice for Pydantic models
+    model_config = {"validate_assignment": True}  # Good practice for Pydantic models

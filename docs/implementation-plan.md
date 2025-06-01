@@ -170,8 +170,6 @@
     * `simgrep index ./dir1`. Check that `~/.config/simgrep/default_project/metadata.duckdb` and `index.usearch` are created/populated.
     * (Manual) Inspect DB tables to verify content.
 
----
-
 * **Deliverable 3.4: `simgrep search <query>` (Using Default Persistent Index)**
   * **Goal:** Search against the previously built persistent index.
   * **Tasks:**
@@ -184,6 +182,8 @@
         1. `simgrep index ./dir1`
         2. `simgrep search "banana"` (no path) should show results from `./dir1` based on the persistent index.
         3. `simgrep search "apple" ./another_dir/some.txt` should still do ephemeral search on `some.txt`.
+
+---
 
 * **Deliverable 3.5: Basic `simgrep status` Command**
   * **Goal:** Show basic information about the default project's index.

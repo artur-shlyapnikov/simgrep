@@ -101,9 +101,9 @@ class TestPersistentVectorStore:
 
         monkeypatch.setattr(os, "replace", mock_os_replace)
 
-        # The error message comes from the outer catch block in save_persistent_index
-        # when the inner VectorStoreError (from finalize) is caught by `except Exception as e`.
-        expected_error_message = f"Failed to save index to {temp_file_path}"
+        # The error message comes from the inner try-except block handling os.replace failure.
+        # It should indicate failure to finalize the move to the persistent_index_path.
+        expected_error_message = f"Failed to finalize saving index to {str(persistent_index_path)}" # Use str() for Path in f-string for regex
         with pytest.raises(VectorStoreError, match=expected_error_message):
             save_persistent_index(sample_usearch_index, persistent_index_path)
         

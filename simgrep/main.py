@@ -1,6 +1,5 @@
 import sys  # For printing to stderr in case of config error
 import warnings
-from enum import Enum
 from pathlib import Path
 from typing import (
     Dict,
@@ -17,16 +16,23 @@ from rich.console import Console
 
 # Assuming simgrep is installed or path is correctly set for sibling imports
 try:
-    from .config import SimgrepConfigError, load_or_create_global_config
+    from .config import (
+        DEFAULT_K_RESULTS,  # Moved from main.py
+        SimgrepConfigError,
+        load_or_create_global_config,
+    )
     from .formatter import format_paths, format_show_basic
-    from .metadata_db import (
+    from .indexer import Indexer, IndexerConfig, IndexerError
+    from .metadata_db import (  # Added connect_persistent_db, MetadataDBError
+        MetadataDBError,
         batch_insert_chunks,
         batch_insert_files,
+        connect_persistent_db,
         create_inmemory_db_connection,
         retrieve_chunk_for_display,
         setup_ephemeral_tables,
     )
-    from .models import ChunkData  # SimgrepConfig will be loaded by .config
+    from .models import ChunkData, OutputMode, SimgrepConfig  # OutputMode moved here
     from .processor import (
         ProcessedChunkInfo,
         chunk_text_by_tokens,
@@ -34,9 +40,13 @@ try:
         generate_embeddings,
         load_tokenizer,
     )
-    from .vector_store import create_inmemory_index, search_inmemory_index
-    from .indexer import Indexer, IndexerConfig, IndexerError # New imports
-    from .models import SimgrepConfig # SimgrepConfig is used by index command
+    from .searcher import perform_persistent_search  # Added perform_persistent_search
+    from .vector_store import (
+        VectorStoreError,  # Added VectorStoreError
+        create_inmemory_index,
+        load_persistent_index,
+        search_inmemory_index,
+    )
 except ImportError:
     # Fallback for running main.py directly during development
     if __name__ == "__main__":
@@ -46,16 +56,23 @@ except ImportError:
         sys.path.insert(
             0, os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         )
-        from simgrep.config import SimgrepConfigError, load_or_create_global_config
+        from simgrep.config import (
+            DEFAULT_K_RESULTS,
+            SimgrepConfigError,
+            load_or_create_global_config,
+        )
         from simgrep.formatter import format_paths, format_show_basic
+        from simgrep.indexer import Indexer, IndexerConfig, IndexerError
         from simgrep.metadata_db import (
+            MetadataDBError,  # Added
             batch_insert_chunks,
             batch_insert_files,
+            connect_persistent_db,  # Added
             create_inmemory_db_connection,
             retrieve_chunk_for_display,
             setup_ephemeral_tables,
         )
-        from simgrep.models import ChunkData, SimgrepConfig
+        from simgrep.models import ChunkData, OutputMode, SimgrepConfig
         from simgrep.processor import (
             ProcessedChunkInfo,
             chunk_text_by_tokens,
@@ -63,53 +80,47 @@ except ImportError:
             generate_embeddings,
             load_tokenizer,
         )
-        from simgrep.vector_store import create_inmemory_index, search_inmemory_index
-        from simgrep.indexer import Indexer, IndexerConfig, IndexerError
+        from simgrep.searcher import perform_persistent_search  # Added
+        from simgrep.vector_store import (  # Added
+            VectorStoreError,
+            create_inmemory_index,
+            load_persistent_index,
+            search_inmemory_index,
+        )
     else:
         raise
 
+# --- Constants for Ephemeral Search (Deliverable 1 & 2 focus) ---
+# EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2" # Now from SimgrepConfig
+# CHUNK_SIZE_TOKENS = 128 # Now from SimgrepConfig
+# OVERLAP_TOKENS = 20     # Now from SimgrepConfig
+# DEFAULT_K_RESULTS = 5  # Moved to config.py
 
+# Suppress specific warnings from sentence_transformers if needed, or handle them appropriately
 warnings.filterwarnings(
     "ignore",
-    message=(
-        "libmagic is unavailable but assists in filetype detection. "
-        "Please consider installing libmagic for better results."
-    ),
+    category=FutureWarning,
+    module="sentence_transformers.SentenceTransformer",
 )
 
-__version__ = "0.1.0"
 
-app = typer.Typer()
+# OutputMode moved to models.py
+
+# Initialize Typer app and Rich console
+app = typer.Typer(
+    name="simgrep",
+    help="A command-line tool for semantic search in local files.",
+    add_completion=False,
+    no_args_is_help=True,
+)
 console = Console()
 
 
-class OutputMode(str, Enum):
-    show = "show"
-    paths = "paths"
-    # json = "json" # Future modes
-    # rag = "rag"   # Future modes
-
-
-EMBEDDING_MODEL_NAME: str = "all-MiniLM-L6-v2"
-CHUNK_SIZE_TOKENS: int = 128
-OVERLAP_TOKENS: int = 20
-DEFAULT_K_RESULTS: int = 5
-
-
-def version_callback(value: bool) -> None:
-    if value:
-        console.print(f"simgrep version: {__version__}")
-        raise typer.Exit()
-
-
-@app.callback()
+@app.callback(invoke_without_command=True)
 def main_callback(
-    version: bool = typer.Option(
-        None,
-        "--version",
-        callback=version_callback,
-        is_eager=True,
-        help="Show version and exit.",
+    ctx: typer.Context,
+    version: Optional[bool] = typer.Option(
+        None, "--version", "-v", help="Show simgrep version and exit.", is_eager=True
     ),
 ) -> None:
     """
@@ -139,14 +150,14 @@ def main_callback(
 @app.command()
 def search(
     query_text: str = typer.Argument(..., help="The text or concept to search for."),
-    path_to_search: Path = typer.Argument(
-        ...,
-        exists=True,
+    path_to_search: Optional[Path] = typer.Argument(
+        None,  # Default to None, making it optional
+        exists=True,  # This will only be checked if path_to_search is not None
         file_okay=True,
         dir_okay=True,
         readable=True,
-        resolve_path=True,  # Ensures path_to_search is absolute and symlinks resolved
-        help="The path to the text file or directory to search within.",
+        resolve_path=True,
+        help="The path to a text file or directory for ephemeral search. If omitted, searches the default persistent index.",
     ),
     output: OutputMode = typer.Option(
         OutputMode.show,  # Default output mode
@@ -166,13 +177,91 @@ def search(
     ),
 ) -> None:
     """
-    Searches for a query within a specified text file or files in a directory using token-based chunking
-    and an in-memory DuckDB for metadata management.
+    Searches for a query within a specified text file or files in a directory (ephemeral search),
+    or against the default persistent index if path_to_search is omitted.
     """
-    console.print(
-        f"Searching for: '[bold blue]{query_text}[/bold blue]' in path: '[green]{path_to_search}[/green]'"
-    )
+    global_simgrep_config: SimgrepConfig = (
+        load_or_create_global_config()
+    )  # Load config early
 
+    if path_to_search is None:
+        # --- Persistent Search ---
+        console.print(
+            f"Searching for: '[bold blue]{query_text}[/bold blue]' in [magenta]default persistent index[/magenta]"
+        )
+        default_project_db_file = (
+            global_simgrep_config.default_project_data_dir / "metadata.duckdb"
+        )
+        default_project_usearch_file = (
+            global_simgrep_config.default_project_data_dir / "index.usearch"
+        )
+
+        if (
+            not default_project_db_file.exists()
+            or not default_project_usearch_file.exists()
+        ):
+            console.print(
+                f"[bold yellow]Warning: Default persistent index not found at "
+                f"'{global_simgrep_config.default_project_data_dir}'.[/bold yellow]\n"
+                f"Please run 'simgrep index <path>' first to create an index."
+            )
+            raise typer.Exit(code=1)
+
+        persistent_db_conn: Optional[duckdb.DuckDBPyConnection] = None
+        persistent_vector_index: Optional[usearch.index.Index] = None
+        try:
+            console.print("  Loading persistent database...")
+            persistent_db_conn = connect_persistent_db(default_project_db_file)
+            console.print("  Loading persistent vector index...")
+            persistent_vector_index = load_persistent_index(
+                default_project_usearch_file
+            )
+
+            if persistent_vector_index is None:
+                console.print(
+                    f"[bold red]Error: Vector index file loaded as None from {default_project_usearch_file}. "
+                    "Index might be corrupted or empty after a failed write.[/bold red]"
+                )
+                raise typer.Exit(code=1)
+            if len(persistent_vector_index) == 0:
+                console.print(
+                    "[yellow]Warning: The persistent vector index is empty. No search can be performed.[/yellow]"
+                )
+                # Output "no results" based on mode
+                if output == OutputMode.paths:
+                    console.print(
+                        format_paths(file_paths=[], use_relative=False, base_path=None)
+                    )
+                else:  # show
+                    console.print("  No relevant chunks found in the persistent index.")
+                raise typer.Exit()
+
+            perform_persistent_search(
+                query_text=query_text,
+                console=console,
+                db_conn=persistent_db_conn,
+                vector_index=persistent_vector_index,
+                global_config=global_simgrep_config,
+                output_mode=output,
+                k_results=DEFAULT_K_RESULTS,  # Make this configurable later
+                display_relative_paths=relative_paths,
+                # For persistent search, base_path_for_relativity might need to be CWD or a configured project root.
+                # For now, persistent search will show absolute paths if relative_paths is true but no base_path.
+                base_path_for_relativity=Path.cwd() if relative_paths else None,
+            )
+        except (MetadataDBError, VectorStoreError, RuntimeError, ValueError) as e:
+            console.print(f"[bold red]Error during persistent search: {e}[/bold red]")
+            raise typer.Exit(code=1)
+        finally:
+            if persistent_db_conn:
+                persistent_db_conn.close()
+                console.print("  Persistent database connection closed.")
+        return  # End of persistent search path
+
+    # --- Ephemeral Search (path_to_search is provided) ---
+    console.print(
+        f"Performing ephemeral search for: '[bold blue]{query_text}[/bold blue]' in path: '[green]{path_to_search}[/green]'"
+    )
     db_conn: Optional[duckdb.DuckDBPyConnection] = None
     try:
         # --- Initialize In-Memory Database ---
@@ -183,9 +272,13 @@ def search(
 
         # --- Load Tokenizer ---
         console.print("\n[bold]Setup: Loading Tokenizer[/bold]")
-        console.print(f"  Loading tokenizer for model: '{EMBEDDING_MODEL_NAME}'...")
+        console.print(
+            f"  Loading tokenizer for model: '{global_simgrep_config.default_embedding_model_name}'..."
+        )
         try:
-            tokenizer = load_tokenizer(EMBEDDING_MODEL_NAME)
+            tokenizer = load_tokenizer(
+                global_simgrep_config.default_embedding_model_name
+            )
             console.print(
                 f"    Tokenizer loaded successfully: {tokenizer.__class__.__name__}"
             )
@@ -245,8 +338,8 @@ def search(
                     chunk_text_by_tokens(
                         full_text=extracted_content,
                         tokenizer=tokenizer,
-                        chunk_size_tokens=CHUNK_SIZE_TOKENS,
-                        overlap_tokens=OVERLAP_TOKENS,
+                        chunk_size_tokens=global_simgrep_config.default_chunk_size_tokens,
+                        overlap_tokens=global_simgrep_config.default_chunk_overlap_tokens,
                     )
                 )
 
@@ -346,10 +439,11 @@ def search(
 
         try:
             console.print(
-                f"  Embedding query: '[italic blue]{query_text}[/italic blue]' using model '{EMBEDDING_MODEL_NAME}'"
+                f"  Embedding query: '[italic blue]{query_text}[/italic blue]' using model '{global_simgrep_config.default_embedding_model_name}'"
             )
             query_embedding = generate_embeddings(
-                texts=[query_text], model_name=EMBEDDING_MODEL_NAME
+                texts=[query_text],
+                model_name=global_simgrep_config.default_embedding_model_name,
             )
             console.print(f"    Query embedding shape: {query_embedding.shape}")
 
@@ -357,10 +451,11 @@ def search(
                 cd.text for cd in all_chunkdata_objects
             ]
             console.print(
-                f"  Embedding {len(chunk_texts_for_embedding)} text chunk(s) using model '{EMBEDDING_MODEL_NAME}'..."
+                f"  Embedding {len(chunk_texts_for_embedding)} text chunk(s) using model '{global_simgrep_config.default_embedding_model_name}'..."
             )
             chunk_embeddings = generate_embeddings(
-                texts=chunk_texts_for_embedding, model_name=EMBEDDING_MODEL_NAME
+                texts=chunk_texts_for_embedding,
+                model_name=global_simgrep_config.default_embedding_model_name,
             )
             console.print(f"    Chunk embeddings shape: {chunk_embeddings.shape}")
 
@@ -523,7 +618,7 @@ def index(
         file_okay=True,
         dir_okay=True,
         readable=True,
-        resolve_path=True, # Ensures path is absolute and symlinks resolved
+        resolve_path=True,  # Ensures path is absolute and symlinks resolved
         help="The path to the file or directory to index.",
     )
 ) -> None:
@@ -532,40 +627,52 @@ def index(
     WARNING: This command currently WIPES all existing data in the default project and re-indexes from scratch.
     """
     console.print(f"Starting indexing for path: [green]{path_to_index}[/green]")
-    console.print("[bold yellow]Warning: This will wipe and rebuild the default project's index.[/bold yellow]")
+    console.print(
+        "[bold yellow]Warning: This will wipe and rebuild the default project's index.[/bold yellow]"
+    )
     # Future: typer.confirm("Are you sure you want to wipe and rebuild the default project index?", abort=True)
 
     try:
         global_simgrep_config: SimgrepConfig = load_or_create_global_config()
 
         # Construct paths for the default project
-        default_project_db_file = global_simgrep_config.default_project_data_dir / "metadata.duckdb"
-        default_project_usearch_file = global_simgrep_config.default_project_data_dir / "index.usearch"
+        default_project_db_file = (
+            global_simgrep_config.default_project_data_dir / "metadata.duckdb"
+        )
+        default_project_usearch_file = (
+            global_simgrep_config.default_project_data_dir / "index.usearch"
+        )
 
         # Prepare configuration for the Indexer
         indexer_config = IndexerConfig(
-            project_name="default_project", # For logging/context
+            project_name="default_project",  # For logging/context
             db_path=default_project_db_file,
             usearch_index_path=default_project_usearch_file,
             embedding_model_name=global_simgrep_config.default_embedding_model_name,
             chunk_size_tokens=global_simgrep_config.default_chunk_size_tokens,
             chunk_overlap_tokens=global_simgrep_config.default_chunk_overlap_tokens,
-            file_scan_patterns=["*.txt"], # Initially hardcode to .txt, make configurable later
+            file_scan_patterns=[
+                "*.txt"
+            ],  # Initially hardcode to .txt, make configurable later
         )
 
         indexer_instance = Indexer(config=indexer_config, console=console)
         indexer_instance.index_path(target_path=path_to_index, wipe_existing=True)
 
-        console.print(f"[bold green]Successfully indexed '{path_to_index}' into the default project.[/bold green]")
+        console.print(
+            f"[bold green]Successfully indexed '{path_to_index}' into the default project.[/bold green]"
+        )
 
     except SimgrepConfigError as e:
         console.print(f"[bold red]Configuration Error:[/bold red]\n  {e}")
         raise typer.Exit(code=1)
-    except IndexerError as e: # Custom error from Indexer
+    except IndexerError as e:  # Custom error from Indexer
         console.print(f"[bold red]Indexing Error:[/bold red]\n  {e}")
         raise typer.Exit(code=1)
     except Exception as e:
-        console.print(f"[bold red]An unexpected error occurred during indexing:[/bold red]\n  {e}")
+        console.print(
+            f"[bold red]An unexpected error occurred during indexing:[/bold red]\n  {e}"
+        )
         # For detailed debugging, consider logging the full traceback
         # import traceback
         # console.print(f"[dim]{traceback.format_exc()}[/dim]")

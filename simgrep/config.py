@@ -6,6 +6,10 @@ except ImportError:
     from simgrep.models import SimgrepConfig
 
 
+# Default number of top results to fetch for searches
+DEFAULT_K_RESULTS = 5
+
+
 class SimgrepConfigError(Exception):
     """Custom exception for simgrep configuration errors."""
 

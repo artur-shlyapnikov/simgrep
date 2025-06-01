@@ -276,61 +276,70 @@ def save_persistent_index(index: usearch.index.Index, index_path: Path) -> None:
 
     temp_index_path = index_path.with_suffix(index_path.suffix + ".tmp")
 
+    # Step 1: Save to temporary file
     try:
         logger.info(f"Saving USearch index to temporary file {temp_index_path}")
         index.save(str(temp_index_path))
         logger.info(
             f"Successfully saved USearch index to temporary file {temp_index_path}"
         )
-
-        try:
-            os.replace(temp_index_path, index_path)
-            logger.info(
-                f"Atomically moved temporary index from {temp_index_path} to {index_path}"
-            )
-        except OSError as e_move:
-            logger.error(
-                f"Failed to move temporary index {temp_index_path} to {index_path}: {e_move}"
-            )
-            if temp_index_path.exists():
-                try:
-                    temp_index_path.unlink()
-                    logger.debug(
-                        f"Cleaned up temporary index file {temp_index_path} after move failure."
-                    )
-                except OSError as e_unlink:
-                    logger.error(
-                        f"Failed to clean up temporary index file {temp_index_path} after move failure: {e_unlink}"
-                    )
-            raise VectorStoreError(
-                f"Failed to finalize saving index to {index_path}"
-            ) from e_move
-
-    except Exception as e:  # Covers index.save() errors
+    except Exception as e_save:  # Catch errors specifically from index.save()
         logger.error(
-            f"Failed to save USearch index to temporary file {temp_index_path}: {e}"
+            f"Failed to save USearch index to temporary file {temp_index_path}: {e_save}"
         )
-        # Ensure temp file is cleaned up if save failed partway and left a file
         if temp_index_path.exists():
             try:
                 temp_index_path.unlink()
                 logger.debug(
                     f"Cleaned up temporary index file {temp_index_path} after save failure."
                 )
-            except OSError as e_unlink:
+            except OSError as e_unlink_save_fail:
                 logger.error(
-                    f"Failed to clean up temporary index file {temp_index_path} after save failure: {e_unlink}"
+                    f"Failed to clean up temporary index file {temp_index_path} "
+                    f"after save failure: {e_unlink_save_fail}"
                 )
-        raise VectorStoreError(f"Failed to save index to {temp_index_path}") from e
+        raise VectorStoreError(
+            f"Failed to save index to temporary file {temp_index_path}"
+        ) from e_save
+
+    # Step 2: Atomic move (only if save to temp succeeded)
+    try:
+        logger.info(
+            f"Attempting to atomically move temporary index from {temp_index_path} to {index_path}"
+        )
+        os.replace(temp_index_path, index_path)
+        logger.info(
+            f"Atomically moved temporary index from {temp_index_path} to {index_path}"
+        )
+    except OSError as e_move:
+        logger.error(
+            f"Failed to move temporary index {temp_index_path} to {index_path}: {e_move}"
+        )
+        # Temp file still exists here, cleanup is important
+        if temp_index_path.exists():
+            try:
+                temp_index_path.unlink()
+                logger.debug(
+                    f"Cleaned up temporary index file {temp_index_path} after move failure."
+                )
+            except OSError as e_unlink_move_fail:
+                logger.error(
+                    f"Failed to clean up temporary index file {temp_index_path} "
+                    f"after move failure: {e_unlink_move_fail}"
+                )
+        raise VectorStoreError(
+            f"Failed to finalize saving index to {index_path}"
+        ) from e_move
     finally:
-        # Final check for temp file, in case an error occurred before os.replace but after save
+        # Final check for temp file, in case an error occurred before os.replace but after save,
+        # or if an unexpected error (not OSError from replace, not Exception from save) occurred.
         if temp_index_path.exists():
             try:
                 temp_index_path.unlink()
                 logger.warning(
                     f"Lingering temporary index file {temp_index_path} found and removed in finally block."
                 )
-            except OSError as e_unlink:
+            except OSError as e_unlink_final:
                 logger.error(
-                    f"Failed to clean up lingering temporary index file {temp_index_path} in finally block: {e_unlink}"
+                    f"Failed to clean up lingering temporary index file {temp_index_path} in finally block: {e_unlink_final}"
                 )

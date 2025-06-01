@@ -115,7 +115,7 @@ def chunk_text_by_tokens(
     return chunks
 
 
-def generate_embeddings(texts: List[str], model_name: str = "all-MiniLM-L6-v2") -> np.ndarray:
+def generate_embeddings(texts: List[str], model_name: str = "sentence-transformers/all-MiniLM-L6-v2") -> np.ndarray:
     """
     Generates vector embeddings for a list of input texts using a specified
     sentence-transformer model.
