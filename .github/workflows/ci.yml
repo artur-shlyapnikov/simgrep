@@ -32,6 +32,9 @@ jobs:
       - name: Install dependencies
         run: make install
 
+      - name: Pre-cache Hugging Face model for tests
+        run: python scripts/cache_hf_model.py
+
       - name: Lint code
         run: make lint
         continue-on-error: true
