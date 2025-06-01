@@ -33,7 +33,7 @@ jobs:
         run: make install
 
       - name: Pre-cache Hugging Face model for tests
-        run: python scripts/cache_hf_model.py
+        run: make download-models
 
       - name: Lint code
         run: make lint
