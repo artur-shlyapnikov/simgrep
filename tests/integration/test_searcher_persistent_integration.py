@@ -1,4 +1,5 @@
 import pathlib
+import sys
 from typing import Generator, List, Tuple
 
 import duckdb
@@ -76,6 +77,7 @@ def populated_persistent_index_for_searcher(
     indexer_config_for_searcher: IndexerConfig,
     sample_files_for_searcher: pathlib.Path,
     test_console: Console,  # Reusing from test_indexer_persistent if available, or define one
+    global_config_for_searcher: SimgrepConfig,  # Add this parameter
 ) -> Tuple[duckdb.DuckDBPyConnection, usearch.index.Index, SimgrepConfig]:
     """Creates a persistent index, then loads and returns its components."""
     indexer = Indexer(config=indexer_config_for_searcher, console=test_console)
@@ -84,15 +86,10 @@ def populated_persistent_index_for_searcher(
     db_conn = connect_persistent_db(indexer_config_for_searcher.db_path)
     vector_idx = load_persistent_index(indexer_config_for_searcher.usearch_index_path)
 
-    # We need a SimgrepConfig instance that points to this specific temp project dir
-    # The global_config_for_searcher fixture already does this.
-    # Find the SimgrepConfig that was used to create indexer_config_for_searcher
-    # This is a bit indirect. Let's assume global_config_for_searcher is the one.
-
     if vector_idx is None:
         pytest.fail("Failed to load vector index after populating.")
 
-    yield db_conn, vector_idx, global_config_for_searcher  # global_config_for_searcher points to the right dir
+    yield db_conn, vector_idx, global_config_for_searcher  # Now global_config_for_searcher is a SimgrepConfig instance
 
     db_conn.close()
 
@@ -101,7 +98,7 @@ def populated_persistent_index_for_searcher(
 def test_console() -> (
     Console
 ):  # Copied from test_indexer_persistent for self-containment if needed
-    return Console(width=120, quiet=True)
+    return Console(file=sys.stdout, width=120, quiet=True)
 
 
 class TestSearcherPersistentIntegration:

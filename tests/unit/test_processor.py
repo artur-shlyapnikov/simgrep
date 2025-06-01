@@ -338,39 +338,41 @@ class TestGenerateEmbeddings:
     VALID_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
     INVALID_MODEL_NAME = "this-model-does-not-exist-ever-12345"
 
-    def test_generate_valid_embeddings(self) -> None:
-        import numpy as np
+    @pytest.fixture(scope="class")
+    def sentence_transformer_model(self) -> "SentenceTransformer": # type: ignore # noqa: F821
+        from sentence_transformers import SentenceTransformer
+        # This relies on the model being pre-cached by CI/Makefile scripts
+        # or downloaded during the first run of this fixture.
+        return SentenceTransformer(self.VALID_MODEL_NAME)
 
+    def test_generate_valid_embeddings(self, sentence_transformer_model: "SentenceTransformer") -> None: # type: ignore # noqa: F821
+        import numpy as np
         from simgrep.processor import generate_embeddings
 
         texts = ["Hello world", "Simgrep is amazing"]
         try:
-            embeddings = generate_embeddings(texts, model_name=self.VALID_MODEL_NAME)
+            # Use the pre-loaded model
+            embeddings = generate_embeddings(texts, model=sentence_transformer_model)
             assert isinstance(embeddings, np.ndarray)
             assert embeddings.shape[0] == len(texts)
             assert embeddings.shape[1] > 0  # embedding dimension
         except RuntimeError as e:
             pytest.fail(f"Failed to generate embeddings with a valid model: {e}")
 
-    def test_generate_embeddings_empty_list(self) -> None:
+    def test_generate_embeddings_empty_list(self, sentence_transformer_model: "SentenceTransformer") -> None: # type: ignore # noqa: F821
         import numpy as np
-
         from simgrep.processor import generate_embeddings
 
         texts: List[str] = []
         try:
-            embeddings = generate_embeddings(texts, model_name=self.VALID_MODEL_NAME)
+            # Use the pre-loaded model
+            embeddings = generate_embeddings(texts, model=sentence_transformer_model)
             assert isinstance(embeddings, np.ndarray)
-            # sentencetransformer usually returns a 0-dim array or specific shape for empty list.
-            # for `encode([])` it returns `array([], shape=(0, 384), dtype=float32)` for minilm
             assert embeddings.shape[0] == 0
             if embeddings.ndim == 1:
-                # handles cases like np.array([]) which has shape (0,)
-                # this means zero embeddings, dimension info is lost from shape.
                 assert embeddings.shape == (0,)
             elif embeddings.ndim == 2:
-                # handles cases like np.empty((0, 384))
-                assert embeddings.shape[1] > 0  # dimension should still be there
+                assert embeddings.shape[1] > 0
             else:
                 pytest.fail(
                     f"Unexpected ndim {embeddings.ndim} for empty list embedding, shape: {embeddings.shape}"
@@ -382,6 +384,7 @@ class TestGenerateEmbeddings:
         from simgrep.processor import generate_embeddings
 
         texts = ["This will fail"]
+        # This test specifically checks the model loading by name path with an invalid name
         with pytest.raises(
             RuntimeError,
             match=f"Failed to generate embeddings using model '{self.INVALID_MODEL_NAME}'",

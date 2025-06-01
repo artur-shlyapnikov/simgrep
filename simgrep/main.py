@@ -438,12 +438,24 @@ def search(
         )
 
         try:
+            # Load embedding model once for ephemeral search
+            from sentence_transformers import SentenceTransformer
+            embedding_model_instance: Optional[SentenceTransformer] = None
+            try:
+                console.print(f"  Loading embedding model '{global_simgrep_config.default_embedding_model_name}'...")
+                embedding_model_instance = SentenceTransformer(global_simgrep_config.default_embedding_model_name)
+                console.print("    Embedding model loaded.")
+            except Exception as e_model_load:
+                 console.print(f"[bold red]Fatal Error: Could not load embedding model.[/bold red]\n  Details: {e_model_load}")
+                 raise typer.Exit(code=1)
+
+
             console.print(
-                f"  Embedding query: '[italic blue]{query_text}[/italic blue]' using model '{global_simgrep_config.default_embedding_model_name}'"
+                f"  Embedding query: '[italic blue]{query_text}[/italic blue]'..."
             )
             query_embedding = generate_embeddings(
                 texts=[query_text],
-                model_name=global_simgrep_config.default_embedding_model_name,
+                model=embedding_model_instance, # Pass pre-loaded model
             )
             console.print(f"    Query embedding shape: {query_embedding.shape}")
 
@@ -451,11 +463,11 @@ def search(
                 cd.text for cd in all_chunkdata_objects
             ]
             console.print(
-                f"  Embedding {len(chunk_texts_for_embedding)} text chunk(s) using model '{global_simgrep_config.default_embedding_model_name}'..."
+                f"  Embedding {len(chunk_texts_for_embedding)} text chunk(s)..."
             )
             chunk_embeddings = generate_embeddings(
                 texts=chunk_texts_for_embedding,
-                model_name=global_simgrep_config.default_embedding_model_name,
+                model=embedding_model_instance, # Pass pre-loaded model
             )
             console.print(f"    Chunk embeddings shape: {chunk_embeddings.shape}")
 

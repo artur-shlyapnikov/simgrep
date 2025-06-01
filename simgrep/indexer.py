@@ -75,10 +75,19 @@ class Indexer:
             raise IndexerError(f"Failed to load tokenizer: {e}") from e
 
         try:
+            self.console.print(
+                f"Loading embedding model: '{self.config.embedding_model_name}'..."
+            )
+            # Import SentenceTransformer here or at the top of the file
+            from sentence_transformers import SentenceTransformer
+            self.embedding_model: SentenceTransformer = SentenceTransformer(
+                self.config.embedding_model_name
+            )
+            self.console.print("Embedding model loaded.")
+
             self.console.print("Determining embedding dimension...")
-            # determine embedding dimension
             dummy_emb = generate_embeddings(
-                ["simgrep_test_string"], self.config.embedding_model_name
+                ["simgrep_test_string"], model=self.embedding_model
             )
             if (
                 dummy_emb.ndim != 2
@@ -95,6 +104,11 @@ class Indexer:
             raise IndexerError(
                 f"Failed to load embedding model or generate dummy embedding for ndim: {e}"
             ) from e
+        except Exception as e_model_load: # Catch other potential errors from SentenceTransformer
+            raise IndexerError(
+                f"Unexpected error loading embedding model '{self.config.embedding_model_name}': {e_model_load}"
+            ) from e_model_load
+
 
     def _calculate_file_content_hash(self, file_path: pathlib.Path) -> str:
         sha256_hash = hashlib.sha256()
@@ -274,7 +288,7 @@ class Indexer:
             # embedding & storing chunks
             chunk_texts = [chunk["text"] for chunk in processed_chunks]
             embeddings_np = generate_embeddings(
-                chunk_texts, self.config.embedding_model_name
+                chunk_texts, model=self.embedding_model
             )
 
             chunk_db_records: List[Dict[str, Any]] = []

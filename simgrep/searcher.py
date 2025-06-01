@@ -26,6 +26,7 @@ def perform_persistent_search(
     k_results: int = DEFAULT_K_RESULTS,
     display_relative_paths: bool = False,
     base_path_for_relativity: Optional[pathlib.Path] = None,
+    min_score: float = 0.1,
 ) -> None:
     """
     Orchestrates the search process against a pre-existing, loaded persistent index.
@@ -53,7 +54,12 @@ def perform_persistent_search(
         console.print(f"[bold red]Error during vector search:[/bold red]\n  {e}")
         raise  # re-raise
 
-    if not search_matches:
+    # Filter by min_score
+    filtered_matches = [
+        (label, score) for (label, score) in search_matches if score >= min_score
+    ]
+
+    if not filtered_matches:
         if output_mode == OutputMode.paths:
             # format_paths handles "no matching files found."
             console.print(
@@ -70,9 +76,9 @@ def perform_persistent_search(
     # process and format results
     if output_mode == OutputMode.show:
         console.print(
-            f"\n[bold cyan]Search Results (Top {len(search_matches)} from persistent index):[/bold cyan]"
+            f"\n[bold cyan]Search Results (Top {len(filtered_matches)} from persistent index):[/bold cyan]"
         )
-        for matched_usearch_label, similarity_score in search_matches:
+        for matched_usearch_label, similarity_score in filtered_matches:
             try:
                 retrieved_details = retrieve_chunk_details_persistent(
                     db_conn, matched_usearch_label
@@ -99,7 +105,7 @@ def perform_persistent_search(
     elif output_mode == OutputMode.paths:
         paths_from_matches: List[pathlib.Path] = []
         unique_paths_seen = set()  # to ensure uniqueness before format_paths
-        for matched_usearch_label, _similarity_score in search_matches:
+        for matched_usearch_label, _similarity_score in filtered_matches:
             try:
                 retrieved_details = retrieve_chunk_details_persistent(
                     db_conn, matched_usearch_label

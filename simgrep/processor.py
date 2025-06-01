@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, TypedDict, cast
+from typing import List, Optional, TypedDict, cast
 
 import numpy as np
 import unstructured.partition.auto as auto_partition
@@ -71,7 +71,7 @@ def chunk_text_by_tokens(
         full_text,
         return_offsets_mapping=True,
         add_special_tokens=False,
-        truncation=False
+        truncation=False,
     )
 
     all_token_ids = encoding.input_ids
@@ -86,9 +86,9 @@ def chunk_text_by_tokens(
     current_token_idx = 0
     while current_token_idx < len(all_token_ids):
         token_slice_end = current_token_idx + chunk_size_tokens
-        
-        chunk_token_ids_batch = all_token_ids[current_token_idx : token_slice_end]
-        chunk_offsets_batch = all_offsets[current_token_idx : token_slice_end]
+
+        chunk_token_ids_batch = all_token_ids[current_token_idx:token_slice_end]
+        chunk_offsets_batch = all_offsets[current_token_idx:token_slice_end]
 
         if not chunk_token_ids_batch:
             break
@@ -98,36 +98,70 @@ def chunk_text_by_tokens(
         start_char = chunk_offsets_batch[0][0]
         # The last token's end offset is the chunk's end
         end_char = chunk_offsets_batch[-1][1]
-        
+
         chunk_text = tokenizer.decode(chunk_token_ids_batch, skip_special_tokens=True)
-        
+
         num_tokens_in_this_chunk = len(chunk_token_ids_batch)
 
-        chunks.append(ProcessedChunkInfo(
-            text=chunk_text,
-            start_char_offset=start_char,
-            end_char_offset=end_char,
-            token_count=num_tokens_in_this_chunk
-        ))
-        
+        chunks.append(
+            ProcessedChunkInfo(
+                text=chunk_text,
+                start_char_offset=start_char,
+                end_char_offset=end_char,
+                token_count=num_tokens_in_this_chunk,
+            )
+        )
+
         current_token_idx += step
-        
+
     return chunks
 
 
-def generate_embeddings(texts: List[str], model_name: str = "sentence-transformers/all-MiniLM-L6-v2") -> np.ndarray:
+def generate_embeddings(
+    texts: List[str],
+    model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
+    model: Optional[SentenceTransformer] = None,
+) -> np.ndarray:
     """
     Generates vector embeddings for a list of input texts using a specified
     sentence-transformer model.
+
+    Args:
+        texts: A list of strings to embed.
+        model_name: The name of the sentence-transformer model to use if `model` is not provided.
+        model: An optional pre-loaded SentenceTransformer model instance.
+
+    Returns:
+        A NumPy array of embeddings.
+
+    Raises:
+        RuntimeError: If embedding generation fails.
     """
     try:
-        model = SentenceTransformer(model_name)
-        embeddings = model.encode(texts, show_progress_bar=False)
+        active_model: SentenceTransformer
+        if model is None:
+            active_model = SentenceTransformer(model_name)
+        else:
+            active_model = model
+
+        embeddings = active_model.encode(texts, show_progress_bar=False)
         return embeddings
     except Exception as e:
+        # Determine which model name to report in the error
+        error_model_name = (
+            model_name
+            if model is None
+            else (
+                model.model_card_data.base_model
+                if hasattr(model, "model_card_data")
+                and hasattr(model.model_card_data, "base_model")
+                else "provided_model"
+            )
+        )
+
         error_message = (
-            f"Failed to generate embeddings using model '{model_name}'. "
+            f"Failed to generate embeddings using model '{error_model_name}'. "
             f"Ensure the model name is correct and an internet connection "
-            f"is available for the first download. Original error: {e}"
+            f"is available for the first download if loading by name. Original error: {e}"
         )
         raise RuntimeError(error_message) from e
