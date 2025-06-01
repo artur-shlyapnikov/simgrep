@@ -1,4 +1,4 @@
-.PHONY: install lint format format-check test typecheck run clean help
+.PHONY: install lint format format-check test typecheck run clean help download-models
 
 PYTHON_VERSION := $(shell cat .python-version)
 UV := uv
@@ -11,10 +11,11 @@ help:
 	@echo "  lint         - Run linters (Ruff check)"
 	@echo "  format       - Format code (Ruff format)"
 	@echo "  format-check - Check code formatting (Ruff format --check)"
-	@echo "  test         - Run unit tests (Pytest)"
-	@echo "  typecheck    - Run static type checker (Mypy)"
-	@echo "  run        - Run the simgrep application (e.g., simgrep --help)"
-	@echo "  clean      - Clean up build artifacts and cache files"
+	@echo "  test           - Run unit tests (Pytest)"
+	@echo "  typecheck      - Run static type checker (Mypy)"
+	@echo "  download-models- Pre-download and cache Hugging Face models used by the project"
+	@echo "  run            - Run the simgrep application (e.g., simgrep --help)"
+	@echo "  clean          - Clean up build artifacts and cache files"
 	@echo ""
 
 install:
@@ -41,6 +42,10 @@ typecheck:
 	@echo "Running static type checker (Mypy)..."
 	$(UV) run mypy simgrep/ tests/
 
+download-models:
+	@echo "Downloading and caching Hugging Face models..."
+	$(UV) run python scripts/cache_hf_model.py
+
 run:
 	@echo "Running simgrep --help as an example..."
 	$(UV) run simgrep --help
@@ -64,7 +69,7 @@ check-python-version:
 	fi
 	$(UV) version # A simple uv command to ensure it's working with the environment
 
-setup: check-python-version install
+setup: check-python-version install download-models
 	@echo "Setup complete."
 
 all: install lint format-check test typecheck
