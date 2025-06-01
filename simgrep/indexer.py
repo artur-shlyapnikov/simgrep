@@ -400,9 +400,9 @@ class Indexer:
                 self.console.print(
                     f"[yellow]No files found to index at '{target_path}' with current patterns.[/yellow]"
                 )
-                return
-
-            self.console.print(f"Found {len(files_to_process)} file(s) to process.")
+                # Removed early return here to allow summary to print
+            else:
+                self.console.print(f"Found {len(files_to_process)} file(s) to process.")
 
             # Rich Progress Bar Setup
             progress_columns = [

@@ -67,6 +67,9 @@ def perform_persistent_search(
             console.print("  No relevant chunks found in the persistent index.")
         return
 
+    # --- Similarity threshold for OutputMode.paths ---
+    SIMILARITY_THRESHOLD = 0.2
+
     # Process and format results
     if output_mode == OutputMode.show:
         console.print(
@@ -99,7 +102,9 @@ def perform_persistent_search(
     elif output_mode == OutputMode.paths:
         paths_from_matches: List[pathlib.Path] = []
         unique_paths_seen = set()  # To ensure uniqueness before format_paths
-        for matched_usearch_label, _similarity_score in search_matches:
+        for matched_usearch_label, similarity_score in search_matches:
+            if similarity_score < SIMILARITY_THRESHOLD:
+                continue  # Skip low-similarity matches
             try:
                 retrieved_details = retrieve_chunk_details_persistent(
                     db_conn, matched_usearch_label

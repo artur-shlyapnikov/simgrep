@@ -179,10 +179,18 @@ def search_inmemory_index(
                 actual_keys = search_result.keys[0]
                 actual_distances = search_result.distances[0]
     elif isinstance(search_result, usearch.index.Matches):  # Single query result
-        num_found_for_query = search_result.count  # type: ignore[attr-defined]
-        if num_found_for_query > 0:
-            actual_keys = search_result.keys
-            actual_distances = search_result.distances
+        # .count attribute is not available on usearch.index.Matches in recent versions.
+        # Use len(search_result.keys) instead.
+        if hasattr(search_result, 'keys') and search_result.keys is not None:
+            num_found_for_query = len(search_result.keys)
+            if num_found_for_query > 0:
+                actual_keys = search_result.keys
+                actual_distances = search_result.distances
+        else: # Should not happen if keys is a mandatory attribute of Matches
+            num_found_for_query = 0
+            actual_keys = None
+            actual_distances = None
+
 
     if (
         num_found_for_query > 0
