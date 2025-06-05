@@ -51,3 +51,6 @@ pythonpath = [
 markers = [
     "timeout: set timeout for a test (requires pytest-timeout)",
 ]
+
+[tool.setuptools]
+packages = ["simgrep"]
