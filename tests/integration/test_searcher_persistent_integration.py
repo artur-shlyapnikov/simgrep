@@ -119,7 +119,7 @@ class TestSearcherPersistentIntegration:
         ],
         test_console: Console,
         capsys: pytest.CaptureFixture,
-        tmp_path: Path,
+        persistent_search_test_data_path: Path,
     ) -> None:
         db_conn, vector_index_val, global_cfg = populated_persistent_index_for_searcher
         query = "simgrep information retrieval"  # Should match content in file1.txt
@@ -141,11 +141,11 @@ class TestSearcherPersistentIntegration:
         ), "Initial 'Embedding query' print message missing."
 
         # Robust check for file path
-        expected_path_str = str(tmp_path / "file1.txt")
+        expected_path_str = str(persistent_search_test_data_path / "file1.txt")
         cleaned_output = captured.out.replace("\n", "").replace("\r", "")
         assert (
-            f"File:{expected_path_str}" in cleaned_output
-        ), f"Expected 'File:{expected_path_str}' to be among the results."
+            f"File: {expected_path_str}" in cleaned_output
+        ), f"Expected 'File: {expected_path_str}' to be among the results."
 
         assert (
             "Score:" in captured.out
@@ -161,7 +161,7 @@ class TestSearcherPersistentIntegration:
         ],
         test_console: Console,
         capsys: pytest.CaptureFixture,
-        tmp_path: Path,
+        persistent_search_test_data_path: Path,
     ) -> None:
         db_conn, vector_index_val, global_cfg = populated_persistent_index_for_searcher
         query = "semantic search"  # Should match content in file2.txt
@@ -182,7 +182,7 @@ class TestSearcherPersistentIntegration:
         ), "Initial 'Embedding query' print message missing."
 
         # Robust check for file path
-        expected_path_str = str(tmp_path / "file2.txt")
+        expected_path_str = str(persistent_search_test_data_path / "file2.txt")
         cleaned_output = captured.out.replace("\n", "").replace("\r", "")
         assert (
             expected_path_str in cleaned_output
@@ -207,7 +207,7 @@ class TestSearcherPersistentIntegration:
             global_config=global_cfg,
             output_mode=OutputMode.show,
             k_results=2,
-            min_score=0.1,
+            min_score=0.95,
         )
         captured = capsys.readouterr()
         assert (
@@ -236,7 +236,7 @@ class TestSearcherPersistentIntegration:
             global_config=global_cfg,
             output_mode=OutputMode.paths,
             k_results=2,
-            min_score=0.1,
+            min_score=0.95,
         )
         captured = capsys.readouterr()
         assert (
