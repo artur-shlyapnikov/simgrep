@@ -31,6 +31,8 @@ from .metadata_db import (
     batch_insert_text_chunks,
     clear_persistent_project_data,
     connect_persistent_db,
+    delete_file_records,
+    get_all_indexed_file_records,
     insert_indexed_file_record,
 )
 from .processor import (
@@ -156,7 +158,7 @@ class Indexer:
             raise IndexerError(f"Vector store preparation failed: {e}") from e
         except Exception as e_vs_unexpected:  # catch-all for unexpected vs errors
             self.usearch_index = None  # ensure it's none if setup failed
-            raise IndexerError("Unexpected error during vector store preparation: " f"{e_vs_unexpected}") from e_vs_unexpected
+            raise IndexerError(f"Unexpected error during vector store preparation: {e_vs_unexpected}") from e_vs_unexpected
 
         # final checks
         if self.usearch_index is None:
@@ -355,8 +357,8 @@ class Indexer:
                 found_files_set = set()
                 for pattern in self.config.file_scan_patterns:
                     for file_p in target_path.rglob(pattern):
-                        if file_p.is_file():  # ensure it's a file
-                            found_files_set.add(file_p.resolve())  # resolve for uniqueness
+                        if file_p.is_file():
+                            found_files_set.add(file_p.resolve())
                 files_to_process = sorted(list(found_files_set))
 
             if not files_to_process:
@@ -364,6 +366,24 @@ class Indexer:
                 # removed early return here to allow summary to print
             else:
                 self.console.print(f"Found {len(files_to_process)} file(s) to process.")
+
+            existing_records: Dict[pathlib.Path, Tuple[int, str]] = {}
+            if not wipe_existing:
+                try:
+                    assert self.db_conn is not None
+                    for fid, path_str, chash in get_all_indexed_file_records(self.db_conn):
+                        existing_records[pathlib.Path(path_str).resolve()] = (fid, chash)
+                except MetadataDBError as e:
+                    raise IndexerError(f"Failed to fetch existing file records: {e}") from e
+
+                existing_paths = set(existing_records.keys())
+                current_paths = set(p.resolve() for p in files_to_process)
+                deleted_paths = existing_paths - current_paths
+                for del_p in deleted_paths:
+                    fid, _ = existing_records[del_p]
+                    removed_labels = delete_file_records(self.db_conn, fid)
+                    if self.usearch_index is not None and removed_labels:
+                        self.usearch_index.remove(keys=np.array(removed_labels, dtype=np.int64))
 
             # rich progress bar setup
             progress_columns = [
@@ -383,10 +403,40 @@ class Indexer:
 
                 workers = max_workers if max_workers and max_workers > 0 else os.cpu_count() or 1
 
-                if workers <= 1 or len(files_to_process) <= 1:
-                    for file_p in files_to_process:
+                def submit_file(file_p: pathlib.Path) -> Optional[concurrent.futures.Future[Tuple[int, int]]]:
+                    nonlocal total_chunks_indexed, total_errors, total_files_processed
+                    resolved_fp = file_p.resolve()
+                    if not wipe_existing and resolved_fp in existing_records:
+                        try:
+                            current_hash = calculate_file_hash(resolved_fp)
+                        except FileNotFoundError:
+                            progress.update(
+                                file_processing_task,
+                                advance=1,
+                                description=f"Skipped (missing): {file_p.name}",
+                            )
+                            total_errors += 1
+                            return None
+
+                        stored_id, stored_hash = existing_records[resolved_fp]
+                        if current_hash == stored_hash:
+                            progress.update(
+                                file_processing_task,
+                                advance=1,
+                                description=f"Skipped (unchanged): {file_p.name}",
+                            )
+                            total_files_processed += 1
+                            return None
+
+                        with db_lock:
+                            removed_labels = delete_file_records(self.db_conn, stored_id)
+                        if self.usearch_index is not None and removed_labels:
+                            with index_lock:
+                                self.usearch_index.remove(keys=np.array(removed_labels, dtype=np.int64))
+
+                    if workers <= 1:
                         num_c, num_e = self._process_and_index_file(
-                            file_p,
+                            resolved_fp,
                             progress,
                             file_processing_task,
                             db_lock,
@@ -397,21 +447,25 @@ class Indexer:
                         total_errors += num_e
                         if num_e == 0 and num_c >= 0:
                             total_files_processed += 1
+                        return None
+
+                    return executor.submit(
+                        self._process_and_index_file,
+                        resolved_fp,
+                        progress,
+                        file_processing_task,
+                        db_lock,
+                        index_lock,
+                        label_lock,
+                    )
+
+                if workers <= 1 or len(files_to_process) <= 1:
+                    for file_p in files_to_process:
+                        submit_file(file_p)
                 else:
                     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
-                        futures = [
-                            executor.submit(
-                                self._process_and_index_file,
-                                file_p,
-                                progress,
-                                file_processing_task,
-                                db_lock,
-                                index_lock,
-                                label_lock,
-                            )
-                            for file_p in files_to_process
-                        ]
-                        for fut in concurrent.futures.as_completed(futures):
+                        futures = [submit_file(fp) for fp in files_to_process]
+                        for fut in concurrent.futures.as_completed([f for f in futures if f]):
                             num_c, num_e = fut.result()
                             total_chunks_indexed += num_c
                             total_errors += num_e

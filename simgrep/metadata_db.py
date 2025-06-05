@@ -70,9 +70,7 @@ def setup_ephemeral_tables(conn: duckdb.DuckDBPyConnection) -> None:
         raise MetadataDBError("Failed to set up ephemeral tables") from e
 
 
-def batch_insert_files(
-    conn: duckdb.DuckDBPyConnection, files_metadata: List[Tuple[int, pathlib.Path]]
-) -> None:
+def batch_insert_files(conn: duckdb.DuckDBPyConnection, files_metadata: List[Tuple[int, pathlib.Path]]) -> None:
     """
     Batch inserts file metadata into the temp_files table.
     Args:
@@ -86,18 +84,14 @@ def batch_insert_files(
     data_to_insert = [(fid, str(fp.resolve())) for fid, fp in files_metadata]
     logger.info(f"Batch inserting {len(data_to_insert)} file(s) into temp_files.")
     try:
-        conn.executemany(
-            "INSERT INTO temp_files (file_id, file_path) VALUES (?, ?)", data_to_insert
-        )
+        conn.executemany("INSERT INTO temp_files (file_id, file_path) VALUES (?, ?)", data_to_insert)
         logger.debug(f"Successfully inserted {len(data_to_insert)} file(s).")
     except duckdb.Error as e:
         logger.error(f"DuckDB error during batch file insert: {e}")
         raise MetadataDBError("Failed during batch file insert") from e
 
 
-def batch_insert_chunks(
-    conn: duckdb.DuckDBPyConnection, chunk_data_list: List[ChunkData]
-) -> None:
+def batch_insert_chunks(conn: duckdb.DuckDBPyConnection, chunk_data_list: List[ChunkData]) -> None:
     """
     Batch inserts chunk data into the temp_chunks table.
     Args:
@@ -133,9 +127,7 @@ def batch_insert_chunks(
         raise MetadataDBError("Failed during batch chunk insert") from e
 
 
-def retrieve_chunk_for_display(
-    conn: duckdb.DuckDBPyConnection, chunk_id: int
-) -> Optional[Tuple[str, pathlib.Path, int, int]]:
+def retrieve_chunk_for_display(conn: duckdb.DuckDBPyConnection, chunk_id: int) -> Optional[Tuple[str, pathlib.Path, int, int]]:
     """
     Retrieves necessary chunk details for display, given a chunk_id.
     Assumes ephemeral table structure.
@@ -262,22 +254,16 @@ def connect_persistent_db(db_path: pathlib.Path) -> duckdb.DuckDBPyConnection:
         logger.info(f"Ensured directory exists for DB: {db_path.parent}")
     except OSError as e:
         logger.error(f"Failed to create directory for DB at {db_path.parent}: {e}")
-        raise MetadataDBError(
-            f"Could not create directory for database at {db_path.parent}"
-        ) from e
+        raise MetadataDBError(f"Could not create directory for database at {db_path.parent}") from e
 
     try:
         conn = duckdb.connect(database=str(db_path), read_only=False)
         logger.info(f"Successfully connected to persistent DB at {db_path}")
         # duckdb enforces foreign keys by default if defined in schema.
         # the pragma foreign_keys = on; is sqlite syntax.
-        logger.debug(
-            f"Foreign key constraints are enforced by default in DuckDB for DB at {db_path}"
-        )
+        logger.debug(f"Foreign key constraints are enforced by default in DuckDB for DB at {db_path}")
     except duckdb.Error as e:
-        logger.error(
-            f"Failed to connect to or initialize persistent DB at {db_path}: {e}"
-        )
+        logger.error(f"Failed to connect to or initialize persistent DB at {db_path}: {e}")
         raise MetadataDBError(f"Failed to connect/initialize DB at {db_path}") from e
 
     _create_persistent_tables_if_not_exist(conn)
@@ -294,12 +280,12 @@ def clear_persistent_project_data(conn: duckdb.DuckDBPyConnection) -> None:
             logger.debug("Deleted all records from 'text_chunks'.")
             cursor.execute("DELETE FROM indexed_files;")
             logger.debug("Deleted all records from 'indexed_files'.")
-            
+
             # resetting sequences with alter sequence ... restart is not supported in duckdb 0.10.0
             # for the purpose of wiping data, simply deleting records is sufficient.
             # primary keys will continue from their last value, which is acceptable.
             logger.info("Sequence reset skipped as 'ALTER SEQUENCE ... RESTART' is not supported in this DuckDB version.")
-            
+
             cursor.execute("COMMIT;")
         logger.info("Persistent project data cleared.")
     except duckdb.Error as e:
@@ -315,13 +301,13 @@ def clear_persistent_project_data(conn: duckdb.DuckDBPyConnection) -> None:
 
 def insert_indexed_file_record(
     conn: duckdb.DuckDBPyConnection,
-    file_path: str, # absolute, resolved path
+    file_path: str,  # absolute, resolved path
     content_hash: str,
     file_size_bytes: int,
-    last_modified_os_timestamp: float, # from file_path.stat().st_mtime
+    last_modified_os_timestamp: float,  # from file_path.stat().st_mtime
 ) -> Optional[int]:
     logger.debug(f"Attempting to insert metadata for file: {file_path}")
-    
+
     last_modified_dt = datetime.datetime.fromtimestamp(last_modified_os_timestamp)
 
     try:
@@ -333,7 +319,7 @@ def insert_indexed_file_record(
             """,
             [file_path, content_hash, file_size_bytes, last_modified_dt],
         ).fetchone()
-        
+
         if result and result[0] is not None:
             file_id = int(result[0])
             logger.info(f"Inserted file '{file_path}' into 'indexed_files' with file_id {file_id}.")
@@ -356,16 +342,18 @@ def batch_insert_text_chunks(conn: duckdb.DuckDBPyConnection, chunk_records: Lis
 
     data_to_insert = []
     for record in chunk_records:
-        data_to_insert.append((
-            record["file_id"],
-            record["usearch_label"],
-            record["chunk_text_snippet"],
-            record["start_char_offset"],
-            record["end_char_offset"],
-            record["token_count"],
-            record.get("embedding_hash"),
-        ))
-    
+        data_to_insert.append(
+            (
+                record["file_id"],
+                record["usearch_label"],
+                record["chunk_text_snippet"],
+                record["start_char_offset"],
+                record["end_char_offset"],
+                record["token_count"],
+                record.get("embedding_hash"),
+            )
+        )
+
     logger.info(f"Batch inserting {len(data_to_insert)} chunk record(s) into persistent 'text_chunks'.")
     try:
         # using an explicit transaction for batch insert
@@ -396,6 +384,54 @@ def batch_insert_text_chunks(conn: duckdb.DuckDBPyConnection, chunk_records: Lis
         except duckdb.Error as rb_err:
             logger.error(f"Failed to rollback transaction: {rb_err}")
         raise MetadataDBError("Failed during batch insert into 'text_chunks'") from e
+
+
+def get_indexed_file_record_by_path(conn: duckdb.DuckDBPyConnection, file_path: str) -> Optional[Tuple[int, str]]:
+    """Return (file_id, content_hash) for a stored file path if it exists."""
+    try:
+        row = conn.execute(
+            "SELECT file_id, content_hash FROM indexed_files WHERE file_path = ?;",
+            [file_path],
+        ).fetchone()
+        if row:
+            return int(row[0]), str(row[1])
+        return None
+    except duckdb.Error as e:
+        logger.error(f"DuckDB error fetching record for {file_path}: {e}")
+        raise MetadataDBError("Failed to fetch indexed file record") from e
+
+
+def get_all_indexed_file_records(conn: duckdb.DuckDBPyConnection) -> List[Tuple[int, str, str]]:
+    """Retrieve all indexed file records as (file_id, file_path, content_hash)."""
+    try:
+        rows = conn.execute("SELECT file_id, file_path, content_hash FROM indexed_files;").fetchall()
+        return [(int(r[0]), str(r[1]), str(r[2])) for r in rows]
+    except duckdb.Error as e:
+        logger.error(f"DuckDB error fetching all indexed file records: {e}")
+        raise MetadataDBError("Failed to fetch indexed file records") from e
+
+
+def delete_file_records(conn: duckdb.DuckDBPyConnection, file_id: int) -> List[int]:
+    """Delete all records related to a file and return removed usearch labels."""
+    try:
+        labels_rows = conn.execute(
+            "SELECT usearch_label FROM text_chunks WHERE file_id = ?;",
+            [file_id],
+        ).fetchall()
+        labels = [int(r[0]) for r in labels_rows]
+        with conn.cursor() as cursor:
+            cursor.execute("BEGIN TRANSACTION;")
+            cursor.execute("DELETE FROM text_chunks WHERE file_id = ?;", [file_id])
+            cursor.execute("DELETE FROM indexed_files WHERE file_id = ?;", [file_id])
+            cursor.execute("COMMIT;")
+        return labels
+    except duckdb.Error as e:
+        logger.error(f"DuckDB error deleting records for file_id {file_id}: {e}")
+        try:
+            conn.execute("ROLLBACK;")
+        except duckdb.Error:
+            pass
+        raise MetadataDBError("Failed to delete file records") from e
 
 
 def get_index_counts(conn: duckdb.DuckDBPyConnection) -> Tuple[int, int]:

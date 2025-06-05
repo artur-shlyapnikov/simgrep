@@ -42,6 +42,7 @@ try:
         load_tokenizer,
     )
     from .searcher import perform_persistent_search  # Added perform_persistent_search
+    from .utils import gather_files_to_process
     from .vector_store import (
         VectorStoreError,  # Added VectorStoreError
         create_inmemory_index,
@@ -81,6 +82,7 @@ except ImportError:
             load_tokenizer,
         )
         from simgrep.searcher import perform_persistent_search  # Added
+        from simgrep.utils import gather_files_to_process
         from simgrep.vector_store import (  # Added
             VectorStoreError,
             create_inmemory_index,
@@ -155,12 +157,24 @@ def search(
         resolve_path=True,
         help="The path to a text file or directory for ephemeral search. If omitted, searches the default persistent index.",
     ),
+    patterns: Optional[List[str]] = typer.Option(
+        None,
+        "--pattern",
+        "-p",
+        help="Glob pattern(s) for files when searching directories. Can be used multiple times. Defaults to '*.txt'.",
+    ),
     output: OutputMode = typer.Option(
         OutputMode.show,  # Default output mode
         "--output",
         "-o",
         help="Output mode. 'paths' mode lists unique, sorted file paths containing matches.",
         case_sensitive=False,
+    ),
+    top: int = typer.Option(
+        DEFAULT_K_RESULTS,
+        "--top",
+        "--k",
+        help="Number of top results to return from the vector search.",
     ),
     relative_paths: bool = typer.Option(
         False,
@@ -172,9 +186,11 @@ def search(
         ),
     ),
 ) -> None:
-    """
-    Searches for a query within a specified text file or files in a directory (ephemeral search),
-    or against the default persistent index if path_to_search is omitted.
+    """Searches for a query within files.
+
+    If ``path_to_search`` is a directory, files are discovered using the given
+    ``patterns`` (default ``['*.txt']``). If ``path_to_search`` is omitted the
+    persistent index is searched instead.
     """
     global_simgrep_config: SimgrepConfig = load_or_create_global_config()  # Load config early
 
@@ -213,7 +229,14 @@ def search(
                 console.print("[yellow]Warning: The persistent vector index is empty. No search can be performed.[/yellow]")
                 # Output "no results" based on mode
                 if output == OutputMode.paths:
-                    console.print(format_paths(file_paths=[], use_relative=False, base_path=None))
+                    console.print(
+                        format_paths(
+                            file_paths=[],
+                            use_relative=False,
+                            base_path=None,
+                            console=console,
+                        )
+                    )
                 else:  # show
                     console.print("  No relevant chunks found in the persistent index.")
                 raise typer.Exit()
@@ -225,7 +248,7 @@ def search(
                 vector_index=persistent_vector_index,
                 global_config=global_simgrep_config,
                 output_mode=output,
-                k_results=DEFAULT_K_RESULTS,  # Make this configurable later
+                k_results=top,
                 display_relative_paths=relative_paths,
                 # For persistent search, base_path_for_relativity might need to be CWD or a configured project root.
                 # For now, persistent search will show absolute paths if relative_paths is true but no base_path.
@@ -266,17 +289,17 @@ def search(
         files_to_process: List[Path] = []
         files_skipped: List[Tuple[Path, str]] = []
 
+        search_patterns = patterns or ["*.txt"]
+        files_to_process = gather_files_to_process(path_to_search, search_patterns)
+
         if path_to_search.is_file():
-            files_to_process.append(path_to_search)
             console.print(f"Processing single file: [green]{path_to_search}[/green]")
-        elif path_to_search.is_dir():
-            console.print(f"Scanning directory: [green]{path_to_search}[/green] for processable files...")
-            discovered_files_generator = path_to_search.rglob("*.txt")
-            files_to_process = list(discovered_files_generator)
+        else:
+            console.print(f"Scanning directory: [green]{path_to_search}[/green] for files matching: {search_patterns}...")
             if not files_to_process:
-                console.print(f"[yellow]No '.txt' files found in directory: {path_to_search}[/yellow]")
+                console.print(f"[yellow]No files found in directory {path_to_search} with patterns {search_patterns}[/yellow]")
             else:
-                console.print(f"Found {len(files_to_process)} '.txt' file(s) to process.")
+                console.print(f"Found {len(files_to_process)} file(s) to process.")
 
         if not files_to_process:
             console.print("No files selected for processing. Exiting.")
@@ -326,7 +349,7 @@ def search(
 
             except FileNotFoundError:
                 console.print(
-                    f"    [bold red]Error: File not found during processing loop: {file_path_item}. " "Skipping.[/bold red]"
+                    f"    [bold red]Error: File not found during processing loop: {file_path_item}. Skipping.[/bold red]"
                 )
                 files_skipped.append((file_path_item, "File not found during processing"))
             except RuntimeError as e:
@@ -334,7 +357,7 @@ def search(
                 files_skipped.append((file_path_item, str(e)))
             except ValueError as ve:
                 console.print(
-                    f"    [bold red]Error with chunking parameters for file '{file_path_item}': {ve}. " "Skipping.[/bold red]"
+                    f"    [bold red]Error with chunking parameters for file '{file_path_item}': {ve}. Skipping.[/bold red]"
                 )
                 files_skipped.append((file_path_item, str(ve)))
             except Exception as e:
@@ -436,11 +459,11 @@ def search(
                     f"Metric: {vector_index.metric}, DType: {str(vector_index.dtype)}"
                 )
 
-                console.print(f"  Searching index for top {DEFAULT_K_RESULTS} similar chunk(s)...")
+                console.print(f"  Searching index for top {top} similar chunk(s)...")
                 search_matches = search_inmemory_index(
                     index=vector_index,
                     query_embedding=query_embedding,
-                    k=DEFAULT_K_RESULTS,
+                    k=top,
                 )
 
                 if not search_matches:
@@ -464,7 +487,12 @@ def search(
         if not search_matches:
             if output == OutputMode.paths:
                 console.print(
-                    format_paths(file_paths=[], use_relative=False, base_path=None)
+                    format_paths(
+                        file_paths=[],
+                        use_relative=False,
+                        base_path=None,
+                        console=console,
+                    )
                 )  # Handles "No matching files found."
             else:  # OutputMode.show or other future modes that might show "no results"
                 console.print("  No relevant chunks found for your query in the processed file(s).")
@@ -492,6 +520,7 @@ def search(
                     file_paths=paths_from_matches,
                     use_relative=actual_use_relative,
                     base_path=current_base_path_for_relativity,
+                    console=console,
                 )
                 if output_string:
                     console.print(output_string)
