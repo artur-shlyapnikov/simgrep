@@ -4,8 +4,12 @@ import subprocess
 import sys
 from typing import Dict, Generator, List, Optional
 
+import duckdb
 import pytest
 from rich.console import Console
+
+pytest.importorskip("sentence_transformers")
+pytest.importorskip("usearch.index")
 
 PROJECT_ROOT = pathlib.Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -178,6 +182,37 @@ class TestCliPersistentE2E:
             "No relevant chunks found" in search_result.stdout
             or "Score:" in search_result.stdout
         )
+
+    def test_status_after_index(
+        self,
+        temp_simgrep_home: pathlib.Path,
+        sample_docs_dir_session: pathlib.Path,
+    ) -> None:
+        env_vars = {"HOME": str(temp_simgrep_home)}
+        run_simgrep_command(["index", str(sample_docs_dir_session)], env=env_vars)
+
+        db_file = (
+            temp_simgrep_home
+            / ".config"
+            / "simgrep"
+            / "default_project"
+            / "metadata.duckdb"
+        )
+        conn = duckdb.connect(str(db_file))
+        files_count = conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()[0]
+        chunks_count = conn.execute("SELECT COUNT(*) FROM text_chunks;").fetchone()[0]
+        conn.close()
+
+        status_result = run_simgrep_command(["status"], env=env_vars)
+        assert status_result.returncode == 0
+        expected_line = f"Default Project: {files_count} files indexed, {chunks_count} chunks."
+        assert expected_line in status_result.stdout
+
+    def test_status_without_index(self, temp_simgrep_home: pathlib.Path) -> None:
+        env_vars = {"HOME": str(temp_simgrep_home)}
+        status_result = run_simgrep_command(["status"], env=env_vars)
+        assert status_result.returncode == 1
+        assert "Default persistent index not found" in status_result.stdout
 
         search_paths_result = run_simgrep_command(
             ["search", "nonexistentqueryxyz", "--output", "paths"], env=env_vars

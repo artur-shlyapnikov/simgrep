@@ -185,7 +185,7 @@
 
 ---
 
-* **Deliverable 3.5: Basic `simgrep status` Command**
+* **Deliverable 3.5: Basic `simgrep status` Command** **(Done)**
   * **Goal:** Show basic information about the default project's index.
   * **Tasks:**
         1. Add `status` command to `main.py`.
