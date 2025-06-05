@@ -1,6 +1,10 @@
 import pathlib  # use pathlib consistently
 from typing import Any, Dict, List, Optional, Tuple
 
+import concurrent.futures
+import os
+import threading
+
 import duckdb
 import numpy as np
 import usearch.index
@@ -160,7 +164,15 @@ class Indexer:
         if self.db_conn is None:
             raise IndexerError("DB connection is None at the end of _prepare_data_stores.")
 
-    def _process_and_index_file(self, file_path: pathlib.Path, progress: Progress, task_id: TaskID) -> Tuple[int, int]:
+    def _process_and_index_file(
+        self,
+        file_path: pathlib.Path,
+        progress: Progress,
+        task_id: TaskID,
+        db_lock: threading.Lock,
+        index_lock: threading.Lock,
+        label_lock: threading.Lock,
+    ) -> Tuple[int, int]:
         num_chunks_this_file = 0
         errors_this_file = 0
         file_display_name = file_path.name
@@ -184,13 +196,14 @@ class Indexer:
             file_size = file_stat.st_size
             last_modified_ts = file_stat.st_mtime
 
-            file_id = insert_indexed_file_record(
-                self.db_conn,
-                file_path=str(file_path.resolve()),
-                content_hash=content_hash,
-                file_size_bytes=file_size,
-                last_modified_os_timestamp=last_modified_ts,
-            )
+            with db_lock:
+                file_id = insert_indexed_file_record(
+                    self.db_conn,
+                    file_path=str(file_path.resolve()),
+                    content_hash=content_hash,
+                    file_size_bytes=file_size,
+                    last_modified_os_timestamp=last_modified_ts,
+                )
 
             if file_id is None:
                 self.console.print(f"[bold red]Error: Failed to get file_id for {file_path}. Skipping.[/bold red]")
@@ -237,7 +250,9 @@ class Indexer:
             usearch_labels_for_batch: List[int] = []
 
             for i, chunk_info in enumerate(processed_chunks):
-                current_label = self._current_usearch_label
+                with label_lock:
+                    current_label = self._current_usearch_label
+                    self._current_usearch_label += 1
                 usearch_labels_for_batch.append(current_label)
 
                 chunk_db_records.append(
@@ -251,16 +266,17 @@ class Indexer:
                         "embedding_hash": None,  # placeholder for v1
                     }
                 )
-                self._current_usearch_label += 1
 
-            batch_insert_text_chunks(self.db_conn, chunk_db_records)
+            with db_lock:
+                batch_insert_text_chunks(self.db_conn, chunk_db_records)
 
             if self.usearch_index is None:  # should be initialized
                 raise IndexerError("USearch index is None during file processing.")
-            self.usearch_index.add(
-                keys=np.array(usearch_labels_for_batch, dtype=np.int64),
-                vectors=embeddings_np,
-            )
+            with index_lock:
+                self.usearch_index.add(
+                    keys=np.array(usearch_labels_for_batch, dtype=np.int64),
+                    vectors=embeddings_np,
+                )
             num_chunks_this_file = len(processed_chunks)
             progress.update(
                 task_id,
@@ -313,7 +329,12 @@ class Indexer:
 
         return num_chunks_this_file, errors_this_file
 
-    def index_path(self, target_path: pathlib.Path, wipe_existing: bool) -> None:
+    def index_path(
+        self,
+        target_path: pathlib.Path,
+        wipe_existing: bool,
+        max_workers: Optional[int] = None,
+    ) -> None:
         total_files_processed = 0
         total_chunks_indexed = 0
         total_errors = 0
@@ -356,14 +377,46 @@ class Indexer:
             ]
             with Progress(*progress_columns, console=self.console, transient=False) as progress:
                 file_processing_task = progress.add_task("[cyan]Indexing files...", total=len(files_to_process))
-                for file_p in files_to_process:
-                    num_c, num_e = self._process_and_index_file(file_p, progress, file_processing_task)
-                    total_chunks_indexed += num_c
-                    total_errors += num_e
-                    if num_e == 0 and num_c >= 0:  # successfully processed or skipped empty/no chunks
-                        total_files_processed += 1
-                    # if num_e > 0, it's an error, file not fully processed.
-                    # progress.update advances automatically in _process_and_index_file
+                db_lock = threading.Lock()
+                index_lock = threading.Lock()
+                label_lock = threading.Lock()
+
+                workers = max_workers if max_workers and max_workers > 0 else os.cpu_count() or 1
+
+                if workers <= 1 or len(files_to_process) <= 1:
+                    for file_p in files_to_process:
+                        num_c, num_e = self._process_and_index_file(
+                            file_p,
+                            progress,
+                            file_processing_task,
+                            db_lock,
+                            index_lock,
+                            label_lock,
+                        )
+                        total_chunks_indexed += num_c
+                        total_errors += num_e
+                        if num_e == 0 and num_c >= 0:
+                            total_files_processed += 1
+                else:
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+                        futures = [
+                            executor.submit(
+                                self._process_and_index_file,
+                                file_p,
+                                progress,
+                                file_processing_task,
+                                db_lock,
+                                index_lock,
+                                label_lock,
+                            )
+                            for file_p in files_to_process
+                        ]
+                        for fut in concurrent.futures.as_completed(futures):
+                            num_c, num_e = fut.result()
+                            total_chunks_indexed += num_c
+                            total_errors += num_e
+                            if num_e == 0 and num_c >= 0:
+                                total_files_processed += 1
 
             # finalization
             if self.usearch_index is not None and len(self.usearch_index) > 0:
