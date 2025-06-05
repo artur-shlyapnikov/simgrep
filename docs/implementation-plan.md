@@ -101,7 +101,7 @@
   * **Tasks:**
         1. `uv add duckdb`
         2. In `simgrep/metadata_db.py`:
-            *`create_inmemory_db() -> duckdb.DuckDBPyConnection`.
+            *`create_inmemory_db_connection() -> duckdb.DuckDBPyConnection`.
             * Define schema and create functions for `temp_files (file_id PK, file_path TEXT)` and `temp_chunks (chunk_id PK, file_id FK, usearch_label INT, text_snippet TEXT, start_offset INT, end_offset INT)`.
             * Functions to insert `ChunkData` into these tables. USearch will store `chunk_id` as its label.
         3. Modify `search` command: Populate in-memory DuckDB. After USearch returns `chunk_id`s, query DuckDB to get full `ChunkData`.
