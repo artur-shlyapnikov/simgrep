@@ -5,6 +5,10 @@ from pathlib import Path
 from typing import List
 
 import pytest
+
+pytest.importorskip("transformers")
+pytest.importorskip("sentence_transformers")
+
 from transformers import PreTrainedTokenizerBase
 
 from simgrep.processor import extract_text_from_file

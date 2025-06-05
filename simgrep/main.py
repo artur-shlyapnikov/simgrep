@@ -29,6 +29,7 @@ try:
         batch_insert_files,
         connect_persistent_db,
         create_inmemory_db_connection,
+        get_index_counts,
         retrieve_chunk_for_display,
         setup_ephemeral_tables,
     )
@@ -69,6 +70,7 @@ except ImportError:
             batch_insert_files,
             connect_persistent_db,  # Added
             create_inmemory_db_connection,
+            get_index_counts,
             retrieve_chunk_for_display,
             setup_ephemeral_tables,
         )
@@ -689,6 +691,36 @@ def index(
         # import traceback
         # console.print(f"[dim]{traceback.format_exc()}[/dim]")
         raise typer.Exit(code=1)
+
+
+@app.command()
+def status() -> None:
+    try:
+        cfg: SimgrepConfig = load_or_create_global_config()
+    except SimgrepConfigError:
+        raise typer.Exit(code=1)
+
+    db_file = cfg.default_project_data_dir / "metadata.duckdb"
+    if not db_file.exists():
+        console.print(
+            f"[bold yellow]Warning: Default persistent index not found at '{cfg.default_project_data_dir}'.[/bold yellow]\n"
+            "Please run 'simgrep index <path>' first to create an index."
+        )
+        raise typer.Exit(code=1)
+
+    conn: Optional[duckdb.DuckDBPyConnection] = None
+    try:
+        conn = connect_persistent_db(db_file)
+        files_count, chunks_count = get_index_counts(conn)
+        console.print(
+            f"Default Project: {files_count} files indexed, {chunks_count} chunks."
+        )
+    except MetadataDBError as e:
+        console.print(f"[bold red]Error retrieving status: {e}[/bold red]")
+        raise typer.Exit(code=1)
+    finally:
+        if conn:
+            conn.close()
 
 
 if __name__ == "__main__":

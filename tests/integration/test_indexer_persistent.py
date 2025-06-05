@@ -3,6 +3,10 @@ import pathlib
 import pytest
 from rich.console import Console
 
+pytest.importorskip("transformers")
+pytest.importorskip("sentence_transformers")
+pytest.importorskip("usearch.index")
+
 from simgrep.indexer import Indexer, IndexerConfig, IndexerError
 from simgrep.metadata_db import connect_persistent_db
 from simgrep.vector_store import load_persistent_index

@@ -6,6 +6,10 @@ import pytest
 import usearch.index
 from rich.console import Console
 
+pytest.importorskip("transformers")
+pytest.importorskip("sentence_transformers")
+pytest.importorskip("usearch.index")
+
 from simgrep.models import OutputMode, SimgrepConfig
 from simgrep.searcher import perform_persistent_search
 

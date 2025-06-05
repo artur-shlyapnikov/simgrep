@@ -5,6 +5,9 @@ import numpy as np
 import pytest
 import usearch.index
 
+pytest.importorskip("numpy")
+pytest.importorskip("usearch.index")
+
 from simgrep.vector_store import (
     VectorStoreError,
     load_persistent_index,

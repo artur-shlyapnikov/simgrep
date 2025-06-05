@@ -396,3 +396,15 @@ def batch_insert_text_chunks(conn: duckdb.DuckDBPyConnection, chunk_records: Lis
         except duckdb.Error as rb_err:
             logger.error(f"Failed to rollback transaction: {rb_err}")
         raise MetadataDBError("Failed during batch insert into 'text_chunks'") from e
+
+
+def get_index_counts(conn: duckdb.DuckDBPyConnection) -> Tuple[int, int]:
+    try:
+        file_res = conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()
+        chunk_res = conn.execute("SELECT COUNT(*) FROM text_chunks;").fetchone()
+        files_count = int(file_res[0]) if file_res else 0
+        chunks_count = int(chunk_res[0]) if chunk_res else 0
+        return files_count, chunks_count
+    except duckdb.Error as e:
+        logger.error(f"DuckDB error retrieving index counts: {e}")
+        raise MetadataDBError("Failed to retrieve index counts") from e
