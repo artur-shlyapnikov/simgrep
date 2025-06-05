@@ -10,8 +10,8 @@ pytest.importorskip("transformers")
 pytest.importorskip("sentence_transformers")
 pytest.importorskip("usearch.index")
 
-from simgrep.models import OutputMode, SimgrepConfig
-from simgrep.searcher import perform_persistent_search
+from simgrep.models import OutputMode, SimgrepConfig  # noqa: E402
+from simgrep.searcher import perform_persistent_search  # noqa: E402
 
 
 # Fixtures
@@ -26,9 +26,7 @@ def persistent_search_test_data_path(tmp_path_factory: pytest.TempPathFactory) -
     """Creates dummy files in a temporary directory for indexing in persistent search tests."""
     data_dir = tmp_path_factory.mktemp("persistent_search_data")
 
-    file1_content = (
-        "This file talks about simgrep and advanced information retrieval techniques."
-    )
+    file1_content = "This file talks about simgrep and advanced information retrieval techniques."
     (data_dir / "file1.txt").write_text(file1_content)
 
     file2_content = "Another document mentioning simgrep. Semantic search is powerful."
@@ -59,9 +57,7 @@ def default_simgrep_config_for_search_tests(
 def populated_persistent_index_for_searcher(
     persistent_search_test_data_path: Path,
     default_simgrep_config_for_search_tests: SimgrepConfig,
-) -> Generator[
-    Tuple[duckdb.DuckDBPyConnection, usearch.index.Index, SimgrepConfig], None, None
-]:
+) -> Generator[Tuple[duckdb.DuckDBPyConnection, usearch.index.Index, SimgrepConfig], None, None]:
     """
     Indexes dummy data and provides the DB connection, USearch index, and config for tests.
     This is session-scoped for efficiency as indexing can be slow.
@@ -102,9 +98,7 @@ def populated_persistent_index_for_searcher(
     vector_index = load_persistent_index(usearch_file)
 
     if vector_index is None:
-        pytest.fail(
-            "Failed to load persistent vector index in 'populated_persistent_index_for_searcher' fixture."
-        )
+        pytest.fail("Failed to load persistent vector index in 'populated_persistent_index_for_searcher' fixture.")
 
     yield db_conn, vector_index, cfg
 
@@ -118,9 +112,7 @@ def populated_persistent_index_for_searcher(
 class TestSearcherPersistentIntegration:
     def test_perform_persistent_search_show_mode_with_results(
         self,
-        populated_persistent_index_for_searcher: Tuple[
-            duckdb.DuckDBPyConnection, usearch.index.Index, SimgrepConfig
-        ],
+        populated_persistent_index_for_searcher: Tuple[duckdb.DuckDBPyConnection, usearch.index.Index, SimgrepConfig],
         test_console: Console,
         capsys: pytest.CaptureFixture,
         persistent_search_test_data_path: Path,
@@ -140,29 +132,19 @@ class TestSearcherPersistentIntegration:
         )
         captured = capsys.readouterr()
 
-        assert (
-            "Embedding query" in captured.out
-        ), "Initial 'Embedding query' print message missing."
+        assert "Embedding query" in captured.out, "Initial 'Embedding query' print message missing."
 
         # Robust check for file path
         expected_path_str = str(persistent_search_test_data_path / "file1.txt")
         cleaned_output = captured.out.replace("\n", "").replace("\r", "")
-        assert (
-            f"File: {expected_path_str}" in cleaned_output
-        ), f"Expected 'File: {expected_path_str}' to be among the results."
+        assert f"File: {expected_path_str}" in cleaned_output, f"Expected 'File: {expected_path_str}' to be among the results."
 
-        assert (
-            "Score:" in captured.out
-        ), "Output for 'show' mode should contain 'Score:'."
-        assert (
-            "Chunk:" in captured.out
-        ), "Output for 'show' mode should contain 'Chunk:'."
+        assert "Score:" in captured.out, "Output for 'show' mode should contain 'Score:'."
+        assert "Chunk:" in captured.out, "Output for 'show' mode should contain 'Chunk:'."
 
     def test_perform_persistent_search_paths_mode_with_results(
         self,
-        populated_persistent_index_for_searcher: Tuple[
-            duckdb.DuckDBPyConnection, usearch.index.Index, SimgrepConfig
-        ],
+        populated_persistent_index_for_searcher: Tuple[duckdb.DuckDBPyConnection, usearch.index.Index, SimgrepConfig],
         test_console: Console,
         capsys: pytest.CaptureFixture,
         persistent_search_test_data_path: Path,
@@ -181,22 +163,16 @@ class TestSearcherPersistentIntegration:
             min_score=0.25,  # Adjusted min_score
         )
         captured = capsys.readouterr()
-        assert (
-            "Embedding query" in captured.out
-        ), "Initial 'Embedding query' print message missing."
+        assert "Embedding query" in captured.out, "Initial 'Embedding query' print message missing."
 
         # Robust check for file path
         expected_path_str = str(persistent_search_test_data_path / "file2.txt")
         cleaned_output = captured.out.replace("\n", "").replace("\r", "")
-        assert (
-            expected_path_str in cleaned_output
-        ), f"Expected '{expected_path_str}' in paths output."
+        assert expected_path_str in cleaned_output, f"Expected '{expected_path_str}' in paths output."
 
     def test_perform_persistent_search_show_mode_no_results(
         self,
-        populated_persistent_index_for_searcher: Tuple[
-            duckdb.DuckDBPyConnection, usearch.index.Index, SimgrepConfig
-        ],
+        populated_persistent_index_for_searcher: Tuple[duckdb.DuckDBPyConnection, usearch.index.Index, SimgrepConfig],
         test_console: Console,
         capsys: pytest.CaptureFixture,
     ) -> None:
@@ -214,18 +190,12 @@ class TestSearcherPersistentIntegration:
             min_score=0.95,
         )
         captured = capsys.readouterr()
-        assert (
-            "Embedding query" in captured.out
-        ), "Initial 'Embedding query' print message missing."
-        assert (
-            "No relevant chunks found in the persistent index." in captured.out
-        ), "Expected 'no results' message for show mode."
+        assert "Embedding query" in captured.out, "Initial 'Embedding query' print message missing."
+        assert "No relevant chunks found in the persistent index." in captured.out, "Expected 'no results' message for show mode."
 
     def test_perform_persistent_search_paths_mode_no_results(
         self,
-        populated_persistent_index_for_searcher: Tuple[
-            duckdb.DuckDBPyConnection, usearch.index.Index, SimgrepConfig
-        ],
+        populated_persistent_index_for_searcher: Tuple[duckdb.DuckDBPyConnection, usearch.index.Index, SimgrepConfig],
         test_console: Console,
         capsys: pytest.CaptureFixture,
     ) -> None:
@@ -243,9 +213,5 @@ class TestSearcherPersistentIntegration:
             min_score=0.95,
         )
         captured = capsys.readouterr()
-        assert (
-            "Embedding query" in captured.out
-        ), "Initial 'Embedding query' print message missing."
-        assert (
-            "No matching files found." in captured.out
-        ), "Expected 'no results' message for paths mode."
+        assert "Embedding query" in captured.out, "Initial 'Embedding query' print message missing."
+        assert "No matching files found." in captured.out, "Expected 'no results' message for paths mode."

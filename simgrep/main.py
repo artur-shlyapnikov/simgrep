@@ -541,7 +541,10 @@ def index(
     """
     console.print(f"Starting indexing for path: [green]{path_to_index}[/green]")
     console.print("[bold yellow]Warning: This will wipe and rebuild the default project's index.[/bold yellow]")
-    # Future: typer.confirm("Are you sure you want to wipe and rebuild the default project index?", abort=True)
+    typer.confirm(
+        "Are you sure you want to wipe and rebuild the default project index?",
+        abort=True,
+    )
 
     try:
         global_simgrep_config: SimgrepConfig = load_or_create_global_config()
