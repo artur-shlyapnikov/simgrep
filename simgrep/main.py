@@ -42,6 +42,7 @@ try:
         load_tokenizer,
     )
     from .searcher import perform_persistent_search  # Added perform_persistent_search
+    from .utils import gather_files_to_process
     from .vector_store import (
         VectorStoreError,  # Added VectorStoreError
         create_inmemory_index,
@@ -81,6 +82,7 @@ except ImportError:
             load_tokenizer,
         )
         from simgrep.searcher import perform_persistent_search  # Added
+        from simgrep.utils import gather_files_to_process
         from simgrep.vector_store import (  # Added
             VectorStoreError,
             create_inmemory_index,
@@ -155,6 +157,12 @@ def search(
         resolve_path=True,
         help="The path to a text file or directory for ephemeral search. If omitted, searches the default persistent index.",
     ),
+    patterns: Optional[List[str]] = typer.Option(
+        None,
+        "--pattern",
+        "-p",
+        help="Glob pattern(s) for files when searching directories. Can be used multiple times. Defaults to '*.txt'.",
+    ),
     output: OutputMode = typer.Option(
         OutputMode.show,  # Default output mode
         "--output",
@@ -178,9 +186,11 @@ def search(
         ),
     ),
 ) -> None:
-    """
-    Searches for a query within a specified text file or files in a directory (ephemeral search),
-    or against the default persistent index if path_to_search is omitted.
+    """Searches for a query within files.
+
+    If ``path_to_search`` is a directory, files are discovered using the given
+    ``patterns`` (default ``['*.txt']``). If ``path_to_search`` is omitted the
+    persistent index is searched instead.
     """
     global_simgrep_config: SimgrepConfig = load_or_create_global_config()  # Load config early
 
@@ -272,17 +282,17 @@ def search(
         files_to_process: List[Path] = []
         files_skipped: List[Tuple[Path, str]] = []
 
+        search_patterns = patterns or ["*.txt"]
+        files_to_process = gather_files_to_process(path_to_search, search_patterns)
+
         if path_to_search.is_file():
-            files_to_process.append(path_to_search)
             console.print(f"Processing single file: [green]{path_to_search}[/green]")
-        elif path_to_search.is_dir():
-            console.print(f"Scanning directory: [green]{path_to_search}[/green] for processable files...")
-            discovered_files_generator = path_to_search.rglob("*.txt")
-            files_to_process = list(discovered_files_generator)
+        else:
+            console.print(f"Scanning directory: [green]{path_to_search}[/green] for files matching: {search_patterns}...")
             if not files_to_process:
-                console.print(f"[yellow]No '.txt' files found in directory: {path_to_search}[/yellow]")
+                console.print(f"[yellow]No files found in directory {path_to_search} with patterns {search_patterns}[/yellow]")
             else:
-                console.print(f"Found {len(files_to_process)} '.txt' file(s) to process.")
+                console.print(f"Found {len(files_to_process)} file(s) to process.")
 
         if not files_to_process:
             console.print("No files selected for processing. Exiting.")
