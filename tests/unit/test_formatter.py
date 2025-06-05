@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from rich.console import Console
+
 import pytest
 
 from simgrep.formatter import format_paths
@@ -50,9 +52,10 @@ class TestFormatPaths:
         file1.write_text("1")
         file2.write_text("2")
 
-        result = format_paths([file1, file2], use_relative=True, base_path=None)
+        test_console = Console()
+        result = format_paths([file1, file2], use_relative=True, base_path=None, console=test_console)
         captured = capsys.readouterr()
-        assert "base_path was not provided to format_paths" in captured.err
+        assert "base_path was not provided to format_paths" in captured.out
 
         expected = "\n".join(
             sorted(

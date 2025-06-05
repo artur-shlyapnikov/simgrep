@@ -213,7 +213,14 @@ def search(
                 console.print("[yellow]Warning: The persistent vector index is empty. No search can be performed.[/yellow]")
                 # Output "no results" based on mode
                 if output == OutputMode.paths:
-                    console.print(format_paths(file_paths=[], use_relative=False, base_path=None))
+                    console.print(
+                        format_paths(
+                            file_paths=[],
+                            use_relative=False,
+                            base_path=None,
+                            console=console,
+                        )
+                    )
                 else:  # show
                     console.print("  No relevant chunks found in the persistent index.")
                 raise typer.Exit()
@@ -464,7 +471,12 @@ def search(
         if not search_matches:
             if output == OutputMode.paths:
                 console.print(
-                    format_paths(file_paths=[], use_relative=False, base_path=None)
+                    format_paths(
+                        file_paths=[],
+                        use_relative=False,
+                        base_path=None,
+                        console=console,
+                    )
                 )  # Handles "No matching files found."
             else:  # OutputMode.show or other future modes that might show "no results"
                 console.print("  No relevant chunks found for your query in the processed file(s).")
@@ -492,6 +504,7 @@ def search(
                     file_paths=paths_from_matches,
                     use_relative=actual_use_relative,
                     base_path=current_base_path_for_relativity,
+                    console=console,
                 )
                 if output_string:
                     console.print(output_string)
