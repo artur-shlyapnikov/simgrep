@@ -14,7 +14,7 @@ When you run `simgrep "your query" ./path/to/search`:
 
 *   **Searches:**
     *   A single file.
-    *   Recursively through a directory (currently processes `.txt` files).
+    *   Recursively through a directory (files matching `--pattern`; defaults to `*.txt`).
 *   **Processing:**
     *   Extracts text from files using `unstructured`.
     *   Chunks text using token-based strategies (configurable model, size, overlap - defaults used for now).
@@ -24,6 +24,20 @@ When you run `simgrep "your query" ./path/to/search`:
     *   Performs semantic similarity search using an in-memory USearch index.
     *   Outputs results showing the relevant file, similarity score, and the text chunk (`--output show`, default).
     *   Lists unique file paths containing matches (`--output paths`).
+
+### Examples
+
+Search only markdown files:
+
+```bash
+simgrep search "apples" docs --pattern "*.md"
+```
+
+Search both text and markdown files:
+
+```bash
+simgrep search "apples" docs --pattern "*.txt" --pattern "*.md"
+```
 
 ## Near Future Plans (Persistent Indexing - Phase 3)
 
