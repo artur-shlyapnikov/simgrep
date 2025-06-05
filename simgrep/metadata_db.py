@@ -70,9 +70,7 @@ def setup_ephemeral_tables(conn: duckdb.DuckDBPyConnection) -> None:
         raise MetadataDBError("Failed to set up ephemeral tables") from e
 
 
-def batch_insert_files(
-    conn: duckdb.DuckDBPyConnection, files_metadata: List[Tuple[int, pathlib.Path]]
-) -> None:
+def batch_insert_files(conn: duckdb.DuckDBPyConnection, files_metadata: List[Tuple[int, pathlib.Path]]) -> None:
     """
     Batch inserts file metadata into the temp_files table.
     Args:
@@ -86,18 +84,14 @@ def batch_insert_files(
     data_to_insert = [(fid, str(fp.resolve())) for fid, fp in files_metadata]
     logger.info(f"Batch inserting {len(data_to_insert)} file(s) into temp_files.")
     try:
-        conn.executemany(
-            "INSERT INTO temp_files (file_id, file_path) VALUES (?, ?)", data_to_insert
-        )
+        conn.executemany("INSERT INTO temp_files (file_id, file_path) VALUES (?, ?)", data_to_insert)
         logger.debug(f"Successfully inserted {len(data_to_insert)} file(s).")
     except duckdb.Error as e:
         logger.error(f"DuckDB error during batch file insert: {e}")
         raise MetadataDBError("Failed during batch file insert") from e
 
 
-def batch_insert_chunks(
-    conn: duckdb.DuckDBPyConnection, chunk_data_list: List[ChunkData]
-) -> None:
+def batch_insert_chunks(conn: duckdb.DuckDBPyConnection, chunk_data_list: List[ChunkData]) -> None:
     """
     Batch inserts chunk data into the temp_chunks table.
     Args:
@@ -133,9 +127,7 @@ def batch_insert_chunks(
         raise MetadataDBError("Failed during batch chunk insert") from e
 
 
-def retrieve_chunk_for_display(
-    conn: duckdb.DuckDBPyConnection, chunk_id: int
-) -> Optional[Tuple[str, pathlib.Path, int, int]]:
+def retrieve_chunk_for_display(conn: duckdb.DuckDBPyConnection, chunk_id: int) -> Optional[Tuple[str, pathlib.Path, int, int]]:
     """
     Retrieves necessary chunk details for display, given a chunk_id.
     Assumes ephemeral table structure.
@@ -165,6 +157,39 @@ def retrieve_chunk_for_display(
         # not raising MetadataDBError here as it's a query, not a structural/connection issue.
         # caller should handle optional return.
         return None
+
+
+def retrieve_chunks_for_display_bulk(
+    conn: duckdb.DuckDBPyConnection, chunk_ids: List[int]
+) -> Dict[int, Tuple[str, pathlib.Path, int, int]]:
+    """Retrieve multiple chunks for display in a single query."""
+
+    if not chunk_ids:
+        logger.debug("No chunk_ids provided for bulk retrieval from temp tables.")
+        return {}
+
+    placeholders = ",".join(["?"] * len(chunk_ids))
+    query = f"""
+        SELECT tc.chunk_id, tc.text_content, tf.file_path, tc.start_char_offset, tc.end_char_offset
+        FROM temp_chunks tc
+        JOIN temp_files tf ON tc.file_id = tf.file_id
+        WHERE tc.chunk_id IN ({placeholders});
+    """
+    logger.debug(f"Retrieving {len(chunk_ids)} chunks for display in bulk.")
+    try:
+        rows = conn.execute(query, chunk_ids).fetchall()
+        results: Dict[int, Tuple[str, pathlib.Path, int, int]] = {}
+        for cid, text, file_path_str, start_offset, end_offset in rows:
+            results[int(cid)] = (
+                str(text),
+                pathlib.Path(file_path_str),
+                int(start_offset),
+                int(end_offset),
+            )
+        return results
+    except duckdb.Error as e:
+        logger.error(f"DuckDB error retrieving chunks {chunk_ids}: {e}")
+        return {}
 
 
 def retrieve_chunk_details_persistent(
@@ -198,6 +223,40 @@ def retrieve_chunk_details_persistent(
         logger.error(f"DuckDB error retrieving persistent chunk (label {usearch_label}): {e}")
         # re-raise as MetadataDBError to signal a problem with db interaction
         raise MetadataDBError(f"Failed to retrieve persistent chunk details for label {usearch_label}") from e
+
+
+def retrieve_chunk_details_persistent_bulk(
+    conn: duckdb.DuckDBPyConnection, usearch_labels: List[int]
+) -> Dict[int, Tuple[str, pathlib.Path, int, int]]:
+    """Retrieve multiple persistent chunk details in one query."""
+
+    if not usearch_labels:
+        logger.debug("No usearch_labels provided for bulk persistent retrieval.")
+        return {}
+
+    placeholders = ",".join(["?"] * len(usearch_labels))
+    query = f"""
+        SELECT tc.usearch_label, tc.chunk_text_snippet, f.file_path,
+               tc.start_char_offset, tc.end_char_offset
+        FROM text_chunks tc
+        JOIN indexed_files f ON tc.file_id = f.file_id
+        WHERE tc.usearch_label IN ({placeholders});
+    """
+    logger.debug(f"Retrieving {len(usearch_labels)} persistent chunks in bulk.")
+    try:
+        rows = conn.execute(query, usearch_labels).fetchall()
+        results: Dict[int, Tuple[str, pathlib.Path, int, int]] = {}
+        for label, text, file_path_str, start_offset, end_offset in rows:
+            results[int(label)] = (
+                str(text),
+                pathlib.Path(file_path_str),
+                int(start_offset),
+                int(end_offset),
+            )
+        return results
+    except duckdb.Error as e:
+        logger.error(f"DuckDB error retrieving persistent chunks {usearch_labels}: {e}")
+        return {}
 
 
 def _create_persistent_tables_if_not_exist(conn: duckdb.DuckDBPyConnection) -> None:
@@ -262,22 +321,16 @@ def connect_persistent_db(db_path: pathlib.Path) -> duckdb.DuckDBPyConnection:
         logger.info(f"Ensured directory exists for DB: {db_path.parent}")
     except OSError as e:
         logger.error(f"Failed to create directory for DB at {db_path.parent}: {e}")
-        raise MetadataDBError(
-            f"Could not create directory for database at {db_path.parent}"
-        ) from e
+        raise MetadataDBError(f"Could not create directory for database at {db_path.parent}") from e
 
     try:
         conn = duckdb.connect(database=str(db_path), read_only=False)
         logger.info(f"Successfully connected to persistent DB at {db_path}")
         # duckdb enforces foreign keys by default if defined in schema.
         # the pragma foreign_keys = on; is sqlite syntax.
-        logger.debug(
-            f"Foreign key constraints are enforced by default in DuckDB for DB at {db_path}"
-        )
+        logger.debug(f"Foreign key constraints are enforced by default in DuckDB for DB at {db_path}")
     except duckdb.Error as e:
-        logger.error(
-            f"Failed to connect to or initialize persistent DB at {db_path}: {e}"
-        )
+        logger.error(f"Failed to connect to or initialize persistent DB at {db_path}: {e}")
         raise MetadataDBError(f"Failed to connect/initialize DB at {db_path}") from e
 
     _create_persistent_tables_if_not_exist(conn)
@@ -294,12 +347,12 @@ def clear_persistent_project_data(conn: duckdb.DuckDBPyConnection) -> None:
             logger.debug("Deleted all records from 'text_chunks'.")
             cursor.execute("DELETE FROM indexed_files;")
             logger.debug("Deleted all records from 'indexed_files'.")
-            
+
             # resetting sequences with alter sequence ... restart is not supported in duckdb 0.10.0
             # for the purpose of wiping data, simply deleting records is sufficient.
             # primary keys will continue from their last value, which is acceptable.
             logger.info("Sequence reset skipped as 'ALTER SEQUENCE ... RESTART' is not supported in this DuckDB version.")
-            
+
             cursor.execute("COMMIT;")
         logger.info("Persistent project data cleared.")
     except duckdb.Error as e:
@@ -315,13 +368,13 @@ def clear_persistent_project_data(conn: duckdb.DuckDBPyConnection) -> None:
 
 def insert_indexed_file_record(
     conn: duckdb.DuckDBPyConnection,
-    file_path: str, # absolute, resolved path
+    file_path: str,  # absolute, resolved path
     content_hash: str,
     file_size_bytes: int,
-    last_modified_os_timestamp: float, # from file_path.stat().st_mtime
+    last_modified_os_timestamp: float,  # from file_path.stat().st_mtime
 ) -> Optional[int]:
     logger.debug(f"Attempting to insert metadata for file: {file_path}")
-    
+
     last_modified_dt = datetime.datetime.fromtimestamp(last_modified_os_timestamp)
 
     try:
@@ -333,7 +386,7 @@ def insert_indexed_file_record(
             """,
             [file_path, content_hash, file_size_bytes, last_modified_dt],
         ).fetchone()
-        
+
         if result and result[0] is not None:
             file_id = int(result[0])
             logger.info(f"Inserted file '{file_path}' into 'indexed_files' with file_id {file_id}.")
@@ -356,16 +409,18 @@ def batch_insert_text_chunks(conn: duckdb.DuckDBPyConnection, chunk_records: Lis
 
     data_to_insert = []
     for record in chunk_records:
-        data_to_insert.append((
-            record["file_id"],
-            record["usearch_label"],
-            record["chunk_text_snippet"],
-            record["start_char_offset"],
-            record["end_char_offset"],
-            record["token_count"],
-            record.get("embedding_hash"),
-        ))
-    
+        data_to_insert.append(
+            (
+                record["file_id"],
+                record["usearch_label"],
+                record["chunk_text_snippet"],
+                record["start_char_offset"],
+                record["end_char_offset"],
+                record["token_count"],
+                record.get("embedding_hash"),
+            )
+        )
+
     logger.info(f"Batch inserting {len(data_to_insert)} chunk record(s) into persistent 'text_chunks'.")
     try:
         # using an explicit transaction for batch insert

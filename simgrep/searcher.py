@@ -8,7 +8,10 @@ from rich.console import Console
 from .config import DEFAULT_K_RESULTS, SimgrepConfig
 from .exceptions import MetadataDBError, VectorStoreError
 from .formatter import format_paths, format_show_basic
-from .metadata_db import retrieve_chunk_details_persistent
+from .metadata_db import (
+    retrieve_chunk_details_persistent,
+    retrieve_chunk_details_persistent_bulk,
+)
 from .models import OutputMode
 from .processor import generate_embeddings
 from .vector_store import (
@@ -32,17 +35,11 @@ def perform_persistent_search(
     Orchestrates the search process against a pre-existing, loaded persistent index.
     """
     embedding_model_name = global_config.default_embedding_model_name
-    console.print(
-        f"  Embedding query: '[italic blue]{query_text}[/italic blue]' using model '{embedding_model_name}'..."
-    )
+    console.print(f"  Embedding query: '[italic blue]{query_text}[/italic blue]' using model '{embedding_model_name}'...")
     try:
-        query_embedding = generate_embeddings(
-            texts=[query_text], model_name=embedding_model_name
-        )
+        query_embedding = generate_embeddings(texts=[query_text], model_name=embedding_model_name)
     except RuntimeError as e:
-        console.print(
-            f"[bold red]Failed to generate query embedding:[/bold red]\n  {e}"
-        )
+        console.print(f"[bold red]Failed to generate query embedding:[/bold red]\n  {e}")
         raise  # re-raise for main.py to catch and exit
 
     console.print(f"  Searching persistent index for top {k_results} similar chunks...")
@@ -55,9 +52,7 @@ def perform_persistent_search(
         raise  # re-raise
 
     # Filter by min_score
-    filtered_matches = [
-        (label, score) for (label, score) in search_matches if score >= min_score
-    ]
+    filtered_matches = [(label, score) for (label, score) in search_matches if score >= min_score]
 
     if not filtered_matches:
         if output_mode == OutputMode.paths:
@@ -75,25 +70,16 @@ def perform_persistent_search(
 
     # process and format results
     if output_mode == OutputMode.show:
-        console.print(
-            f"\n[bold cyan]Search Results (Top {len(filtered_matches)} from persistent index):[/bold cyan]"
-        )
+        console.print(f"\n[bold cyan]Search Results (Top {len(filtered_matches)} from persistent index):[/bold cyan]")
+        all_labels = [label for label, _score in filtered_matches]
+        bulk_details = retrieve_chunk_details_persistent_bulk(db_conn, all_labels)
         for matched_usearch_label, similarity_score in filtered_matches:
-            try:
-                retrieved_details = retrieve_chunk_details_persistent(
-                    db_conn, matched_usearch_label
-                )
-            except MetadataDBError as e:
-                console.print(
-                    f"[yellow]Warning: Database error retrieving details for chunk label {matched_usearch_label}: {e}[/yellow]"
-                )
-                continue  # skip this result
-
+            retrieved_details = bulk_details.get(matched_usearch_label)
             if retrieved_details:
                 text_snippet, file_path_obj, _start, _end = retrieved_details
                 output_string = format_show_basic(
                     file_path=file_path_obj,
-                    chunk_text=text_snippet,  # using snippet from db for now
+                    chunk_text=text_snippet,
                     score=similarity_score,
                 )
                 console.print("---")
@@ -104,27 +90,18 @@ def perform_persistent_search(
                 )
     elif output_mode == OutputMode.paths:
         paths_from_matches: List[pathlib.Path] = []
-        unique_paths_seen = set()  # to ensure uniqueness before format_paths
+        unique_paths_seen = set()
+        all_labels = [label for label, _score in filtered_matches]
+        bulk_details = retrieve_chunk_details_persistent_bulk(db_conn, all_labels)
         for matched_usearch_label, _similarity_score in filtered_matches:
-            try:
-                retrieved_details = retrieve_chunk_details_persistent(
-                    db_conn, matched_usearch_label
-                )
-            except MetadataDBError as e:
-                console.print(
-                    f"[yellow]Warning: Database error retrieving path for chunk label {matched_usearch_label}: {e}[/yellow]"
-                )
-                continue
-
+            retrieved_details = bulk_details.get(matched_usearch_label)
             if retrieved_details:
-                file_path_obj = retrieved_details[1]  # the file_path_obj
+                file_path_obj = retrieved_details[1]
                 if file_path_obj not in unique_paths_seen:
                     paths_from_matches.append(file_path_obj)
                     unique_paths_seen.add(file_path_obj)
             else:
-                console.print(
-                    f"[yellow]Warning: Could not retrieve path for chunk label {matched_usearch_label}.[/yellow]"
-                )
+                console.print(f"[yellow]Warning: Could not retrieve path for chunk label {matched_usearch_label}.[/yellow]")
 
         output_string = format_paths(
             file_paths=paths_from_matches,  # already unique

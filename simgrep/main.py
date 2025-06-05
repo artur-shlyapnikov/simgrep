@@ -31,6 +31,7 @@ try:
         create_inmemory_db_connection,
         get_index_counts,
         retrieve_chunk_for_display,
+        retrieve_chunks_for_display_bulk,
         setup_ephemeral_tables,
     )
     from .models import ChunkData, OutputMode, SimgrepConfig  # OutputMode moved here
@@ -70,6 +71,7 @@ except ImportError:
             create_inmemory_db_connection,
             get_index_counts,
             retrieve_chunk_for_display,
+            retrieve_chunks_for_display_bulk,
             setup_ephemeral_tables,
         )
         from simgrep.models import ChunkData, OutputMode, SimgrepConfig
@@ -326,7 +328,7 @@ def search(
 
             except FileNotFoundError:
                 console.print(
-                    f"    [bold red]Error: File not found during processing loop: {file_path_item}. " "Skipping.[/bold red]"
+                    f"    [bold red]Error: File not found during processing loop: {file_path_item}. Skipping.[/bold red]"
                 )
                 files_skipped.append((file_path_item, "File not found during processing"))
             except RuntimeError as e:
@@ -334,7 +336,7 @@ def search(
                 files_skipped.append((file_path_item, str(e)))
             except ValueError as ve:
                 console.print(
-                    f"    [bold red]Error with chunking parameters for file '{file_path_item}': {ve}. " "Skipping.[/bold red]"
+                    f"    [bold red]Error with chunking parameters for file '{file_path_item}': {ve}. Skipping.[/bold red]"
                 )
                 files_skipped.append((file_path_item, str(ve)))
             except Exception as e:
@@ -471,8 +473,10 @@ def search(
         else:
             if output == OutputMode.paths:
                 paths_from_matches: List[Path] = []
+                all_ids = [cid for cid, _score in search_matches]
+                bulk_details = retrieve_chunks_for_display_bulk(db_conn, all_ids)
                 for matched_chunk_id, _similarity_score in search_matches:
-                    retrieved_details = retrieve_chunk_for_display(db_conn, matched_chunk_id)
+                    retrieved_details = bulk_details.get(matched_chunk_id)
                     if retrieved_details:
                         _text_content, retrieved_path, _start_char, _end_char = retrieved_details
                         paths_from_matches.append(retrieved_path)
@@ -498,8 +502,10 @@ def search(
 
             elif output == OutputMode.show:
                 console.print(f"\n[bold cyan]Search Results (Top {len(search_matches)}):[/bold cyan]")
+                all_ids = [cid for cid, _score in search_matches]
+                bulk_details = retrieve_chunks_for_display_bulk(db_conn, all_ids)
                 for matched_chunk_id, similarity_score in search_matches:
-                    retrieved_details = retrieve_chunk_for_display(db_conn, matched_chunk_id)
+                    retrieved_details = bulk_details.get(matched_chunk_id)
 
                     if retrieved_details:
                         retrieved_text, retrieved_path, _start_offset, _end_offset = retrieved_details
