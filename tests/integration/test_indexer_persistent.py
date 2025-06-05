@@ -277,3 +277,77 @@ class TestIndexerPersistent:
     # - Different file patterns
     # - Robustness against corrupted existing index/db files (if not wiping)
     # - Indexing very large files or many files (performance, memory)
+
+    def test_incremental_skips_and_updates(
+        self,
+        indexer_config: IndexerConfig,
+        test_console: Console,
+        sample_files_dir: pathlib.Path,
+    ) -> None:
+        indexer = Indexer(config=indexer_config, console=test_console)
+        indexer.index_path(target_path=sample_files_dir, wipe_existing=True)
+
+        file1_path = (sample_files_dir / "file1.txt").resolve()
+        file2_path = (sample_files_dir / "file2.md").resolve()
+
+        conn = connect_persistent_db(indexer_config.db_path)
+        try:
+            file2_chunks_before = conn.execute(
+                "SELECT COUNT(*) FROM text_chunks tc JOIN indexed_files f ON tc.file_id=f.file_id WHERE f.file_path = ?;",
+                [str(file2_path)],
+            ).fetchone()[0]
+            total_chunks_before = conn.execute("SELECT COUNT(*) FROM text_chunks;").fetchone()[0]
+            file2_hash_before = conn.execute(
+                "SELECT content_hash FROM indexed_files WHERE file_path = ?;",
+                [str(file2_path)],
+            ).fetchone()[0]
+        finally:
+            conn.close()
+
+        index_size_before = len(load_persistent_index(indexer_config.usearch_index_path))
+
+        indexer2 = Indexer(config=indexer_config, console=test_console)
+        indexer2.index_path(target_path=sample_files_dir, wipe_existing=False)
+
+        conn = connect_persistent_db(indexer_config.db_path)
+        try:
+            file2_hash_after = conn.execute(
+                "SELECT content_hash FROM indexed_files WHERE file_path = ?;",
+                [str(file2_path)],
+            ).fetchone()[0]
+            file2_chunks_after = conn.execute(
+                "SELECT COUNT(*) FROM text_chunks tc JOIN indexed_files f ON tc.file_id=f.file_id WHERE f.file_path = ?;",
+                [str(file2_path)],
+            ).fetchone()[0]
+            total_chunks_nochange = conn.execute("SELECT COUNT(*) FROM text_chunks;").fetchone()[0]
+        finally:
+            conn.close()
+
+        index_size_nochange = len(load_persistent_index(indexer_config.usearch_index_path))
+
+        assert file2_hash_after == file2_hash_before
+        assert file2_chunks_after == file2_chunks_before
+        assert total_chunks_nochange == total_chunks_before
+        assert index_size_nochange == index_size_before
+
+        file1_path.write_text(file1_path.read_text() + " extra")
+        new_hash1 = calculate_file_hash(file1_path)
+
+        indexer3 = Indexer(config=indexer_config, console=test_console)
+        indexer3.index_path(target_path=sample_files_dir, wipe_existing=False)
+
+        conn = connect_persistent_db(indexer_config.db_path)
+        try:
+            new_hash_db = conn.execute(
+                "SELECT content_hash FROM indexed_files WHERE file_path = ?;",
+                [str(file1_path)],
+            ).fetchone()[0]
+            file2_chunks_after_mod = conn.execute(
+                "SELECT COUNT(*) FROM text_chunks tc JOIN indexed_files f ON tc.file_id=f.file_id WHERE f.file_path = ?;",
+                [str(file2_path)],
+            ).fetchone()[0]
+        finally:
+            conn.close()
+
+        assert new_hash_db == new_hash1
+        assert file2_chunks_after_mod == file2_chunks_before
