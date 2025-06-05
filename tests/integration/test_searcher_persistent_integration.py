@@ -87,6 +87,7 @@ def populated_persistent_index_for_searcher(
         db_path=db_file,
         usearch_index_path=usearch_file,
         embedding_model_name=cfg.default_embedding_model_name,
+        embedding_batch_size=cfg.default_embedding_batch_size,
         chunk_size_tokens=cfg.default_chunk_size_tokens,
         chunk_overlap_tokens=cfg.default_chunk_overlap_tokens,
         file_scan_patterns=["*.txt"],

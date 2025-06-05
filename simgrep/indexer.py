@@ -53,6 +53,7 @@ class IndexerConfig(BaseModel):
     embedding_model_name: str
     chunk_size_tokens: int
     chunk_overlap_tokens: int
+    embedding_batch_size: int = 32
     file_scan_patterns: List[str] = Field(default_factory=lambda: ["*.txt"])
 
 
@@ -80,7 +81,11 @@ class Indexer:
             self.console.print("Embedding model loaded.")
 
             self.console.print("Determining embedding dimension...")
-            dummy_emb = generate_embeddings(["simgrep_test_string"], model=self.embedding_model)
+            dummy_emb = generate_embeddings(
+                ["simgrep_test_string"],
+                model=self.embedding_model,
+                batch_size=self.config.embedding_batch_size,
+            )
             if dummy_emb.ndim != 2 or dummy_emb.shape[0] == 0 or dummy_emb.shape[1] == 0:
                 raise IndexerError(
                     f"Could not determine embedding dimension using model {self.config.embedding_model_name}. "
@@ -231,7 +236,11 @@ class Indexer:
 
             # embedding & storing chunks
             chunk_texts = [chunk["text"] for chunk in processed_chunks]
-            embeddings_np = generate_embeddings(chunk_texts, model=self.embedding_model)
+            embeddings_np = generate_embeddings(
+                chunk_texts,
+                model=self.embedding_model,
+                batch_size=self.config.embedding_batch_size,
+            )
 
             chunk_db_records: List[Dict[str, Any]] = []
             usearch_labels_for_batch: List[int] = []

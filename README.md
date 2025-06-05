@@ -18,8 +18,9 @@ When you run `simgrep "your query" ./path/to/search`:
 *   **Processing:**
     *   Extracts text from files using `unstructured`.
     *   Chunks text using token-based strategies (configurable model, size, overlap - defaults used for now).
-    *   Generates embeddings for your query and text chunks (uses `sentence-transformers`).
-    *   Manages chunk metadata (source file, offsets) using an in-memory DuckDB.
+*   Generates embeddings for your query and text chunks (uses `sentence-transformers`).
+*   Embedding generation batch size is configurable via `default_embedding_batch_size` (defaults to 32).
+*   Manages chunk metadata (source file, offsets) using an in-memory DuckDB.
 *   **Finds & Displays:**
     *   Performs semantic similarity search using an in-memory USearch index.
     *   Outputs results showing the relevant file, similarity score, and the text chunk (`--output show`, default).

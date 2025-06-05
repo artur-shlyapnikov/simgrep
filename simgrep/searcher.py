@@ -37,7 +37,9 @@ def perform_persistent_search(
     )
     try:
         query_embedding = generate_embeddings(
-            texts=[query_text], model_name=embedding_model_name
+            texts=[query_text],
+            model_name=embedding_model_name,
+            batch_size=global_config.default_embedding_batch_size,
         )
     except RuntimeError as e:
         console.print(

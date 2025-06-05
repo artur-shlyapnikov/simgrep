@@ -364,6 +364,21 @@ class TestGenerateEmbeddings:
         ):
             generate_embeddings(texts, model_name=self.INVALID_MODEL_NAME)
 
+    def test_embeddings_consistent_across_batch_sizes(
+        self, sentence_transformer_model: "SentenceTransformer"
+    ) -> None:  # type: ignore # noqa: F821
+        import numpy as np
+
+        from simgrep.processor import generate_embeddings
+
+        texts = ["one", "two", "three"]
+        emb_default = generate_embeddings(texts, model=sentence_transformer_model)
+        emb_bs1 = generate_embeddings(texts, model=sentence_transformer_model, batch_size=1)
+        emb_bs2 = generate_embeddings(texts, model=sentence_transformer_model, batch_size=2)
+
+        assert np.allclose(emb_default, emb_bs1, rtol=1e-5, atol=1e-6)
+        assert np.allclose(emb_default, emb_bs2, rtol=1e-5, atol=1e-6)
+
 
 class TestCalculateFileHash:
     def test_calculate_file_hash_valid_file(self, temp_text_file: Path) -> None:

@@ -392,6 +392,7 @@ def search(
             query_embedding = generate_embeddings(
                 texts=[query_text],
                 model=embedding_model_instance,  # Pass pre-loaded model
+                batch_size=global_simgrep_config.default_embedding_batch_size,
             )
             console.print(f"    Query embedding shape: {query_embedding.shape}")
 
@@ -400,6 +401,7 @@ def search(
             chunk_embeddings = generate_embeddings(
                 texts=chunk_texts_for_embedding,
                 model=embedding_model_instance,  # Pass pre-loaded model
+                batch_size=global_simgrep_config.default_embedding_batch_size,
             )
             console.print(f"    Chunk embeddings shape: {chunk_embeddings.shape}")
 
@@ -556,6 +558,7 @@ def index(
             db_path=default_project_db_file,
             usearch_index_path=default_project_usearch_file,
             embedding_model_name=global_simgrep_config.default_embedding_model_name,
+            embedding_batch_size=global_simgrep_config.default_embedding_batch_size,
             chunk_size_tokens=global_simgrep_config.default_chunk_size_tokens,
             chunk_overlap_tokens=global_simgrep_config.default_chunk_overlap_tokens,
             file_scan_patterns=["*.txt"],  # Initially hardcode to .txt, make configurable later

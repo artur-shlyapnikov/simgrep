@@ -33,6 +33,7 @@ class TestSimgrepConfig:
             assert config.default_embedding_model_name == "sentence-transformers/all-MiniLM-L6-v2"
             assert config.default_chunk_size_tokens == 128
             assert config.default_chunk_overlap_tokens == 20
+            assert config.default_embedding_batch_size == 32
 
             # Check that the directory was created
             assert expected_data_dir.exists()
@@ -114,5 +115,6 @@ class TestSimgrepConfig:
         assert config.default_embedding_model_name == "sentence-transformers/all-MiniLM-L6-v2"
         assert config.default_chunk_size_tokens == 128
         assert config.default_chunk_overlap_tokens == 20
+        assert config.default_embedding_batch_size == 32
         # assert config.llm_api_key is None # If/when added
         # assert config.projects == []      # If/when added

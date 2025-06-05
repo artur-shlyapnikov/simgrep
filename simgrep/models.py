@@ -48,6 +48,7 @@ class SimgrepConfig(BaseModel):
     default_embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     default_chunk_size_tokens: int = 128
     default_chunk_overlap_tokens: int = 20
+    default_embedding_batch_size: int = 32
 
     # llm_api_key: Optional[str] = None # deferred to a later phase (e.g., rag implementation)
     # projects: List[ProjectConfig] = Field(default_factory=list) # deferred to deliverable 4.4

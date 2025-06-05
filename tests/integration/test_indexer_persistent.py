@@ -29,6 +29,7 @@ def indexer_config(temp_project_dir: pathlib.Path) -> IndexerConfig:
         db_path=temp_project_dir / "metadata.duckdb",
         usearch_index_path=temp_project_dir / "index.usearch",
         embedding_model_name="sentence-transformers/all-MiniLM-L6-v2",
+        embedding_batch_size=32,
         chunk_size_tokens=128,  # Default from SimgrepConfig
         chunk_overlap_tokens=20,  # Default from SimgrepConfig
         file_scan_patterns=["*.txt", "*.md"],

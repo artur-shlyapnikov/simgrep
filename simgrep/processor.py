@@ -122,6 +122,8 @@ def generate_embeddings(
     texts: List[str],
     model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
     model: Optional[SentenceTransformer] = None,
+    *,
+    batch_size: Optional[int] = None,
 ) -> np.ndarray:
     """
     Generates vector embeddings for a list of input texts using a specified
@@ -145,7 +147,11 @@ def generate_embeddings(
         else:
             active_model = model
 
-        embeddings = active_model.encode(texts, show_progress_bar=False)
+        encode_kwargs = {"show_progress_bar": False}
+        if batch_size is not None:
+            encode_kwargs["batch_size"] = batch_size
+
+        embeddings = active_model.encode(texts, **encode_kwargs)
         return embeddings
     except Exception as e:
         # Determine which model name to report in the error
