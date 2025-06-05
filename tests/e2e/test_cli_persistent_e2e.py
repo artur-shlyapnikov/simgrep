@@ -161,8 +161,12 @@ class TestCliPersistentE2E:
 
         db_file = temp_simgrep_home / ".config" / "simgrep" / "default_project" / "metadata.duckdb"
         conn = duckdb.connect(str(db_file))
-        files_count = conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()[0]
-        chunks_count = conn.execute("SELECT COUNT(*) FROM text_chunks;").fetchone()[0]
+        files_count = conn.execute(
+            "SELECT COUNT(*) FROM indexed_files;"
+        ).fetchone()[0]  # type: ignore[index]
+        chunks_count = conn.execute(
+            "SELECT COUNT(*) FROM text_chunks;"
+        ).fetchone()[0]  # type: ignore[index]
         conn.close()
 
         status_result = run_simgrep_command(["status"], env=env_vars)
