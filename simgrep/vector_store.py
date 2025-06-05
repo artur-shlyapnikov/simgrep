@@ -342,12 +342,3 @@ def save_persistent_index(index: usearch.index.Index, index_path: Path) -> None:
                 logger.error(
                     f"Failed to clean up lingering temporary index file {temp_index_path} in finally block: {e_unlink_final}"
                 )
-            try:
-                temp_index_path.unlink()
-                logger.warning(
-                    f"Lingering temporary index file {temp_index_path} found and removed in finally block."
-                )
-            except OSError as e_unlink_final:
-                logger.error(
-                    f"Failed to clean up lingering temporary index file {temp_index_path} in finally block: {e_unlink_final}"
-                )
