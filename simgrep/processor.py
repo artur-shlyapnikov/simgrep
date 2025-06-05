@@ -1,3 +1,4 @@
+import hashlib
 from pathlib import Path
 from typing import List, Optional, TypedDict, cast
 
@@ -153,8 +154,7 @@ def generate_embeddings(
             if model is None
             else (
                 model.model_card_data.base_model
-                if hasattr(model, "model_card_data")
-                and hasattr(model.model_card_data, "base_model")
+                if hasattr(model, "model_card_data") and hasattr(model.model_card_data, "base_model")
                 else "provided_model"
             )
         )
@@ -165,3 +165,18 @@ def generate_embeddings(
             f"is available for the first download if loading by name. Original error: {e}"
         )
         raise RuntimeError(error_message) from e
+
+
+def calculate_file_hash(file_path: Path) -> str:
+    """Compute the SHA256 hash of a file's contents."""
+    if not file_path.exists() or not file_path.is_file():
+        raise FileNotFoundError(f"File not found or is not a file: {file_path}")
+
+    sha256_hash = hashlib.sha256()
+    try:
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                sha256_hash.update(chunk)
+        return sha256_hash.hexdigest()
+    except OSError as e:
+        raise IOError(f"Error reading file for hashing: {e}") from e

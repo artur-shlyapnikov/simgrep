@@ -3,13 +3,14 @@ import pathlib
 import pytest
 from rich.console import Console
 
+from simgrep.indexer import Indexer, IndexerConfig, IndexerError
+from simgrep.metadata_db import connect_persistent_db
+from simgrep.processor import calculate_file_hash
+from simgrep.vector_store import load_persistent_index
+
 pytest.importorskip("transformers")
 pytest.importorskip("sentence_transformers")
 pytest.importorskip("usearch.index")
-
-from simgrep.indexer import Indexer, IndexerConfig, IndexerError
-from simgrep.metadata_db import connect_persistent_db
-from simgrep.vector_store import load_persistent_index
 
 
 @pytest.fixture
@@ -46,31 +47,20 @@ def sample_files_dir(tmp_path: pathlib.Path) -> pathlib.Path:
     source_dir = tmp_path / "sample_source_files"
     source_dir.mkdir()
 
-    (source_dir / "file1.txt").write_text(
-        "This is the first test file. It contains simple text about simgrep."
-    )
-    (source_dir / "file2.md").write_text(
-        "# Markdown File\n\nThis is a markdown document with some *emphasis*."
-    )
+    (source_dir / "file1.txt").write_text("This is the first test file. It contains simple text about simgrep.")
+    (source_dir / "file2.md").write_text("# Markdown File\n\nThis is a markdown document with some *emphasis*.")
     (source_dir / "empty.txt").write_text("")
-    (source_dir / "noprocess.py").write_text(
-        "print('This python file should not be indexed by default patterns')"
-    )
+    (source_dir / "noprocess.py").write_text("print('This python file should not be indexed by default patterns')")
 
     sub_dir = source_dir / "subdir"
     sub_dir.mkdir()
-    (sub_dir / "file3.txt").write_text(
-        "A file in a subdirectory. More content for simgrep."
-    )
+    (sub_dir / "file3.txt").write_text("A file in a subdirectory. More content for simgrep.")
 
     return source_dir
 
 
 class TestIndexerPersistent:
-
-    def test_indexer_initialization(
-        self, indexer_config: IndexerConfig, test_console: Console
-    ) -> None:
+    def test_indexer_initialization(self, indexer_config: IndexerConfig, test_console: Console) -> None:
         """Test if the Indexer initializes correctly."""
         try:
             indexer = Indexer(config=indexer_config, console=test_console)
@@ -109,9 +99,7 @@ class TestIndexerPersistent:
             # Check indexed_files table: file1.txt, file2.md, subdir/file3.txt should be there
             # empty.txt might be skipped if it results in no chunks or is handled as empty.
             # noprocess.py should be skipped due to pattern.
-            file_count_result = db_conn.execute(
-                "SELECT COUNT(*) FROM indexed_files;"
-            ).fetchone()
+            file_count_result = db_conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()
             assert file_count_result is not None
             # Expecting 3 files: file1.txt, file2.md, subdir/file3.txt
             # The exact count depends on how empty files are handled by the indexer logic for DB insertion.
@@ -120,13 +108,9 @@ class TestIndexerPersistent:
             assert file_count_result[0] >= 3
 
             # Check text_chunks table: should have some chunks
-            chunk_count_result = db_conn.execute(
-                "SELECT COUNT(*) FROM text_chunks;"
-            ).fetchone()
+            chunk_count_result = db_conn.execute("SELECT COUNT(*) FROM text_chunks;").fetchone()
             assert chunk_count_result is not None
-            assert (
-                chunk_count_result[0] > 0
-            )  # Expecting some chunks from the non-empty files
+            assert chunk_count_result[0] > 0  # Expecting some chunks from the non-empty files
 
             # Verify specific file paths
             expected_file1_path = str((sample_files_dir / "file1.txt").resolve())
@@ -136,9 +120,7 @@ class TestIndexerPersistent:
             ).fetchone()
             assert res is not None and res[0] == 1
 
-            expected_file3_path = str(
-                (sample_files_dir / "subdir" / "file3.txt").resolve()
-            )
+            expected_file3_path = str((sample_files_dir / "subdir" / "file3.txt").resolve())
             res = db_conn.execute(
                 "SELECT COUNT(*) FROM indexed_files WHERE file_path = ?;",
                 [expected_file3_path],
@@ -180,15 +162,11 @@ class TestIndexerPersistent:
         db_conn = None
         try:
             db_conn = connect_persistent_db(indexer_config.db_path)
-            file_count_result = db_conn.execute(
-                "SELECT COUNT(*) FROM indexed_files;"
-            ).fetchone()
+            file_count_result = db_conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()
             assert file_count_result is not None
             assert file_count_result[0] == 1  # Only one file indexed
 
-            chunk_count_result = db_conn.execute(
-                "SELECT COUNT(*) FROM text_chunks;"
-            ).fetchone()
+            chunk_count_result = db_conn.execute("SELECT COUNT(*) FROM text_chunks;").fetchone()
             assert chunk_count_result is not None
             assert chunk_count_result[0] > 0
         finally:
@@ -198,6 +176,32 @@ class TestIndexerPersistent:
         vector_index = load_persistent_index(indexer_config.usearch_index_path)
         assert vector_index is not None
         assert len(vector_index) > 0
+
+    def test_file_hash_and_mtime_stored(
+        self,
+        indexer_config: IndexerConfig,
+        test_console: Console,
+        sample_files_dir: pathlib.Path,
+    ) -> None:
+        indexer = Indexer(config=indexer_config, console=test_console)
+        indexer.index_path(target_path=sample_files_dir, wipe_existing=True)
+
+        file_to_check = sample_files_dir / "file1.txt"
+
+        db_conn = connect_persistent_db(indexer_config.db_path)
+        try:
+            row = db_conn.execute(
+                "SELECT content_hash, last_modified_os FROM indexed_files WHERE file_path = ?;",
+                [str(file_to_check.resolve())],
+            ).fetchone()
+            assert row is not None
+
+            expected_hash = calculate_file_hash(file_to_check)
+            db_hash, db_ts = row
+            assert db_hash == expected_hash
+            assert abs(db_ts.timestamp() - file_to_check.stat().st_mtime) < 1.0
+        finally:
+            db_conn.close()
 
     def test_index_empty_directory(
         self,
@@ -225,15 +229,11 @@ class TestIndexerPersistent:
         db_conn = None
         try:
             db_conn = connect_persistent_db(indexer_config.db_path)
-            file_count_result = db_conn.execute(
-                "SELECT COUNT(*) FROM indexed_files;"
-            ).fetchone()
+            file_count_result = db_conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()
             assert file_count_result is not None
             assert file_count_result[0] == 0
 
-            chunk_count_result = db_conn.execute(
-                "SELECT COUNT(*) FROM text_chunks;"
-            ).fetchone()
+            chunk_count_result = db_conn.execute("SELECT COUNT(*) FROM text_chunks;").fetchone()
             assert chunk_count_result is not None
             assert chunk_count_result[0] == 0
         finally:
@@ -258,9 +258,7 @@ class TestIndexerPersistent:
         db_conn = None
         try:
             db_conn = connect_persistent_db(indexer_config.db_path)
-            file_count_result = db_conn.execute(
-                "SELECT COUNT(*) FROM indexed_files;"
-            ).fetchone()
+            file_count_result = db_conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()
             assert file_count_result is not None
             assert file_count_result[0] == 0
         finally:
