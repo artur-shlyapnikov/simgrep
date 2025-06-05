@@ -208,7 +208,9 @@ def search(
                 f"Please run 'simgrep index <path>' first to create an index."
             )
             console.print("No matching files found.")
-            raise typer.Exit(code=0)
+            if output == OutputMode.paths:
+                raise typer.Exit(code=0)
+            raise typer.Exit(code=1)
 
         persistent_db_conn: Optional[duckdb.DuckDBPyConnection] = None
         persistent_vector_index: Optional[usearch.index.Index] = None
