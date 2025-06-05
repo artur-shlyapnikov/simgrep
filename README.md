@@ -24,6 +24,7 @@ When you run `simgrep "your query" ./path/to/search`:
     *   Performs semantic similarity search using an in-memory USearch index.
     *   Outputs results showing the relevant file, similarity score, and the text chunk (`--output show`, default).
     *   Lists unique file paths containing matches (`--output paths`).
+    *   Limit the number of matches returned with `--top N` (alias `--k`).
 
 ## Near Future Plans (Persistent Indexing - Phase 3)
 

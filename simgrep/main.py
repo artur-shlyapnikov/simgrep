@@ -162,6 +162,12 @@ def search(
         help="Output mode. 'paths' mode lists unique, sorted file paths containing matches.",
         case_sensitive=False,
     ),
+    top: int = typer.Option(
+        DEFAULT_K_RESULTS,
+        "--top",
+        "--k",
+        help="Number of top results to return from the vector search.",
+    ),
     relative_paths: bool = typer.Option(
         False,
         "--relative-paths/--absolute-paths",  # Provides --no-relative-paths as well
@@ -225,7 +231,7 @@ def search(
                 vector_index=persistent_vector_index,
                 global_config=global_simgrep_config,
                 output_mode=output,
-                k_results=DEFAULT_K_RESULTS,  # Make this configurable later
+                k_results=top,
                 display_relative_paths=relative_paths,
                 # For persistent search, base_path_for_relativity might need to be CWD or a configured project root.
                 # For now, persistent search will show absolute paths if relative_paths is true but no base_path.
@@ -326,7 +332,7 @@ def search(
 
             except FileNotFoundError:
                 console.print(
-                    f"    [bold red]Error: File not found during processing loop: {file_path_item}. " "Skipping.[/bold red]"
+                    f"    [bold red]Error: File not found during processing loop: {file_path_item}. Skipping.[/bold red]"
                 )
                 files_skipped.append((file_path_item, "File not found during processing"))
             except RuntimeError as e:
@@ -334,7 +340,7 @@ def search(
                 files_skipped.append((file_path_item, str(e)))
             except ValueError as ve:
                 console.print(
-                    f"    [bold red]Error with chunking parameters for file '{file_path_item}': {ve}. " "Skipping.[/bold red]"
+                    f"    [bold red]Error with chunking parameters for file '{file_path_item}': {ve}. Skipping.[/bold red]"
                 )
                 files_skipped.append((file_path_item, str(ve)))
             except Exception as e:
@@ -436,11 +442,11 @@ def search(
                     f"Metric: {vector_index.metric}, DType: {str(vector_index.dtype)}"
                 )
 
-                console.print(f"  Searching index for top {DEFAULT_K_RESULTS} similar chunk(s)...")
+                console.print(f"  Searching index for top {top} similar chunk(s)...")
                 search_matches = search_inmemory_index(
                     index=vector_index,
                     query_embedding=query_embedding,
-                    k=DEFAULT_K_RESULTS,
+                    k=top,
                 )
 
                 if not search_matches:
