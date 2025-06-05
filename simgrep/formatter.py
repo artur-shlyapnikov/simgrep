@@ -1,6 +1,7 @@
-import sys
 from pathlib import Path
 from typing import List, Optional
+
+from rich.console import Console
 
 
 def format_show_basic(file_path: Path, chunk_text: str, score: float) -> str:
@@ -22,7 +23,9 @@ def format_show_basic(file_path: Path, chunk_text: str, score: float) -> str:
 def format_paths(
     file_paths: List[Path],
     use_relative: bool,
-    base_path: Optional[Path]
+    base_path: Optional[Path],
+    *,
+    console: Optional[Console] = None,
 ) -> str:
     """
     Formats a list of file paths for display. Paths are unique and sorted.
@@ -42,15 +45,18 @@ def format_paths(
     # ensure all paths are absolute, then unique and sorted.
     # paths from retrieve_chunk_for_display should already be absolute and resolved.
     unique_absolute_paths = sorted(list(set(p.resolve() for p in file_paths)))
-    
+
     output_paths_str_list: List[str] = []
+
+    if console is None:
+        console = Console()
 
     if use_relative:
         if base_path is None:
-            print(
+            console.print(
                 "Warning (simgrep internal): base_path was not provided to format_paths "
                 "when use_relative was True. Defaulting to absolute paths.",
-                file=sys.stderr
+                style="yellow",
             )
             # fallback to absolute paths for this call
             for p_abs in unique_absolute_paths:
@@ -65,8 +71,8 @@ def format_paths(
                     # fallback to absolute path if it cannot be made relative
                     # (e.g., different drive on windows, or not a subpath)
                     output_paths_str_list.append(str(p_abs.resolve()))
-    else: # use_relative is false
+    else:  # use_relative is false
         for p_abs in unique_absolute_paths:
             output_paths_str_list.append(str(p_abs.resolve()))
-    
+
     return "\n".join(output_paths_str_list)
