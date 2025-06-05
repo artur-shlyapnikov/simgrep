@@ -162,7 +162,7 @@ def retrieve_chunk_for_display(
         return None
     except duckdb.Error as e:
         logger.error(f"DuckDB error retrieving chunk {chunk_id}: {e}")
-        # not raising metadatadberror here as it's a query, not a structural/connection issue.
+        # not raising MetadataDBError here as it's a query, not a structural/connection issue.
         # caller should handle optional return.
         return None
 
@@ -196,7 +196,7 @@ def retrieve_chunk_details_persistent(
         return None
     except duckdb.Error as e:
         logger.error(f"DuckDB error retrieving persistent chunk (label {usearch_label}): {e}")
-        # re-raise as metadatadberror to signal a problem with db interaction
+        # re-raise as MetadataDBError to signal a problem with db interaction
         raise MetadataDBError(f"Failed to retrieve persistent chunk details for label {usearch_label}") from e
 
 
