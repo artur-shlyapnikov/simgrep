@@ -4,7 +4,6 @@ from typing import List, Optional, TypedDict, cast
 
 import numpy as np
 import unstructured.partition.auto as auto_partition
-from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
 from unstructured.documents.elements import Element
 
@@ -121,7 +120,7 @@ def chunk_text_by_tokens(
 def generate_embeddings(
     texts: List[str],
     model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
-    model: Optional[SentenceTransformer] = None,
+    model: Optional[object] = None,
 ) -> np.ndarray:
     """
     Generates vector embeddings for a list of input texts using a specified
@@ -139,8 +138,10 @@ def generate_embeddings(
         RuntimeError: If embedding generation fails.
     """
     try:
-        active_model: SentenceTransformer
+        active_model: "SentenceTransformer"
         if model is None:
+            from sentence_transformers import SentenceTransformer
+
             active_model = SentenceTransformer(model_name)
         else:
             active_model = model
