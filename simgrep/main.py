@@ -207,6 +207,7 @@ def search(
                 f"'{global_simgrep_config.default_project_data_dir}'.[/bold yellow]\n"
                 f"Please run 'simgrep index <path>' first to create an index."
             )
+            console.print("No matching files found.")
             raise typer.Exit(code=1)
 
         persistent_db_conn: Optional[duckdb.DuckDBPyConnection] = None
