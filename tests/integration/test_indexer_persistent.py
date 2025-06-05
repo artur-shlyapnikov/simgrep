@@ -277,3 +277,64 @@ class TestIndexerPersistent:
     # - Different file patterns
     # - Robustness against corrupted existing index/db files (if not wiping)
     # - Indexing very large files or many files (performance, memory)
+
+    def test_incremental_indexing_updates_only_changed_files(
+        self,
+        indexer_config: IndexerConfig,
+        test_console: Console,
+        sample_files_dir: pathlib.Path,
+    ) -> None:
+        """Index path twice, modify a file, and ensure only changes are applied."""
+        # Initial full index
+        indexer = Indexer(config=indexer_config, console=test_console)
+        indexer.index_path(target_path=sample_files_dir, wipe_existing=True)
+
+        conn = connect_persistent_db(indexer_config.db_path)
+        try:
+            initial_counts = conn.execute("SELECT COUNT(*) FROM indexed_files").fetchone()[0]
+            initial_chunk_count = conn.execute("SELECT COUNT(*) FROM text_chunks").fetchone()[0]
+        finally:
+            conn.close()
+
+        # Second run with no changes should keep counts the same
+        indexer = Indexer(config=indexer_config, console=test_console)
+        indexer.index_path(target_path=sample_files_dir, wipe_existing=False)
+
+        conn = connect_persistent_db(indexer_config.db_path)
+        try:
+            count_after_second = conn.execute("SELECT COUNT(*) FROM indexed_files").fetchone()[0]
+            chunk_after_second = conn.execute("SELECT COUNT(*) FROM text_chunks").fetchone()[0]
+        finally:
+            conn.close()
+
+        assert count_after_second == initial_counts
+        assert chunk_after_second == initial_chunk_count
+
+        # Modify a file and add a new file
+        target_file = sample_files_dir / "file1.txt"
+        target_file.write_text(target_file.read_text() + "\nextra line")
+        new_file = sample_files_dir / "added.txt"
+        new_file.write_text("brand new content")
+
+        indexer = Indexer(config=indexer_config, console=test_console)
+        indexer.index_path(target_path=sample_files_dir, wipe_existing=False)
+
+        conn = connect_persistent_db(indexer_config.db_path)
+        try:
+            final_file_count = conn.execute("SELECT COUNT(*) FROM indexed_files").fetchone()[0]
+            # Ensure new file added
+            new_file_row = conn.execute(
+                "SELECT content_hash FROM indexed_files WHERE file_path = ?",
+                [str(new_file.resolve())],
+            ).fetchone()
+            assert new_file_row is not None
+            # Ensure modified file hash updated
+            updated_hash = conn.execute(
+                "SELECT content_hash FROM indexed_files WHERE file_path = ?",
+                [str(target_file.resolve())],
+            ).fetchone()[0]
+        finally:
+            conn.close()
+
+        assert final_file_count == initial_counts + 1
+        assert updated_hash == calculate_file_hash(target_file)

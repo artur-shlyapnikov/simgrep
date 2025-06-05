@@ -537,11 +537,9 @@ def index(
 ) -> None:
     """
     Creates or updates a persistent index for the specified path in the default project.
-    WARNING: This command currently WIPES all existing data in the default project and re-indexes from scratch.
+    Files that are unchanged since the last index run will be skipped.
     """
     console.print(f"Starting indexing for path: [green]{path_to_index}[/green]")
-    console.print("[bold yellow]Warning: This will wipe and rebuild the default project's index.[/bold yellow]")
-    # Future: typer.confirm("Are you sure you want to wipe and rebuild the default project index?", abort=True)
 
     try:
         global_simgrep_config: SimgrepConfig = load_or_create_global_config()
@@ -562,7 +560,7 @@ def index(
         )
 
         indexer_instance = Indexer(config=indexer_config, console=console)
-        indexer_instance.index_path(target_path=path_to_index, wipe_existing=True)
+        indexer_instance.index_path(target_path=path_to_index, wipe_existing=False)
 
         console.print(f"[bold green]Successfully indexed '{path_to_index}' into the default project.[/bold green]")
 

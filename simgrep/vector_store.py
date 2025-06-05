@@ -215,6 +215,19 @@ def search_inmemory_index(
     return results
 
 
+def remove_vectors_from_index(
+    index: usearch.index.Index, labels: List[int]
+) -> None:
+    """Remove vectors identified by labels from a USearch index."""
+    if not labels:
+        return
+    try:
+        index.remove(keys=np.array(labels, dtype=np.int64))
+    except Exception as e:
+        logger.error(f"Failed to remove vectors from USearch index: {e}")
+        raise VectorStoreError("Failed to remove vectors from USearch index") from e
+
+
 def load_persistent_index(index_path: Path) -> Optional[usearch.index.Index]:
     """
     Loads a USearch index from a file.

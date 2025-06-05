@@ -28,6 +28,9 @@ from .metadata_db import (
     clear_persistent_project_data,
     connect_persistent_db,
     insert_indexed_file_record,
+    fetch_indexed_file_record,
+    update_indexed_file_record,
+    delete_chunks_for_file,
 )
 from .processor import (
     ProcessedChunkInfo,
@@ -37,7 +40,11 @@ from .processor import (
     generate_embeddings,
     load_tokenizer,
 )
-from .vector_store import load_persistent_index, save_persistent_index
+from .vector_store import (
+    load_persistent_index,
+    save_persistent_index,
+    remove_vectors_from_index,
+)
 
 
 class IndexerError(Exception):
@@ -184,23 +191,56 @@ class Indexer:
             file_size = file_stat.st_size
             last_modified_ts = file_stat.st_mtime
 
-            file_id = insert_indexed_file_record(
-                self.db_conn,
-                file_path=str(file_path.resolve()),
-                content_hash=content_hash,
-                file_size_bytes=file_size,
-                last_modified_os_timestamp=last_modified_ts,
-            )
+            existing = fetch_indexed_file_record(self.db_conn, str(file_path.resolve()))
+            if existing:
+                file_id = existing[0]
+                stored_hash = existing[1]
+                stored_mtime = existing[3].timestamp() if existing[3] else None
 
-            if file_id is None:
-                self.console.print(f"[bold red]Error: Failed to get file_id for {file_path}. Skipping.[/bold red]")
-                errors_this_file += 1
-                progress.update(
-                    task_id,
-                    advance=1,
-                    description=f"Skipped (DB insert): {file_display_name}",
+                if stored_hash == content_hash and stored_mtime is not None and abs(stored_mtime - last_modified_ts) < 1e-6:
+                    progress.update(
+                        task_id,
+                        advance=1,
+                        description=f"Unchanged: {file_display_name}",
+                    )
+                    return num_chunks_this_file, errors_this_file
+
+                labels_to_remove = delete_chunks_for_file(self.db_conn, file_id)
+                if labels_to_remove and self.usearch_index is not None:
+                    try:
+                        remove_vectors_from_index(self.usearch_index, labels_to_remove)
+                    except VectorStoreError as e:
+                        self.console.print(
+                            f"[yellow]Warning: Failed to remove old vectors for {file_path}: {e}[/yellow]"
+                        )
+
+                update_indexed_file_record(
+                    self.db_conn,
+                    file_id=file_id,
+                    new_content_hash=content_hash,
+                    new_file_size_bytes=file_size,
+                    new_last_modified_os_timestamp=last_modified_ts,
                 )
-                return num_chunks_this_file, errors_this_file
+            else:
+                file_id = insert_indexed_file_record(
+                    self.db_conn,
+                    file_path=str(file_path.resolve()),
+                    content_hash=content_hash,
+                    file_size_bytes=file_size,
+                    last_modified_os_timestamp=last_modified_ts,
+                )
+
+                if file_id is None:
+                    self.console.print(
+                        f"[bold red]Error: Failed to get file_id for {file_path}. Skipping.[/bold red]"
+                    )
+                    errors_this_file += 1
+                    progress.update(
+                        task_id,
+                        advance=1,
+                        description=f"Skipped (DB insert): {file_display_name}",
+                    )
+                    return num_chunks_this_file, errors_this_file
 
             # text extraction & chunking
             text_content = extract_text_from_file(file_path)

@@ -349,6 +349,67 @@ def insert_indexed_file_record(
         raise MetadataDBError(f"Failed to insert file metadata for '{file_path}'") from e
 
 
+def fetch_indexed_file_record(
+    conn: duckdb.DuckDBPyConnection, file_path: str
+) -> Optional[Tuple[int, str, int, datetime.datetime]]:
+    """Retrieve an existing indexed_files record for the given file_path."""
+    try:
+        result = conn.execute(
+            "SELECT file_id, content_hash, file_size_bytes, last_modified_os FROM indexed_files WHERE file_path = ?;",
+            [file_path],
+        ).fetchone()
+        if result:
+            file_id, hash_val, size_bytes, last_mod = result
+            return int(file_id), str(hash_val), int(size_bytes), last_mod
+        return None
+    except duckdb.Error as e:
+        logger.error(f"DuckDB error fetching indexed file record for '{file_path}': {e}")
+        raise MetadataDBError(f"Failed to fetch indexed file record for '{file_path}'") from e
+
+
+def update_indexed_file_record(
+    conn: duckdb.DuckDBPyConnection,
+    file_id: int,
+    new_content_hash: str,
+    new_file_size_bytes: int,
+    new_last_modified_os_timestamp: float,
+) -> None:
+    """Update metadata for an existing indexed file."""
+    new_last_modified_dt = datetime.datetime.fromtimestamp(new_last_modified_os_timestamp)
+    try:
+        conn.execute(
+            """
+            UPDATE indexed_files
+            SET content_hash = ?, file_size_bytes = ?, last_modified_os = ?, last_indexed_at = CURRENT_TIMESTAMP
+            WHERE file_id = ?;
+            """,
+            [
+                new_content_hash,
+                new_file_size_bytes,
+                new_last_modified_dt,
+                file_id,
+            ],
+        )
+    except duckdb.Error as e:
+        logger.error(f"DuckDB error updating indexed file record for id {file_id}: {e}")
+        raise MetadataDBError(f"Failed to update indexed file record for id {file_id}") from e
+
+
+def delete_chunks_for_file(conn: duckdb.DuckDBPyConnection, file_id: int) -> List[int]:
+    """Delete chunk rows for a file and return their usearch labels."""
+    try:
+        rows = conn.execute(
+            "SELECT usearch_label FROM text_chunks WHERE file_id = ?;",
+            [file_id],
+        ).fetchall()
+        labels = [int(r[0]) for r in rows] if rows else []
+        conn.execute("DELETE FROM text_chunks WHERE file_id = ?;", [file_id])
+        return labels
+    except duckdb.Error as e:
+        logger.error(f"DuckDB error deleting chunks for file_id {file_id}: {e}")
+        raise MetadataDBError(f"Failed to delete chunks for file_id {file_id}") from e
+
+
 def batch_insert_text_chunks(conn: duckdb.DuckDBPyConnection, chunk_records: List[Dict[str, Any]]) -> None:
     if not chunk_records:
         logger.debug("No chunk records provided for batch insert into 'text_chunks'.")
