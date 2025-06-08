@@ -292,38 +292,54 @@ class TestIndexerPersistent:
 
         conn = connect_persistent_db(indexer_config.db_path)
         try:
-            file2_chunks_before = conn.execute(
+            file2_chunks_before_row = conn.execute(
                 "SELECT COUNT(*) FROM text_chunks tc JOIN indexed_files f ON tc.file_id=f.file_id WHERE f.file_path = ?;",
                 [str(file2_path)],
-            ).fetchone()[0]
-            total_chunks_before = conn.execute("SELECT COUNT(*) FROM text_chunks;").fetchone()[0]
-            file2_hash_before = conn.execute(
+            ).fetchone()
+            total_chunks_before_row = conn.execute("SELECT COUNT(*) FROM text_chunks;").fetchone()
+            file2_hash_before_row = conn.execute(
                 "SELECT content_hash FROM indexed_files WHERE file_path = ?;",
                 [str(file2_path)],
-            ).fetchone()[0]
+            ).fetchone()
+            assert file2_chunks_before_row is not None
+            assert total_chunks_before_row is not None
+            assert file2_hash_before_row is not None
+            file2_chunks_before = file2_chunks_before_row[0]
+            total_chunks_before = total_chunks_before_row[0]
+            file2_hash_before = file2_hash_before_row[0]
         finally:
             conn.close()
 
-        index_size_before = len(load_persistent_index(indexer_config.usearch_index_path))
+        idx_before = load_persistent_index(indexer_config.usearch_index_path)
+        assert idx_before is not None
+        index_size_before = len(idx_before)
 
         indexer2 = Indexer(config=indexer_config, console=test_console)
         indexer2.index_path(target_path=sample_files_dir, wipe_existing=False)
 
         conn = connect_persistent_db(indexer_config.db_path)
         try:
-            file2_hash_after = conn.execute(
+            file2_hash_after_row = conn.execute(
                 "SELECT content_hash FROM indexed_files WHERE file_path = ?;",
                 [str(file2_path)],
-            ).fetchone()[0]
-            file2_chunks_after = conn.execute(
+            ).fetchone()
+            file2_chunks_after_row = conn.execute(
                 "SELECT COUNT(*) FROM text_chunks tc JOIN indexed_files f ON tc.file_id=f.file_id WHERE f.file_path = ?;",
                 [str(file2_path)],
-            ).fetchone()[0]
-            total_chunks_nochange = conn.execute("SELECT COUNT(*) FROM text_chunks;").fetchone()[0]
+            ).fetchone()
+            total_chunks_nochange_row = conn.execute("SELECT COUNT(*) FROM text_chunks;").fetchone()
+            assert file2_hash_after_row is not None
+            assert file2_chunks_after_row is not None
+            assert total_chunks_nochange_row is not None
+            file2_hash_after = file2_hash_after_row[0]
+            file2_chunks_after = file2_chunks_after_row[0]
+            total_chunks_nochange = total_chunks_nochange_row[0]
         finally:
             conn.close()
 
-        index_size_nochange = len(load_persistent_index(indexer_config.usearch_index_path))
+        idx_nochange = load_persistent_index(indexer_config.usearch_index_path)
+        assert idx_nochange is not None
+        index_size_nochange = len(idx_nochange)
 
         assert file2_hash_after == file2_hash_before
         assert file2_chunks_after == file2_chunks_before
@@ -338,14 +354,18 @@ class TestIndexerPersistent:
 
         conn = connect_persistent_db(indexer_config.db_path)
         try:
-            new_hash_db = conn.execute(
+            new_hash_row = conn.execute(
                 "SELECT content_hash FROM indexed_files WHERE file_path = ?;",
                 [str(file1_path)],
-            ).fetchone()[0]
-            file2_chunks_after_mod = conn.execute(
+            ).fetchone()
+            file2_chunks_after_mod_row = conn.execute(
                 "SELECT COUNT(*) FROM text_chunks tc JOIN indexed_files f ON tc.file_id=f.file_id WHERE f.file_path = ?;",
                 [str(file2_path)],
-            ).fetchone()[0]
+            ).fetchone()
+            assert new_hash_row is not None
+            assert file2_chunks_after_mod_row is not None
+            new_hash_db = new_hash_row[0]
+            file2_chunks_after_mod = file2_chunks_after_mod_row[0]
         finally:
             conn.close()
 

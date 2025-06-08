@@ -138,7 +138,7 @@ class Indexer:
                     if len(self.usearch_index) > 0:
                         try:
                             max_existing_label = self.usearch_index.keys[len(self.usearch_index.keys) - 1]
-                            self._current_usearch_label = max_existing_label + 1
+                            self._current_usearch_label = int(max_existing_label) + 1
                         except Exception:
                             self.console.print(
                                 "[yellow]Warning: Could not determine max key from existing index,"

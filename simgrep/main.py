@@ -163,12 +163,11 @@ def search(
         resolve_path=True,
         help="The path to a text file or directory for ephemeral search. If omitted, searches the default persistent index.",
     ),
-    patterns: Optional[Tuple[str, ...]] = typer.Option(
+    patterns: Optional[List[str]] = typer.Option(
         None,
         "--pattern",
         "-p",
         help="Glob pattern(s) for files when searching directories. Can be used multiple times. Defaults to '*.txt'.",
-        multiple=True,
     ),
     output: OutputMode = typer.Option(
         OutputMode.show,  # Default output mode
