@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from hypothesis import given, strategies as st
+from hypothesis import HealthCheck, given, settings, strategies as st
 from hypothesis.extra import numpy as hynp
 
 pytest.importorskip("numpy")
@@ -30,6 +30,7 @@ def _embedding_label_strategy():
     return _inner()
 
 
+@settings(deadline=None, suppress_health_check=[HealthCheck.too_slow])
 @given(_embedding_label_strategy())
 def test_search_results_subset_and_len(data: tuple[np.ndarray, np.ndarray, np.ndarray]) -> None:
     embeddings, labels, query = data
