@@ -5,7 +5,8 @@ import duckdb
 import pytest
 
 # Ensure consistent exception type
-from simgrep.metadata_db import MetadataDBError, connect_persistent_db
+from simgrep.metadata_db import MetadataDBError
+from simgrep.metadata_store import MetadataStore
 
 
 @pytest.fixture
@@ -67,9 +68,10 @@ class TestPersistentMetadataDB:
         assert not persistent_db_path.exists()
         assert not persistent_db_path.parent.exists()
 
-        conn = None
+        store = None
         try:
-            conn = connect_persistent_db(persistent_db_path)
+            store = MetadataStore(persistent=True, db_path=persistent_db_path)
+            conn = store.conn
             assert isinstance(conn, duckdb.DuckDBPyConnection)
             assert persistent_db_path.exists()
             assert persistent_db_path.is_file()
@@ -110,17 +112,18 @@ class TestPersistentMetadataDB:
             assert text_chunks_schema.get("embedding_hash") == "VARCHAR"  # nullable
 
         finally:
-            if conn:
-                conn.close()
+            if store:
+                store.close()
 
     def test_connect_persistent_db_existing_db(
         self, persistent_db_path: pathlib.Path
     ) -> None:
         """test connecting to an existing DB: tables are still there, no errors."""
         # first, create the db
-        conn1 = None
+        store1 = None
         try:
-            conn1 = connect_persistent_db(persistent_db_path)
+            store1 = MetadataStore(persistent=True, db_path=persistent_db_path)
+            conn1 = store1.conn
             # add some dummy data to ensure it persists
             conn1.execute(
                 "INSERT INTO indexed_files (file_path, content_hash, file_size_bytes) VALUES (?, ?, ?)",
@@ -128,15 +131,16 @@ class TestPersistentMetadataDB:
             )
             conn1.commit()  # duckdb auto-commits by default unless in explicit transaction
         finally:
-            if conn1:
-                conn1.close()
+            if store1:
+                store1.close()
 
         assert persistent_db_path.exists()
 
         # connect again
-        conn2 = None
+        store2 = None
         try:
-            conn2 = connect_persistent_db(persistent_db_path)
+            store2 = MetadataStore(persistent=True, db_path=persistent_db_path)
+            conn2 = store2.conn
             tables = conn2.execute("SHOW TABLES;").fetchall()
             table_names = [table[0] for table in tables]
             assert "indexed_files" in table_names
@@ -150,8 +154,8 @@ class TestPersistentMetadataDB:
             count = result[0]
             assert count == 1
         finally:
-            if conn2:
-                conn2.close()
+            if store2:
+                store2.close()
 
     def test_connect_persistent_db_directory_creation_failure(
         self, persistent_db_path: pathlib.Path
@@ -168,15 +172,16 @@ class TestPersistentMetadataDB:
             MetadataDBError,
             match=f"Could not create directory for database at {str(path_that_should_be_dir)}",
         ):
-            connect_persistent_db(persistent_db_path)
+            MetadataStore(persistent=True, db_path=persistent_db_path)
 
     def test_data_persistence_and_fk_constraint(
         self, persistent_db_path: pathlib.Path
     ) -> None:
         """test inserting data, checking FK constraints, and persistence."""
-        conn = None
+        store = None
         try:
-            conn = connect_persistent_db(persistent_db_path)
+            store = MetadataStore(persistent=True, db_path=persistent_db_path)
+            conn = store.conn
 
             # insert into indexed_files
             file_path1 = "/path/to/file1.txt"
@@ -246,13 +251,14 @@ class TestPersistentMetadataDB:
                 )
                 conn.execute(insert_sql, [file1_id, 1001, "snippet3", 10, 20, 6])
         finally:
-            if conn:
-                conn.close()
+            if store:
+                store.close()
 
         # reconnect and verify data
-        conn_reopened = None
+        store_reopened = None
         try:
-            conn_reopened = connect_persistent_db(persistent_db_path)
+            store_reopened = MetadataStore(persistent=True, db_path=persistent_db_path)
+            conn_reopened = store_reopened.conn
             file_count_result = conn_reopened.execute(
                 "SELECT COUNT(*) FROM indexed_files"
             ).fetchone()
@@ -276,5 +282,5 @@ class TestPersistentMetadataDB:
             retrieved_snippet = retrieved_snippet_result[0]
             assert retrieved_snippet == "snippet1"
         finally:
-            if conn_reopened:
-                conn_reopened.close()
+            if store_reopened:
+                store_reopened.close()

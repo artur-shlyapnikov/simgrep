@@ -1,14 +1,13 @@
 import pathlib
 from typing import List, Optional, Tuple
 
-import duckdb
 import usearch.index
 from rich.console import Console
 
 from .config import DEFAULT_K_RESULTS, SimgrepConfig
 from .exceptions import MetadataDBError, VectorStoreError
 from .formatter import format_paths, format_show_basic
-from .metadata_db import retrieve_chunk_details_persistent
+from .metadata_store import MetadataStore
 from .models import OutputMode
 from .processor import generate_embeddings
 from .vector_store import (
@@ -19,7 +18,7 @@ from .vector_store import (
 def perform_persistent_search(
     query_text: str,
     console: Console,
-    db_conn: duckdb.DuckDBPyConnection,
+    metadata_store: MetadataStore,
     vector_index: usearch.index.Index,
     global_config: SimgrepConfig,
     output_mode: OutputMode,
@@ -71,7 +70,7 @@ def perform_persistent_search(
         console.print(f"\n[bold cyan]Search Results (Top {len(filtered_matches)} from persistent index):[/bold cyan]")
         for matched_usearch_label, similarity_score in filtered_matches:
             try:
-                retrieved_details = retrieve_chunk_details_persistent(db_conn, matched_usearch_label)
+                retrieved_details = metadata_store.retrieve_chunk_details_persistent(matched_usearch_label)
             except MetadataDBError as e:
                 console.print(
                     f"[yellow]Warning: Database error retrieving details for chunk label {matched_usearch_label}: {e}[/yellow]"
@@ -96,7 +95,7 @@ def perform_persistent_search(
         unique_paths_seen = set()  # to ensure uniqueness before format_paths
         for matched_usearch_label, _similarity_score in filtered_matches:
             try:
-                retrieved_details = retrieve_chunk_details_persistent(db_conn, matched_usearch_label)
+                retrieved_details = metadata_store.retrieve_chunk_details_persistent(matched_usearch_label)
             except MetadataDBError as e:
                 console.print(
                     f"[yellow]Warning: Database error retrieving path for chunk label {matched_usearch_label}: {e}[/yellow]"
