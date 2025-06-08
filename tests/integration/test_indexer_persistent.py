@@ -6,7 +6,7 @@ from rich.console import Console
 from simgrep.indexer import Indexer, IndexerConfig, IndexerError
 from simgrep.metadata_db import connect_persistent_db
 from simgrep.processor import calculate_file_hash
-from simgrep.vector_store import load_persistent_index
+from simgrep.vector_store import VectorStore
 
 pytest.importorskip("transformers")
 pytest.importorskip("sentence_transformers")
@@ -140,7 +140,7 @@ class TestIndexerPersistent:
                 db_conn.close()
 
         # Verify vector index content (basic checks)
-        vector_index = load_persistent_index(indexer_config.usearch_index_path)
+        vector_index = VectorStore(index_path=indexer_config.usearch_index_path).index
         assert vector_index is not None
         assert len(vector_index) > 0  # Should have embeddings for the chunks
 
@@ -173,7 +173,7 @@ class TestIndexerPersistent:
             if db_conn:
                 db_conn.close()
 
-        vector_index = load_persistent_index(indexer_config.usearch_index_path)
+        vector_index = VectorStore(index_path=indexer_config.usearch_index_path).index
         assert vector_index is not None
         assert len(vector_index) > 0
 
@@ -221,7 +221,7 @@ class TestIndexerPersistent:
         # USearch index might not be saved if it's empty, depending on Indexer logic
         # Current Indexer logic: saves if >0, unlinks if 0. So it should not exist if no files.
         if indexer_config.usearch_index_path.exists():
-            idx = load_persistent_index(indexer_config.usearch_index_path)
+            idx = VectorStore(index_path=indexer_config.usearch_index_path).index
             assert idx is not None and len(idx) == 0
         else:
             assert not indexer_config.usearch_index_path.exists()
@@ -266,7 +266,7 @@ class TestIndexerPersistent:
                 db_conn.close()
 
         if indexer_config.usearch_index_path.exists():
-            idx = load_persistent_index(indexer_config.usearch_index_path)
+            idx = VectorStore(index_path=indexer_config.usearch_index_path).index
             assert idx is not None and len(idx) == 0
         else:
             assert not indexer_config.usearch_index_path.exists()
@@ -310,7 +310,7 @@ class TestIndexerPersistent:
         finally:
             conn.close()
 
-        idx_before = load_persistent_index(indexer_config.usearch_index_path)
+        idx_before = VectorStore(index_path=indexer_config.usearch_index_path).index
         assert idx_before is not None
         index_size_before = len(idx_before)
 
@@ -337,7 +337,7 @@ class TestIndexerPersistent:
         finally:
             conn.close()
 
-        idx_nochange = load_persistent_index(indexer_config.usearch_index_path)
+        idx_nochange = VectorStore(index_path=indexer_config.usearch_index_path).index
         assert idx_nochange is not None
         index_size_nochange = len(idx_nochange)
 

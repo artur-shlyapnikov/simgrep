@@ -39,7 +39,7 @@ from .processor import (
     generate_embeddings,
     load_tokenizer,
 )
-from .vector_store import load_persistent_index, save_persistent_index
+from .vector_store import VectorStore
 
 
 class IndexerError(Exception):
@@ -64,6 +64,7 @@ class Indexer:
         self.console = console
         self.db_conn: Optional[duckdb.DuckDBPyConnection] = None
         self.usearch_index: Optional[usearch.index.Index] = None
+        self.vector_store: Optional[VectorStore] = None
         self._current_usearch_label: int = 0  # global counter for unique usearch labels
 
         try:
@@ -121,18 +122,18 @@ class Indexer:
             if wipe_existing:
                 self.console.print(f"Wiping existing vector index: {self.config.usearch_index_path}...")
                 self.config.usearch_index_path.unlink(missing_ok=True)
-                self.usearch_index = usearch.index.Index(
-                    ndim=self.embedding_ndim,
-                    metric="cos",
-                    dtype="f32",  # todo: make metric/dtype configurable
-                )
+                self.vector_store = VectorStore(ndim=self.embedding_ndim, metric="cos", dtype="f32")
+                self.usearch_index = self.vector_store.index
                 self.console.print("New empty vector index created.")
+                self._current_usearch_label = 0
             else:  # for future incremental logic
                 self.console.print(f"Loading vector index from: {self.config.usearch_index_path}...")
-                self.usearch_index = load_persistent_index(self.config.usearch_index_path)
+                self.vector_store = VectorStore(index_path=self.config.usearch_index_path, ndim=self.embedding_ndim, metric="cos", dtype="f32")
+                self.usearch_index = self.vector_store.index
                 if self.usearch_index is None:
                     self.console.print("No existing vector index found. Creating new one.")
-                    self.usearch_index = usearch.index.Index(ndim=self.embedding_ndim, metric="cos", dtype="f32")
+                    self.vector_store = VectorStore(ndim=self.embedding_ndim, metric="cos", dtype="f32")
+                    self.usearch_index = self.vector_store.index
                 else:
                     self.console.print(f"Loaded existing vector index with {len(self.usearch_index)} items.")
                     if len(self.usearch_index) > 0:
@@ -148,10 +149,12 @@ class Indexer:
                     else:
                         self._current_usearch_label = 0
         except VectorStoreError as e:
-            self.usearch_index = None  # ensure it's none if setup failed
+            self.vector_store = None
+            self.usearch_index = None
             raise IndexerError(f"Vector store preparation failed: {e}") from e
-        except Exception as e_vs_unexpected:  # catch-all for unexpected vs errors
-            self.usearch_index = None  # ensure it's none if setup failed
+        except Exception as e_vs_unexpected:
+            self.vector_store = None
+            self.usearch_index = None
             raise IndexerError(f"Unexpected error during vector store preparation: {e_vs_unexpected}") from e_vs_unexpected
 
         # final checks
@@ -255,11 +258,11 @@ class Indexer:
 
             batch_insert_text_chunks(self.db_conn, chunk_db_records)
 
-            if self.usearch_index is None:  # should be initialized
+            if self.vector_store is None:
                 raise IndexerError("USearch index is None during file processing.")
-            self.usearch_index.add(
-                keys=np.array(usearch_labels_for_batch, dtype=np.int64),
-                vectors=embeddings_np,
+            self.vector_store.add_vectors(
+                embeddings_np,
+                np.array(usearch_labels_for_batch, dtype=np.int64),
             )
             num_chunks_this_file = len(processed_chunks)
             progress.update(
@@ -410,11 +413,11 @@ class Indexer:
                     # progress.update advances automatically in _process_and_index_file
 
             # finalization
-            if self.usearch_index is not None and len(self.usearch_index) > 0:
+            if self.vector_store is not None and len(self.usearch_index) > 0:
                 self.console.print(f"Saving vector index with {len(self.usearch_index)} items...")
-                save_persistent_index(self.usearch_index, self.config.usearch_index_path)
+                self.vector_store.save(self.config.usearch_index_path)
                 self.console.print("Vector index saved.")
-            elif self.usearch_index is not None and len(self.usearch_index) == 0:
+            elif self.vector_store is not None and len(self.usearch_index) == 0:
                 self.console.print("Vector index is empty. Not saving.")
                 # optionally delete an old index file if it exists and current one is empty after wipe
                 self.config.usearch_index_path.unlink(missing_ok=True)

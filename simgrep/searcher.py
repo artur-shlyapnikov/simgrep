@@ -2,7 +2,6 @@ import pathlib
 from typing import List, Optional, Tuple
 
 import duckdb
-import usearch.index
 from rich.console import Console
 
 from .config import DEFAULT_K_RESULTS, SimgrepConfig
@@ -11,16 +10,14 @@ from .formatter import format_paths, format_show_basic
 from .metadata_db import retrieve_chunk_details_persistent
 from .models import OutputMode
 from .processor import generate_embeddings
-from .vector_store import (
-    search_inmemory_index,  # this function is generic for any usearch index
-)
+from .vector_store import VectorStore
 
 
 def perform_persistent_search(
     query_text: str,
     console: Console,
     db_conn: duckdb.DuckDBPyConnection,
-    vector_index: usearch.index.Index,
+    vector_store: VectorStore,
     global_config: SimgrepConfig,
     output_mode: OutputMode,
     k_results: int = DEFAULT_K_RESULTS,
@@ -41,8 +38,8 @@ def perform_persistent_search(
 
     console.print(f"  Searching persistent index for top {k_results} similar chunks...")
     try:
-        search_matches: List[Tuple[int, float]] = search_inmemory_index(
-            index=vector_index, query_embedding=query_embedding, k=k_results
+        search_matches: List[Tuple[int, float]] = vector_store.search(
+            query_embedding, k=k_results
         )
     except (VectorStoreError, ValueError) as e:
         console.print(f"[bold red]Error during vector search:[/bold red]\n  {e}")

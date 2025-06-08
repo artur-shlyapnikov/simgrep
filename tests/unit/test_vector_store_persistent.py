@@ -8,11 +8,7 @@ import usearch.index
 pytest.importorskip("numpy")
 pytest.importorskip("usearch.index")
 
-from simgrep.vector_store import (
-    VectorStoreError,
-    load_persistent_index,
-    save_persistent_index,
-)
+from simgrep.vector_store import VectorStore, VectorStoreError
 
 
 @pytest.fixture
@@ -49,7 +45,9 @@ class TestPersistentVectorStore:
         assert not persistent_index_path.exists()
         assert not persistent_index_path.parent.exists()  # to check directory creation
 
-        save_persistent_index(sample_usearch_index, persistent_index_path)
+        vs = VectorStore(ndim=sample_usearch_index.ndim)
+        vs.index = sample_usearch_index
+        vs.save(persistent_index_path)
 
         assert persistent_index_path.exists()
         assert persistent_index_path.is_file()
@@ -61,7 +59,8 @@ class TestPersistentVectorStore:
         )
         assert not temp_file_path.exists()
 
-        loaded_index = load_persistent_index(persistent_index_path)
+        vs_loaded = VectorStore(index_path=persistent_index_path)
+        loaded_index = vs_loaded.index
         assert loaded_index is not None
         assert isinstance(loaded_index, usearch.index.Index)
         assert len(loaded_index) == len(sample_usearch_index)
@@ -89,10 +88,13 @@ class TestPersistentVectorStore:
         persistent_index_path: pathlib.Path,
     ) -> None:
         """test saving an empty index."""
-        save_persistent_index(empty_usearch_index, persistent_index_path)
+        vs = VectorStore(ndim=empty_usearch_index.ndim)
+        vs.index = empty_usearch_index
+        vs.save(persistent_index_path)
         assert persistent_index_path.exists()
 
-        loaded_index = load_persistent_index(persistent_index_path)
+        vs_loaded = VectorStore(index_path=persistent_index_path)
+        loaded_index = vs_loaded.index
         assert loaded_index is not None
         assert len(loaded_index) == 0
         assert loaded_index.ndim == empty_usearch_index.ndim
@@ -102,8 +104,9 @@ class TestPersistentVectorStore:
     ) -> None:
         """test loading a non-existent index file returns none."""
         assert not persistent_index_path.exists()
-        loaded_index = load_persistent_index(persistent_index_path)
-        assert loaded_index is None
+        vs = VectorStore(ndim=1)
+        with pytest.raises(VectorStoreError):
+            vs.load(persistent_index_path)
 
     def test_save_persistent_index_directory_creation_failure(
         self,
@@ -120,8 +123,10 @@ class TestPersistentVectorStore:
         path_that_should_be_dir.touch()  # create it as a file
 
         error_match = f"Could not create directory for USearch index at {str(path_that_should_be_dir)}"
+        vs = VectorStore(ndim=sample_usearch_index.ndim)
+        vs.index = sample_usearch_index
         with pytest.raises(VectorStoreError, match=error_match):
-            save_persistent_index(sample_usearch_index, persistent_index_path)
+            vs.save(persistent_index_path)
 
     def test_save_persistent_index_atomic_failure_on_replace(
         self,
@@ -146,8 +151,10 @@ class TestPersistentVectorStore:
         expected_error_message = (
             f"Failed to finalize saving index to {str(persistent_index_path)}"
         )
+        vs = VectorStore(ndim=sample_usearch_index.ndim)
+        vs.index = sample_usearch_index
         with pytest.raises(VectorStoreError, match=expected_error_message):
-            save_persistent_index(sample_usearch_index, persistent_index_path)
+            vs.save(persistent_index_path)
 
         # final state: original file should not exist, temp file should be cleaned up
         assert not persistent_index_path.exists()
@@ -161,7 +168,8 @@ class TestPersistentVectorStore:
         with open(persistent_index_path, "wb") as f:
             f.write(b"this is not a valid usearch index file content")
 
+        vs = VectorStore(ndim=1)
         with pytest.raises(
             VectorStoreError, match=f"Failed to load index from {persistent_index_path}"
         ):
-            load_persistent_index(persistent_index_path)
+            vs.load(persistent_index_path)

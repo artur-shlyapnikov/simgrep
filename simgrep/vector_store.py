@@ -14,6 +14,77 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+class VectorStore:
+    """Simple wrapper around ``usearch.index.Index`` supporting persistence."""
+
+    def __init__(
+        self,
+        index_path: Optional[Path] | None = None,
+        *,
+        ndim: Optional[int] = None,
+        metric: str = "cos",
+        dtype: str = "f32",
+    ) -> None:
+        """Load an existing index or create a new one."""
+
+        self.path: Optional[Path] = index_path
+        self.metric = metric
+        self.dtype = dtype
+
+        loaded: Optional[usearch.index.Index] = None
+        if index_path is not None and index_path.exists():
+            loaded = load_persistent_index(index_path)
+
+        if loaded is not None:
+            self.index = loaded
+        else:
+            if ndim is None:
+                raise ValueError("ndim must be provided when creating a new index")
+            self.index = usearch.index.Index(ndim=ndim, metric=metric, dtype=dtype)
+
+    def add_vectors(self, vectors: np.ndarray, labels: np.ndarray) -> None:
+        """Add vectors and their integer labels to the index."""
+        if not isinstance(vectors, np.ndarray) or vectors.ndim != 2:
+            raise ValueError("Embeddings must be a 2D NumPy array.")
+        if not isinstance(labels, np.ndarray) or labels.ndim != 1:
+            raise ValueError("labels must be a 1D NumPy array.")
+        if vectors.shape[0] == 0:
+            raise ValueError("Embeddings array cannot be empty")
+        if vectors.shape[0] != labels.shape[0]:
+            raise ValueError(
+                f"Number of embeddings ({vectors.shape[0]}) must match number of labels ({labels.shape[0]})"
+            )
+        if vectors.shape[1] != self.index.ndim:
+            raise ValueError(
+                f"Embedding dimension ({vectors.shape[1]}) does not match index dimension ({self.index.ndim})"
+            )
+
+        self.index.add(keys=labels.astype(np.int64), vectors=vectors.astype(np.float32))
+
+    def search(self, query: np.ndarray, k: int = 5) -> List[Tuple[int, float]]:
+        """Search for the ``k`` most similar vectors."""
+
+        return search_inmemory_index(self.index, query, k)
+
+    def save(self, path: Optional[Path] | None = None) -> None:
+        """Persist the index to ``path`` or ``self.path``."""
+
+        target = path or self.path
+        if target is None:
+            raise ValueError("No path specified to save index")
+        save_persistent_index(self.index, target)
+        self.path = target
+
+    def load(self, path: Path) -> None:
+        """Load a persisted index into this instance."""
+
+        idx = load_persistent_index(path)
+        if idx is None:
+            raise VectorStoreError(f"Index file not found at {path}")
+        self.index = idx
+        self.path = path
+
+
 def create_inmemory_index(
     embeddings: np.ndarray,
     labels_for_usearch: np.ndarray,

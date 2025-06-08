@@ -50,9 +50,9 @@ try:
     from .searcher import perform_persistent_search  # Added perform_persistent_search
     from .utils import gather_files_to_process
     from .vector_store import (
+        VectorStore,
         VectorStoreError,  # Added VectorStoreError
         create_inmemory_index,
-        load_persistent_index,
         search_inmemory_index,
     )
 except ImportError:
@@ -89,10 +89,10 @@ except ImportError:
         )
         from simgrep.searcher import perform_persistent_search  # Added
         from simgrep.utils import gather_files_to_process
-        from simgrep.vector_store import (  # Added
+        from simgrep.vector_store import (
+            VectorStore,
             VectorStoreError,
             create_inmemory_index,
-            load_persistent_index,
             search_inmemory_index,
         )
     else:
@@ -218,20 +218,20 @@ def search(
             raise typer.Exit(code=1)
 
         persistent_db_conn: Optional[duckdb.DuckDBPyConnection] = None
-        persistent_vector_index: Optional[usearch.index.Index] = None
+        persistent_vector_store: Optional[VectorStore] = None
         try:
             console.print("  Loading persistent database...")
             persistent_db_conn = connect_persistent_db(default_project_db_file)
             console.print("  Loading persistent vector index...")
-            persistent_vector_index = load_persistent_index(default_project_usearch_file)
+            persistent_vector_store = VectorStore(index_path=default_project_usearch_file)
 
-            if persistent_vector_index is None:
+            if persistent_vector_store.index is None:
                 console.print(
                     f"[bold red]Error: Vector index file loaded as None from {default_project_usearch_file}. "
                     "Index might be corrupted or empty after a failed write.[/bold red]"
                 )
                 raise typer.Exit(code=1)
-            if len(persistent_vector_index) == 0:
+            if len(persistent_vector_store.index) == 0:
                 console.print("[yellow]Warning: The persistent vector index is empty. No search can be performed.[/yellow]")
                 # Output "no results" based on mode
                 if output == OutputMode.paths:
@@ -251,7 +251,7 @@ def search(
                 query_text=query_text,
                 console=console,
                 db_conn=persistent_db_conn,
-                vector_index=persistent_vector_index,
+                vector_store=persistent_vector_store,
                 global_config=global_simgrep_config,
                 output_mode=output,
                 k_results=top,

@@ -5,7 +5,7 @@ import usearch.index
 pytest.importorskip("numpy")
 pytest.importorskip("usearch.index")
 
-from simgrep.vector_store import create_inmemory_index, search_inmemory_index
+from simgrep.vector_store import VectorStore
 
 
 @pytest.fixture
@@ -27,8 +27,10 @@ def simple_labels() -> np.ndarray:
 
 class TestCreateInmemoryIndex:
     def test_valid_embeddings_and_labels(self, simple_embeddings: np.ndarray, simple_labels: np.ndarray) -> None:
-        index = create_inmemory_index(simple_embeddings, simple_labels)
+        vs = VectorStore(ndim=simple_embeddings.shape[1])
+        vs.add_vectors(simple_embeddings, simple_labels)
 
+        index = vs.index
         assert isinstance(index, usearch.index.Index)
         assert len(index) == simple_embeddings.shape[0]
         assert index.ndim == simple_embeddings.shape[1]
@@ -37,20 +39,22 @@ class TestCreateInmemoryIndex:
         embeddings = np.random.rand(3, 4).astype(np.float32)
         labels = np.array([1, 2], dtype=np.int64)
         with pytest.raises(ValueError, match=r"Number of embeddings \(3\) must match number of labels \(2\)"):
-            create_inmemory_index(embeddings, labels)
+            VectorStore(ndim=embeddings.shape[1]).add_vectors(embeddings, labels)
 
     def test_empty_embeddings_raise(self) -> None:
         embeddings = np.empty((0, 5), dtype=np.float32)
         labels = np.empty((0,), dtype=np.int64)
         with pytest.raises(ValueError, match="Embeddings array cannot be empty"):
-            create_inmemory_index(embeddings, labels)
+            vs = VectorStore(ndim=embeddings.shape[1])
+            vs.add_vectors(embeddings, labels)
 
 
 class TestSearchInmemoryIndex:
     def test_search_returns_results(self, simple_embeddings: np.ndarray, simple_labels: np.ndarray) -> None:
-        index = create_inmemory_index(simple_embeddings, simple_labels)
+        vs = VectorStore(ndim=simple_embeddings.shape[1])
+        vs.add_vectors(simple_embeddings, simple_labels)
         query = simple_embeddings[0]
-        results = search_inmemory_index(index, query, k=2)
+        results = vs.search(query, k=2)
 
         assert results
         assert results[0][0] == simple_labels[0]
@@ -58,11 +62,12 @@ class TestSearchInmemoryIndex:
         assert len(results) <= 2
 
     def test_dimension_mismatch_errors(self, simple_embeddings: np.ndarray, simple_labels: np.ndarray) -> None:
-        index = create_inmemory_index(simple_embeddings, simple_labels)
+        vs = VectorStore(ndim=simple_embeddings.shape[1])
+        vs.add_vectors(simple_embeddings, simple_labels)
         wrong_dim_query = np.random.rand(simple_embeddings.shape[1] + 1).astype(np.float32)
         with pytest.raises(ValueError, match="does not match index dimension"):
-            search_inmemory_index(index, wrong_dim_query, k=1)
+            vs.search(wrong_dim_query, k=1)
 
         batch_query = np.random.rand(2, simple_embeddings.shape[1]).astype(np.float32)
         with pytest.raises(ValueError, match="Expected a single query embedding"):
-            search_inmemory_index(index, batch_query, k=1)
+            vs.search(batch_query, k=1)
