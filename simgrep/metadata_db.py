@@ -115,11 +115,7 @@ def batch_insert_chunks(conn: duckdb.DuckDBPyConnection, chunk_data_list: List[C
     ]
     logger.info(f"Batch inserting {len(data_to_insert)} chunk(s) into temp_chunks.")
     try:
-        sql = (
-            "INSERT INTO temp_chunks (chunk_id, file_id, text_content, "
-            "start_char_offset, end_char_offset, token_count) "
-            "VALUES (?, ?, ?, ?, ?, ?)"
-        )
+        sql = "INSERT INTO temp_chunks (chunk_id, file_id, text_content, " "start_char_offset, end_char_offset, token_count) " "VALUES (?, ?, ?, ?, ?, ?)"
         conn.executemany(sql, data_to_insert)
         logger.debug(f"Successfully inserted {len(data_to_insert)} chunk(s).")
     except duckdb.Error as e:
@@ -159,9 +155,7 @@ def retrieve_chunk_for_display(conn: duckdb.DuckDBPyConnection, chunk_id: int) -
         return None
 
 
-def retrieve_chunk_details_persistent(
-    conn: duckdb.DuckDBPyConnection, usearch_label: int
-) -> Optional[Tuple[str, pathlib.Path, int, int]]:
+def retrieve_chunk_details_persistent(conn: duckdb.DuckDBPyConnection, usearch_label: int) -> Optional[Tuple[str, pathlib.Path, int, int]]:
     """
     Retrieves chunk details (snippet, file path, offsets) from persistent tables
     using the usearch_label.
@@ -456,9 +450,7 @@ def connect_global_db(path: pathlib.Path) -> duckdb.DuckDBPyConnection:
         raise MetadataDBError(f"Failed to connect to global DB at {path}") from e
 
     try:
-        conn.execute(
-            "CREATE SEQUENCE IF NOT EXISTS projects_project_id_seq;"
-        )
+        conn.execute("CREATE SEQUENCE IF NOT EXISTS projects_project_id_seq;")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS projects (
@@ -504,9 +496,7 @@ def insert_project(
         raise MetadataDBError("Failed to insert project") from e
 
 
-def get_project_by_name(
-    conn: duckdb.DuckDBPyConnection, project_name: str
-) -> Optional[Tuple[int, str, str, str, str]]:
+def get_project_by_name(conn: duckdb.DuckDBPyConnection, project_name: str) -> Optional[Tuple[int, str, str, str, str]]:
     try:
         row = conn.execute(
             "SELECT * FROM projects WHERE project_name = ?;",
@@ -524,3 +514,11 @@ def get_project_by_name(
     except duckdb.Error as e:
         raise MetadataDBError("Failed to fetch project") from e
 
+
+def get_all_projects(conn: duckdb.DuckDBPyConnection) -> List[str]:
+    """Return a list of all project names in the global metadata DB."""
+    try:
+        rows = conn.execute("SELECT project_name FROM projects ORDER BY project_name;").fetchall()
+        return [str(row[0]) for row in rows]
+    except duckdb.Error as e:
+        raise MetadataDBError("Failed to fetch projects") from e
