@@ -79,17 +79,14 @@ class Indexer:
             dummy_emb = generate_embeddings(["simgrep_test_string"], model=self.embedding_model)
             if dummy_emb.ndim != 2 or dummy_emb.shape[0] == 0 or dummy_emb.shape[1] == 0:
                 raise IndexerError(
-                    f"Could not determine embedding dimension using model {self.config.embedding_model_name}. "
-                    f"Dummy embedding shape: {dummy_emb.shape}"
+                    f"Could not determine embedding dimension using model {self.config.embedding_model_name}. Dummy embedding shape: {dummy_emb.shape}"
                 )
             self.embedding_ndim: int = dummy_emb.shape[1]
             self.console.print(f"Embedding dimension set to: {self.embedding_ndim}")
         except RuntimeError as e:
             raise IndexerError(f"Failed to load embedding model or generate dummy embedding for ndim: {e}") from e
         except Exception as e_model_load:  # Catch other potential errors from SentenceTransformer
-            raise IndexerError(
-                f"Unexpected error loading embedding model '{self.config.embedding_model_name}': {e_model_load}"
-            ) from e_model_load
+            raise IndexerError(f"Unexpected error loading embedding model '{self.config.embedding_model_name}': {e_model_load}") from e_model_load
 
     def _prepare_data_stores(self, wipe_existing: bool) -> None:
         self.console.print("Preparing data stores (database and vector index)...")
@@ -137,10 +134,7 @@ class Indexer:
                             max_existing_label = self.usearch_index.keys[len(self.usearch_index.keys) - 1]
                             self._current_usearch_label = int(max_existing_label) + 1
                         except Exception:
-                            self.console.print(
-                                "[yellow]Warning: Could not determine max key from existing index,"
-                                " starting labels from 0.[/yellow]"
-                            )
+                            self.console.print("[yellow]Warning: Could not determine max key from existing index, starting labels from 0.[/yellow]")
                             self._current_usearch_label = 0
                     else:
                         self._current_usearch_label = 0
@@ -156,6 +150,60 @@ class Indexer:
             raise IndexerError("USearch index is None at the end of _prepare_data_stores.")
         if self.metadata_store is None:
             raise IndexerError("DB connection is None at the end of _prepare_data_stores.")
+
+    def _extract_and_chunk_file(self, file_path: pathlib.Path) -> List[ProcessedChunkInfo]:
+        """Return token chunks extracted from the file."""
+        text_content = extract_text_from_file(file_path)
+        if not text_content.strip():
+            return []
+
+        return chunk_text_by_tokens(
+            text_content,
+            self.tokenizer,
+            self.config.chunk_size_tokens,
+            self.config.chunk_overlap_tokens,
+        )
+
+    def _generate_embeddings_for_chunks(self, chunks: List[ProcessedChunkInfo]) -> np.ndarray:
+        """Generate embeddings for chunk texts."""
+        chunk_texts = [c["text"] for c in chunks]
+        return generate_embeddings(chunk_texts, model=self.embedding_model)
+
+    def _store_processed_chunks(
+        self,
+        file_id: int,
+        processed_chunks: List[ProcessedChunkInfo],
+        embeddings_np: np.ndarray,
+    ) -> None:
+        chunk_db_records: List[Dict[str, Any]] = []
+        usearch_labels_for_batch: List[int] = []
+
+        for chunk_info in processed_chunks:
+            current_label = self._current_usearch_label
+            usearch_labels_for_batch.append(current_label)
+            chunk_db_records.append(
+                {
+                    "file_id": file_id,
+                    "usearch_label": current_label,
+                    "chunk_text_snippet": chunk_info["text"][:255],
+                    "start_char_offset": chunk_info["start_char_offset"],
+                    "end_char_offset": chunk_info["end_char_offset"],
+                    "token_count": chunk_info["token_count"],
+                    "embedding_hash": None,
+                }
+            )
+            self._current_usearch_label += 1
+
+        assert self.metadata_store is not None
+        self.metadata_store.batch_insert_text_chunks(chunk_db_records)
+
+        if self.usearch_index is None:
+            raise IndexerError("USearch index is None during file processing.")
+
+        self.usearch_index.add(
+            keys=np.array(usearch_labels_for_batch, dtype=np.int64),
+            vectors=embeddings_np,
+        )
 
     def _process_and_index_file(self, file_path: pathlib.Path, progress: Progress, task_id: TaskID) -> Tuple[int, int]:
         num_chunks_this_file = 0
@@ -199,23 +247,18 @@ class Indexer:
                 )
                 return num_chunks_this_file, errors_this_file
 
-            # text extraction & chunking
-            text_content = extract_text_from_file(file_path)
-            if not text_content.strip():
-                self.console.print(f"[yellow]Info: File {file_path} is empty or whitespace only. Skipping chunking.[/yellow]")
+            processed_chunks = self._extract_and_chunk_file(file_path)
+            if not processed_chunks:
+                info_msg = "no chunks"
+                if file_path.stat().st_size == 0:
+                    info_msg = "empty"
+                self.console.print(f"[yellow]Info: File {file_path} {info_msg}. Skipping chunking.[/yellow]")
                 progress.update(
                     task_id,
                     advance=1,
-                    description=f"Processed (empty): {file_display_name}",
+                    description=f"Processed ({info_msg}): {file_display_name}",
                 )
                 return num_chunks_this_file, errors_this_file
-
-            processed_chunks: List[ProcessedChunkInfo] = chunk_text_by_tokens(
-                text_content,
-                self.tokenizer,
-                self.config.chunk_size_tokens,
-                self.config.chunk_overlap_tokens,
-            )
 
             if not processed_chunks:
                 self.console.print(f"[yellow]Info: No chunks generated for {file_path}.[/yellow]")
@@ -226,39 +269,8 @@ class Indexer:
                 )
                 return num_chunks_this_file, errors_this_file
 
-            # embedding & storing chunks
-            chunk_texts = [chunk["text"] for chunk in processed_chunks]
-            embeddings_np = generate_embeddings(chunk_texts, model=self.embedding_model)
-
-            chunk_db_records: List[Dict[str, Any]] = []
-            usearch_labels_for_batch: List[int] = []
-
-            for i, chunk_info in enumerate(processed_chunks):
-                current_label = self._current_usearch_label
-                usearch_labels_for_batch.append(current_label)
-
-                chunk_db_records.append(
-                    {
-                        "file_id": file_id,
-                        "usearch_label": current_label,
-                        "chunk_text_snippet": chunk_info["text"][:255],  # truncate for snippet
-                        "start_char_offset": chunk_info["start_char_offset"],
-                        "end_char_offset": chunk_info["end_char_offset"],
-                        "token_count": chunk_info["token_count"],
-                        "embedding_hash": None,  # placeholder for v1
-                    }
-                )
-                self._current_usearch_label += 1
-
-            assert self.metadata_store is not None
-            self.metadata_store.batch_insert_text_chunks(chunk_db_records)
-
-            if self.usearch_index is None:  # should be initialized
-                raise IndexerError("USearch index is None during file processing.")
-            self.usearch_index.add(
-                keys=np.array(usearch_labels_for_batch, dtype=np.int64),
-                vectors=embeddings_np,
-            )
+            embeddings_np = self._generate_embeddings_for_chunks(processed_chunks)
+            self._store_processed_chunks(file_id, processed_chunks, embeddings_np)
             num_chunks_this_file = len(processed_chunks)
             progress.update(
                 task_id,
@@ -326,9 +338,7 @@ class Indexer:
             if target_path.is_file():
                 files_to_process.append(target_path)
             elif target_path.is_dir():
-                self.console.print(
-                    f"Scanning directory '{target_path}' for files matching patterns: {self.config.file_scan_patterns}..."
-                )
+                self.console.print(f"Scanning directory '{target_path}' for files matching patterns: {self.config.file_scan_patterns}...")
                 found_files_set = set()
                 for pattern in self.config.file_scan_patterns:
                     for file_p in target_path.rglob(pattern):
@@ -420,10 +430,7 @@ class Indexer:
                 self.config.usearch_index_path.unlink(missing_ok=True)
 
             self.console.print(f"\n[bold green]Indexing complete for project '{self.config.project_name}'.[/bold green]")
-            self.console.print(
-                f"  Summary: {total_files_processed} files processed, "
-                f"{total_chunks_indexed} chunks indexed, {total_errors} errors encountered."
-            )
+            self.console.print(f"  Summary: {total_files_processed} files processed, {total_chunks_indexed} chunks indexed, {total_errors} errors encountered.")
 
         except IndexerError as e:  # catch errors from _prepare_data_stores or other indexer logic
             self.console.print(f"[bold red]Indexer Error: {e}[/bold red]")
