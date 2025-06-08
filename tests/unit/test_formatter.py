@@ -77,3 +77,13 @@ class TestFormatPaths:
             )
         )
         assert result == expected
+
+    def test_relative_paths_outside_base_fallbacks_to_absolute(self, tmp_path: Path) -> None:
+        base_path = tmp_path / "base"
+        base_path.mkdir()
+        outside_file = tmp_path / "outside.txt"
+        outside_file.write_text("x")
+
+        result = format_paths([outside_file], use_relative=True, base_path=base_path)
+
+        assert result == str(outside_file.resolve())
