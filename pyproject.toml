@@ -1,7 +1,7 @@
 [project]
-name = "simgrep-project"
+name = "simgrep"
 version = "0.1.0"
-description = "Add your description here"
+description = "Semantic search CLI for local files. Quickly find text by meaning rather than keywords."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -28,7 +28,7 @@ dev-dependencies = [
 ]
 
 [tool.ruff]
-line-length = 130
+line-length = 160
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
@@ -36,7 +36,7 @@ select = ["E", "F", "I"]
 [tool.ruff.format]
 
 [tool.mypy]
-python_version = "3.12" # Or your target Python version (e.g., 3.10, 3.11)
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
