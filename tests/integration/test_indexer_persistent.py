@@ -1,4 +1,5 @@
 import pathlib
+import shutil
 
 import pytest
 from rich.console import Console
@@ -376,3 +377,37 @@ class TestIndexerPersistent:
 
         assert new_hash_db == new_hash1
         assert file2_chunks_after_mod == file2_chunks_before
+
+    def test_rebuild_wipes_existing_data(
+        self,
+        indexer_config: IndexerConfig,
+        test_console: Console,
+        sample_files_dir: pathlib.Path,
+        tmp_path: pathlib.Path,
+    ) -> None:
+        """Index path, then re-index different path with wipe_existing=True."""
+        indexer = Indexer(config=indexer_config, console=test_console)
+        indexer.index_path(target_path=sample_files_dir, wipe_existing=True)
+
+        store = MetadataStore(persistent=True, db_path=indexer_config.db_path)
+        try:
+            initial_counts = store.get_index_counts()
+            assert initial_counts[0] >= 3
+        finally:
+            store.close()
+
+        subset_dir = tmp_path / "subset"
+        subset_dir.mkdir()
+        shutil.copy2(sample_files_dir / "file1.txt", subset_dir / "file1.txt")
+
+        indexer2 = Indexer(config=indexer_config, console=test_console)
+        indexer2.index_path(target_path=subset_dir, wipe_existing=True)
+
+        store_after = MetadataStore(persistent=True, db_path=indexer_config.db_path)
+        try:
+            files_after, _ = store_after.get_index_counts()
+            assert files_after == 1
+            row = store_after.conn.execute("SELECT COUNT(*) FROM indexed_files WHERE file_path LIKE '%file2.md%';").fetchone()
+            assert row is not None and row[0] == 0
+        finally:
+            store_after.close()
