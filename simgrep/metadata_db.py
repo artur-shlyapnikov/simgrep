@@ -442,3 +442,85 @@ def get_index_counts(conn: duckdb.DuckDBPyConnection) -> Tuple[int, int]:
     except duckdb.Error as e:
         logger.error(f"DuckDB error retrieving index counts: {e}")
         raise MetadataDBError("Failed to retrieve index counts") from e
+
+
+def connect_global_db(path: pathlib.Path) -> duckdb.DuckDBPyConnection:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        raise MetadataDBError(f"Could not create directory for global DB at {path.parent}") from e
+
+    try:
+        conn = duckdb.connect(database=str(path), read_only=False)
+    except duckdb.Error as e:
+        raise MetadataDBError(f"Failed to connect to global DB at {path}") from e
+
+    try:
+        conn.execute(
+            "CREATE SEQUENCE IF NOT EXISTS projects_project_id_seq;"
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS projects (
+                project_id BIGINT PRIMARY KEY DEFAULT nextval('projects_project_id_seq'),
+                project_name VARCHAR UNIQUE NOT NULL,
+                db_path VARCHAR NOT NULL,
+                usearch_index_path VARCHAR NOT NULL,
+                embedding_model_name VARCHAR NOT NULL
+            );
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS project_indexed_paths (
+                project_id BIGINT REFERENCES projects(project_id),
+                path VARCHAR NOT NULL
+            );
+            """
+        )
+    except duckdb.Error as e:
+        raise MetadataDBError("Failed to create global DB tables") from e
+
+    return conn
+
+
+def insert_project(
+    conn: duckdb.DuckDBPyConnection,
+    project_name: str,
+    db_path: str,
+    usearch_index_path: str,
+    embedding_model_name: str,
+) -> int:
+    try:
+        result = conn.execute(
+            """
+            INSERT INTO projects (project_name, db_path, usearch_index_path, embedding_model_name)
+            VALUES (?, ?, ?, ?) RETURNING project_id;
+            """,
+            [project_name, db_path, usearch_index_path, embedding_model_name],
+        ).fetchone()
+        return int(result[0]) if result else -1
+    except duckdb.Error as e:
+        raise MetadataDBError("Failed to insert project") from e
+
+
+def get_project_by_name(
+    conn: duckdb.DuckDBPyConnection, project_name: str
+) -> Optional[Tuple[int, str, str, str, str]]:
+    try:
+        row = conn.execute(
+            "SELECT * FROM projects WHERE project_name = ?;",
+            [project_name],
+        ).fetchone()
+        if row:
+            return (
+                int(row[0]),
+                str(row[1]),
+                str(row[2]),
+                str(row[3]),
+                str(row[4]),
+            )
+        return None
+    except duckdb.Error as e:
+        raise MetadataDBError("Failed to fetch project") from e
+

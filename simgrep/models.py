@@ -1,5 +1,6 @@
 from enum import Enum
 from pathlib import Path
+from typing import Dict, List
 
 from pydantic import BaseModel, Field
 
@@ -28,6 +29,14 @@ class ChunkData(BaseModel):
     token_count: int  # number of tokens in this chunk (as per the specified tokenizer)
 
 
+class ProjectConfig(BaseModel):
+    name: str
+    indexed_paths: List[Path] = Field(default_factory=list)
+    embedding_model: str
+    db_path: Path
+    usearch_index_path: Path
+
+
 class SimgrepConfig(BaseModel):
     """
     Global configuration for simgrep.
@@ -41,6 +50,16 @@ class SimgrepConfig(BaseModel):
     default_project_data_dir: Path = Field(
         default_factory=lambda: Path("~/.config/simgrep/default_project").expanduser()
     )
+
+    config_file: Path = Field(
+        default_factory=lambda: Path("~/.config/simgrep/config.toml").expanduser()
+    )
+
+    db_directory: Path = Field(
+        default_factory=lambda: Path("~/.config/simgrep").expanduser()
+    )
+
+    projects: Dict[str, ProjectConfig] = Field(default_factory=dict)
 
     # centralizing other global defaults from main.py constants / architecture doc:
     # these will be used by persistent indexing logic in later deliverables (e.g., 3.3, 3.4).
