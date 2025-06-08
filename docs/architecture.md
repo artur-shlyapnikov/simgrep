@@ -290,7 +290,7 @@ The tool is designed to be intuitive for simple use cases ("semantic grep replac
     *   `copy-files`: For each unique file containing relevant chunks, concatenates `--- File: <path> ---\n<full_file_content>\n\n` and copies to clipboard.
     *   `copy-chunks`: Concatenates only the relevant chunk texts (with their source file path as a comment/header) and copies to clipboard.
     *   `json`: Outputs detailed results (file path, chunk text, score, offsets, metadata) as a JSON array.
-    *   `count`: Shows number of matching chunks and files.
+    *   `count`: Shows number of matching chunks and files. ✅
     *   `imports`: Displays the full dependency tree for a single code file, recursively resolving imports for Python, TypeScript, and Java.
 
 **7. User Experience (UX) Design**

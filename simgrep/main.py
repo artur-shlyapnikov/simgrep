@@ -27,7 +27,7 @@ try:
         SimgrepConfigError,
         load_or_create_global_config,
     )
-    from .formatter import format_paths, format_show_basic
+    from .formatter import format_count, format_paths, format_show_basic
     from .indexer import Indexer, IndexerConfig, IndexerError
     from .metadata_db import MetadataDBError, get_index_counts
     from .metadata_store import MetadataStore
@@ -59,7 +59,7 @@ except ImportError:
             SimgrepConfigError,
             load_or_create_global_config,
         )
-        from simgrep.formatter import format_paths, format_show_basic
+        from simgrep.formatter import format_count, format_paths, format_show_basic
         from simgrep.indexer import Indexer, IndexerConfig, IndexerError
         from simgrep.metadata_db import MetadataDBError, get_index_counts
         from simgrep.metadata_store import MetadataStore
@@ -157,7 +157,7 @@ def search(
         OutputMode.show,  # Default output mode
         "--output",
         "-o",
-        help="Output mode. 'paths' mode lists unique, sorted file paths containing matches.",
+        help="Output mode. 'paths' lists file paths, 'count' prints result counts.",
         case_sensitive=False,
     ),
     top: int = typer.Option(
@@ -505,8 +505,12 @@ def search(
                         console=console,
                     )
                 )  # Handles "No matching files found."
+            elif output == OutputMode.count:
+                console.print(format_count([]))
             else:  # OutputMode.show or other future modes that might show "no results"
-                console.print("  No relevant chunks found for your query in the processed file(s).")
+                console.print(
+                    "  No relevant chunks found for your query in the processed file(s)."
+                )
         else:
             if output == OutputMode.paths:
                 paths_from_matches: List[Path] = []
@@ -557,6 +561,29 @@ def search(
                             f"[bold yellow]Warning: Could not retrieve details for chunk_id {matched_chunk_id} "
                             f"from DB.[/bold yellow]"
                         )
+            elif output == OutputMode.count:
+                results_for_count: List[ChunkData] = []
+                for matched_chunk_id, _score in search_matches:
+                    assert store is not None
+                    retrieved_details = store.retrieve_chunk_for_display(matched_chunk_id)
+                    if retrieved_details:
+                        text, path_obj, start, end = retrieved_details
+                        results_for_count.append(
+                            ChunkData(
+                                text=text,
+                                source_file_path=path_obj,
+                                source_file_id=0,
+                                usearch_label=matched_chunk_id,
+                                start_char_offset=start,
+                                end_char_offset=end,
+                                token_count=0,
+                            )
+                        )
+                    else:
+                        console.print(
+                            f"[yellow]Warning: Could not retrieve details for chunk_id {matched_chunk_id}.[/yellow]"
+                        )
+                console.print(format_count(results_for_count))
 
     finally:
         if store:

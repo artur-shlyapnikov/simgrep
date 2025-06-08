@@ -49,3 +49,22 @@ class TestCliEphemeralE2E:
         assert "single.txt" in result.stdout
         assert "Processing:" in result.stdout
         assert "100%" in result.stdout
+
+    def test_ephemeral_search_count_mode(self, tmp_path: pathlib.Path, temp_simgrep_home: pathlib.Path) -> None:
+        docs_dir = tmp_path / "count_docs"
+        docs_dir.mkdir()
+        (docs_dir / "a.txt").write_text("term one")
+        (docs_dir / "b.txt").write_text("another term term")
+
+        env_vars = {"HOME": str(temp_simgrep_home)}
+        result = run_simgrep_command([
+            "search",
+            "term",
+            str(docs_dir),
+            "--output",
+            "count",
+        ], env=env_vars)
+        assert result.returncode == 0
+        assert "matching chunks in" in result.stdout
+        assert "Processing:" in result.stdout
+        assert "100%" in result.stdout

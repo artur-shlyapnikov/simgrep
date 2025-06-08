@@ -3,7 +3,8 @@ from pathlib import Path
 import pytest
 from rich.console import Console
 
-from simgrep.formatter import format_paths, format_show_basic
+from simgrep.formatter import format_count, format_paths, format_show_basic
+from simgrep.models import ChunkData
 
 
 class TestFormatShowBasic:
@@ -77,3 +78,39 @@ class TestFormatPaths:
             )
         )
         assert result == expected
+
+
+class TestFormatCount:
+    def test_counts_unique_files_and_chunks(self) -> None:
+        results = [
+            ChunkData(
+                text="a",
+                source_file_path=Path("/tmp/a.txt"),
+                source_file_id=0,
+                usearch_label=0,
+                start_char_offset=0,
+                end_char_offset=1,
+                token_count=1,
+            ),
+            ChunkData(
+                text="b",
+                source_file_path=Path("/tmp/a.txt"),
+                source_file_id=0,
+                usearch_label=1,
+                start_char_offset=2,
+                end_char_offset=3,
+                token_count=1,
+            ),
+            ChunkData(
+                text="c",
+                source_file_path=Path("/tmp/b.txt"),
+                source_file_id=1,
+                usearch_label=2,
+                start_char_offset=0,
+                end_char_offset=1,
+                token_count=1,
+            ),
+        ]
+
+        result = format_count(results)
+        assert result == "3 matching chunks in 2 files."

@@ -6,9 +6,9 @@ from rich.console import Console
 
 from .config import DEFAULT_K_RESULTS, SimgrepConfig
 from .exceptions import MetadataDBError, VectorStoreError
-from .formatter import format_paths, format_show_basic
+from .formatter import format_count, format_paths, format_show_basic
 from .metadata_store import MetadataStore
-from .models import OutputMode
+from .models import ChunkData, OutputMode
 from .processor import generate_embeddings
 from .vector_store import (
     search_inmemory_index,  # this function is generic for any usearch index
@@ -118,3 +118,35 @@ def perform_persistent_search(
         )
         # format_paths itself handles "no matching files found." if paths_from_matches is empty.
         console.print(output_string)
+    elif output_mode == OutputMode.count:
+        results_for_count: List[ChunkData] = []
+        for matched_usearch_label, _score in filtered_matches:
+            try:
+                retrieved_details = metadata_store.retrieve_chunk_details_persistent(
+                    matched_usearch_label
+                )
+            except MetadataDBError as e:
+                console.print(
+                    f"[yellow]Warning: Database error retrieving details for chunk label {matched_usearch_label}: {e}[/yellow]"
+                )
+                continue
+
+            if retrieved_details:
+                text_snippet, file_path_obj, start_offset, end_offset = retrieved_details
+                results_for_count.append(
+                    ChunkData(
+                        text=text_snippet,
+                        source_file_path=file_path_obj,
+                        source_file_id=0,
+                        usearch_label=matched_usearch_label,
+                        start_char_offset=start_offset,
+                        end_char_offset=end_offset,
+                        token_count=0,
+                    )
+                )
+            else:
+                console.print(
+                    f"[yellow]Warning: Could not retrieve details for chunk label {matched_usearch_label}.[/yellow]"
+                )
+
+        console.print(format_count(results_for_count))

@@ -1,6 +1,8 @@
 from pathlib import Path
 from typing import List, Optional
 
+from .models import ChunkData
+
 from rich.console import Console
 
 
@@ -78,3 +80,10 @@ def format_paths(
             output_paths_str_list.append(str(p_abs.resolve()))
 
     return "\n".join(output_paths_str_list)
+
+
+def format_count(results: List[ChunkData]) -> str:
+    """Return a simple count summary for search results."""
+    total_chunks = len(results)
+    unique_files = len({cd.source_file_path for cd in results})
+    return f"{total_chunks} matching chunks in {unique_files} files."

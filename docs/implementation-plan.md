@@ -328,7 +328,7 @@
   * **Key Modules:** `simgrep/formatter.py`, `simgrep/main.py`
   * **What to Test (E2E):** `simgrep search "info" --output rag --question "Summarize?"` prints formatted prompt.
 
-* **Deliverable 5.4: `count` Output Mode**
+* **Deliverable 5.4: `count` Output Mode** ✅
   * **Goal:** Show counts of matching chunks and files.
   * **Tasks:**
         1. In `formatter.py`, implement `format_count(results: List[ChunkData]) -> str`.

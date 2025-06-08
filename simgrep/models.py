@@ -7,7 +7,8 @@ from pydantic import BaseModel, Field
 class OutputMode(str, Enum):
     show = "show"
     paths = "paths"
-    # future: json, rag, copy-chunks, copy-files, count
+    count = "count"
+    # future: json, rag, copy-chunks, copy-files
 
 
 class ChunkData(BaseModel):
