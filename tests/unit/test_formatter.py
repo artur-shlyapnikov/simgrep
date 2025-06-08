@@ -3,7 +3,15 @@ from pathlib import Path
 import pytest
 from rich.console import Console
 
-from simgrep.formatter import format_paths
+from simgrep.formatter import format_paths, format_show_basic
+
+
+class TestFormatShowBasic:
+    def test_basic_formatting(self, tmp_path: Path) -> None:
+        file_path = tmp_path / "file.txt"
+        result = format_show_basic(file_path, "snippet", 0.123456)
+        expected = f"File: {str(file_path)}\nScore: 0.1235\nChunk: snippet"
+        assert result == expected
 
 
 class TestFormatPaths:
