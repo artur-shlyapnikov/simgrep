@@ -4,7 +4,7 @@
 
 *Goal: Implement `simgrep "query" <single_text_file_path>` with in-memory processing and basic "show" output.*
 
-* **Deliverable 1.1: Text Extraction from Single File**
+* **Deliverable 1.1: Text Extraction from Single File** ✅
   * **Goal:** Read content from a specified text file.
   * **Tasks:**
         1. `uv add unstructured`
@@ -16,7 +16,7 @@
     * `simgrep search "anything" ./test.txt` should internally have the content of `test.txt` (e.g., print it for now).
     * Test with a non-existent file path – should show a user-friendly error.
 
-* **Deliverable 1.2: Simplistic Text Chunking**
+* **Deliverable 1.2: Simplistic Text Chunking** ✅
   * **Goal:** Break extracted text into smaller, overlapping pieces.
   * **Tasks:**
         1. In `simgrep/processor.py`, create `chunk_text_simple(text: str, chunk_size_chars: int, overlap_chars: int) -> List[str]`. (Focus on simplicity, e.g., character-based, not token-based yet).
@@ -25,7 +25,7 @@
   * **What to Test:**
     * Using `test.txt` from 1.1, `simgrep search "anything" ./test.txt` should internally produce a list of text chunks (e.g., print them). Verify chunking and overlap logic manually.
 
-* **Deliverable 1.3: Embedding Generation (Query & Chunks)**
+* **Deliverable 1.3: Embedding Generation (Query & Chunks)** ✅
   * **Goal:** Convert query and text chunks into vector embeddings.
   * **Tasks:**
         1. `uv add sentence-transformers` (implicitly `transformers`, `torch`).
@@ -35,7 +35,7 @@
   * **What to Test:**
     * `simgrep search "world" ./test.txt` should internally generate embeddings for "world" and for each chunk of `test.txt`. Print shapes of embedding arrays to verify. (Model download might take time on first run).
 
-* **Deliverable 1.4: In-Memory Vector Search (USearch)**
+* **Deliverable 1.4: In-Memory Vector Search (USearch)** ✅
   * **Goal:** Find most similar chunks to the query using an in-memory vector index.
   * **Tasks:**
         1. `uv add usearch numpy` (numpy might come with sentence-transformers).
@@ -47,7 +47,7 @@
   * **What to Test:**
     * `simgrep search "world" ./test.txt` should internally get a list of (chunk_index, score) tuples. Print these to verify USearch is working.
 
-* **Deliverable 1.5: Basic "Show" Output (E2E!)**
+* **Deliverable 1.5: Basic "Show" Output (E2E!)** ✅
   * **Goal:** Display the most relevant chunk text and its source file.
   * **Tasks:**
         1. In `simgrep/formatter.py`, create `format_show_basic(file_path: Path, chunk_text: str, score: float) -> str`.
@@ -72,7 +72,7 @@
 
 *Goal: Expand ephemeral search to directories, improve chunking, introduce Pydantic models, and use in-memory DuckDB for metadata.*
 
-* **Deliverable 2.1: Directory Traversal & Multiple File Processing**
+* **Deliverable 2.1: Directory Traversal & Multiple File Processing** ✅
   * **Goal:** Allow `path_to_search` to be a directory, processing all `.txt` files within.
   * **Tasks:**
         1. Modify `search` command logic: if `path_to_search` is a directory, use `Path.rglob("*.txt")` to find files.
@@ -83,7 +83,7 @@
     * Create `dir1/a.txt` ("apple banana") and `dir1/b.txt` ("banana orange").
     * `simgrep search "banana" ./dir1` should show results from both `a.txt` and `b.txt`.
 
-* **Deliverable 2.2: Pydantic Models for Data & Token-based Chunking**
+* **Deliverable 2.2: Pydantic Models for Data & Token-based Chunking** ✅
   * **Goal:** Introduce structured data handling and more robust chunking.
   * **Tasks:**
         1. In `simgrep/models.py`, define `ChunkData(text: str, source_file_path: Path, source_file_id: int, usearch_label: int, start_char_offset: int, end_char_offset: int, token_count: int)`.
@@ -96,7 +96,7 @@
     * Internal representation of chunks now includes offsets and token counts. Print these for verification.
     * Chunking should be more semantically aware (though still basic).
 
-* **Deliverable 2.3: In-Memory DuckDB for Ephemeral Metadata**
+* **Deliverable 2.3: In-Memory DuckDB for Ephemeral Metadata** ✅
   * **Goal:** Use DuckDB to manage chunk metadata during ephemeral search.
   * **Tasks:**
         1. `uv add duckdb`
@@ -110,7 +110,7 @@
     * Search results should still be correct. Internally, data is now flowing through DuckDB.
     * (Optional) Add a debug flag to dump DuckDB table contents.
 
-* **Deliverable 2.4: `--output paths` Mode**
+* **Deliverable 2.4: `--output paths` Mode** ✅
   * **Goal:** Add an option to list unique file paths containing matches.
   * **Tasks:**
         1. In `simgrep/formatter.py`, add `format_paths(chunk_results: List[ChunkData]) -> str`.
@@ -129,7 +129,7 @@
 
 *Goal: Implement `simgrep index <path>` and `simgrep search <query>` (without path) using a persistent default project index.*
 
-* **Deliverable 3.1: Basic Global Configuration (`config.py`)**
+* **Deliverable 3.1: Basic Global Configuration (`config.py`)** ✅
   * **Goal:** Define where persistent data for the default project will live.
   * **Tasks:**
         1. In `simgrep/models.py`, define `SimgrepConfig(db_directory: Path = Path("~/.config/simgrep/default_project").expanduser(), ...)`
@@ -139,7 +139,7 @@
   * **What to Test:**
     * Running any `simgrep` command creates `~/.config/simgrep/default_project` if it doesn't exist.
 
-* **Deliverable 3.2: Persistent DuckDB & USearch for Default Project**
+* **Deliverable 3.2: Persistent DuckDB & USearch for Default Project** ✅
   * **Goal:** Store index data on disk.
   * **Tasks:**
         1. Modify `simgrep/metadata_db.py`:
@@ -152,7 +152,7 @@
   * **What to Test:**
     * Functions can be called. Test save/load of an empty/trivial index and DB.
 
-* **Deliverable 3.3: `simgrep index <path>` Command (Non-Incremental)**
+* **Deliverable 3.3: `simgrep index <path>` Command (Non-Incremental)** ✅
   * **Goal:** Create a persistent index for a given path under the default project.
   * **Tasks:**
         1. Add `index` command to `simgrep/main.py`: `simgrep index <path_to_index>`.
@@ -170,7 +170,7 @@
     * `simgrep index ./dir1`. Check that `~/.config/simgrep/default_project/metadata.duckdb` and `index.usearch` are created/populated.
     * (Manual) Inspect DB tables to verify content.
 
-* **Deliverable 3.4: `simgrep search <query>` (Using Default Persistent Index)**
+* **Deliverable 3.4: `simgrep search <query>` (Using Default Persistent Index)** ✅
   * **Goal:** Search against the previously built persistent index.
   * **Tasks:**
         1. Modify `search` command in `main.py`:
@@ -185,7 +185,7 @@
 
 ---
 
-* **Deliverable 3.5: Basic `simgrep status` Command** **(Done)**
+* **Deliverable 3.5: Basic `simgrep status` Command** ✅ **(Done)**
   * **Goal:** Show basic information about the default project's index.
   * **Tasks:**
         1. Add `status` command to `main.py`.
@@ -202,7 +202,7 @@
 
 *Goal: Make indexing efficient by only processing changed files and introduce the concept of named projects.*
 
-* **Deliverable 4.1: Content Hashing & Storing in DB**
+* **Deliverable 4.1: Content Hashing & Storing in DB** ✅
   * **Goal:** Calculate and store file content hashes to detect changes.
   * **Tasks:**
         1. In `simgrep/processor.py`, add `calculate_file_hash(file_path: Path) -> str` (SHA256).
@@ -212,7 +212,7 @@
   * **What to Test:**
     * After `simgrep index ./dir1`, inspect `indexed_files` table to see hashes and mtimes.
 
-* **Deliverable 4.2: Basic Incremental Indexing Logic**
+* **Deliverable 4.2: Basic Incremental Indexing Logic** ✅
   * **Goal:** Skip unchanged files and re-index changed/new files.
   * **Tasks:**
         1. Modify `indexer.py` (`simgrep index`):
