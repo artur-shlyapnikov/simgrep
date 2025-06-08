@@ -21,6 +21,7 @@ def run_simgrep_command(
     args: List[str],
     cwd: Optional[pathlib.Path] = None,
     env: Optional[Dict[str, str]] = None,
+    input_str: Optional[str] = None,
 ) -> subprocess.CompletedProcess:
     """Helper function to run simgrep CLI commands."""
     command = [sys.executable, "-m", "simgrep.main"] + args
@@ -35,7 +36,14 @@ def run_simgrep_command(
     if env:
         console.print(f"[dim]Env overrides: {env}[/dim]")
 
-    result = subprocess.run(command, capture_output=True, text=True, cwd=cwd, env=process_env)
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+        env=process_env,
+        input=input_str,
+    )
 
     if result.stdout:
         console.print("[bold green]Stdout:[/bold green]")
@@ -102,7 +110,9 @@ class TestCliPersistentE2E:
         env_vars = {"HOME": str(temp_simgrep_home)}
 
         # 1. Index the sample documents
-        index_result = run_simgrep_command(["index", str(sample_docs_dir_session)], env=env_vars)
+        index_result = run_simgrep_command(
+            ["index", str(sample_docs_dir_session)], env=env_vars, input_str="y\n"
+        )
         assert index_result.returncode == 0
         assert "Successfully indexed" in index_result.stdout
         assert "default project" in index_result.stdout
@@ -130,7 +140,9 @@ class TestCliPersistentE2E:
         env_vars = {"HOME": str(temp_simgrep_home)}
 
         # 1. Index (assuming it's clean or wiped by indexer logic)
-        run_simgrep_command(["index", str(sample_docs_dir_session)], env=env_vars)  # Ensure index is fresh
+        run_simgrep_command(
+            ["index", str(sample_docs_dir_session)], env=env_vars, input_str="y\n"
+        )  # Ensure index is fresh
 
         # 2. Search with --output paths
         search_result = run_simgrep_command(["search", "apples", "--output", "paths"], env=env_vars)
@@ -144,7 +156,9 @@ class TestCliPersistentE2E:
 
     def test_search_persistent_no_matches(self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path) -> None:
         env_vars = {"HOME": str(temp_simgrep_home)}
-        run_simgrep_command(["index", str(sample_docs_dir_session)], env=env_vars)
+        run_simgrep_command(
+            ["index", str(sample_docs_dir_session)], env=env_vars, input_str="y\n"
+        )
 
         search_result = run_simgrep_command(["search", "nonexistentqueryxyz"], env=env_vars)
         assert search_result.returncode == 0  # Should exit cleanly
@@ -157,7 +171,9 @@ class TestCliPersistentE2E:
         sample_docs_dir_session: pathlib.Path,
     ) -> None:
         env_vars = {"HOME": str(temp_simgrep_home)}
-        run_simgrep_command(["index", str(sample_docs_dir_session)], env=env_vars)
+        run_simgrep_command(
+            ["index", str(sample_docs_dir_session)], env=env_vars, input_str="y\n"
+        )
 
         db_file = temp_simgrep_home / ".config" / "simgrep" / "default_project" / "metadata.duckdb"
         conn = duckdb.connect(str(db_file))
@@ -197,7 +213,9 @@ class TestCliPersistentE2E:
         empty_dir = tmp_path / "empty_docs_for_e2e"
         empty_dir.mkdir()
 
-        index_result = run_simgrep_command(["index", str(empty_dir)], env=env_vars)
+        index_result = run_simgrep_command(
+            ["index", str(empty_dir)], env=env_vars, input_str="y\n"
+        )
         assert index_result.returncode == 0
         assert "No files found to index" in index_result.stdout
         assert "0 files processed" in index_result.stdout  # Or similar message indicating no work done
@@ -216,7 +234,9 @@ class TestCliPersistentE2E:
     ) -> None:
         env_vars = {"HOME": str(temp_simgrep_home)}
 
-        index_result = run_simgrep_command(["index", str(sample_docs_dir_session)], env=env_vars)
+        index_result = run_simgrep_command(
+            ["index", str(sample_docs_dir_session)], env=env_vars, input_str="y\n"
+        )
         assert index_result.returncode == 0
         # doc3.md should be ignored by default patterns
         assert "3 files processed" in index_result.stdout  # doc1.txt, doc2.txt, subdir/doc_sub.txt
@@ -231,7 +251,9 @@ class TestCliPersistentE2E:
     ) -> None:
         env_vars = {"HOME": str(temp_simgrep_home)}
 
-        run_simgrep_command(["index", str(sample_docs_dir_session)], env=env_vars)
+        run_simgrep_command(
+            ["index", str(sample_docs_dir_session)], env=env_vars, input_str="y\n"
+        )
 
         top1_result = run_simgrep_command(["search", "apples", "--top", "1"], env=env_vars)
         assert top1_result.returncode == 0
@@ -240,3 +262,28 @@ class TestCliPersistentE2E:
         top2_result = run_simgrep_command(["search", "apples", "--top", "2"], env=env_vars)
         assert top2_result.returncode == 0
         assert top2_result.stdout.count("File:") >= 2
+
+    def test_index_prompt_decline_prevents_reindexing(
+        self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path
+    ) -> None:
+        env_vars = {"HOME": str(temp_simgrep_home)}
+
+        run_simgrep_command(
+            ["index", str(sample_docs_dir_session)], env=env_vars, input_str="y\n"
+        )
+
+        db_file = temp_simgrep_home / ".config" / "simgrep" / "default_project" / "metadata.duckdb"
+        conn = duckdb.connect(str(db_file))
+        initial_files = conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()[0]
+        conn.close()
+
+        decline_result = run_simgrep_command(
+            ["index", str(sample_docs_dir_session)], env=env_vars, input_str="n\n"
+        )
+        assert decline_result.returncode == 1
+        assert "Aborted" in decline_result.stderr
+
+        conn = duckdb.connect(str(db_file))
+        after_files = conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()[0]
+        conn.close()
+        assert after_files == initial_files

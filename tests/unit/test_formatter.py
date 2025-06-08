@@ -1,8 +1,7 @@
 from pathlib import Path
 
-from rich.console import Console
-
 import pytest
+from rich.console import Console
 
 from simgrep.formatter import format_paths
 
