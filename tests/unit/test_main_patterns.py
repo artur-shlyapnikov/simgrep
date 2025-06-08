@@ -19,3 +19,13 @@ class TestGatherFilesToProcess:
         file_csv.write_text("C")
         result = gather_files_to_process(tmp_path, ["*.txt", "*.md"])
         assert set(result) == {file_txt.resolve(), file_md.resolve()}
+
+    def test_single_file_path(self, tmp_path: Path) -> None:
+        file_path = tmp_path / "only.txt"
+        file_path.write_text("content")
+        result = gather_files_to_process(file_path, ["*.txt"])
+        assert result == [file_path.resolve()]
+
+    def test_empty_directory_no_matches(self, tmp_path: Path) -> None:
+        result = gather_files_to_process(tmp_path, ["*.doesnotmatch"])
+        assert result == []
