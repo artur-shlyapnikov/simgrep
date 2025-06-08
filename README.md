@@ -8,6 +8,10 @@ It's designed for ephemeral (one-off) searches and will soon support persistent 
 
 See the [Architecture Document](docs/architecture.md) for more details.
 
+## Use Cases
+See [use-case diagrams](docs/use-cases.md) for ephemeral search, persistent indexing, and RAG-based answering.
+
+
 ## Current Capabilities (Ephemeral Search)
 
 When you run `simgrep "your query" ./path/to/search`:
