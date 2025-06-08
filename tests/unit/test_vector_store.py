@@ -36,7 +36,7 @@ class TestCreateInmemoryIndex:
     def test_mismatched_shapes_raises(self) -> None:
         embeddings = np.random.rand(3, 4).astype(np.float32)
         labels = np.array([1, 2], dtype=np.int64)
-        with pytest.raises(ValueError, match="Number of embeddings \(3\) must match number of labels \(2\)"):
+        with pytest.raises(ValueError, match=r"Number of embeddings \(3\) must match number of labels \(2\)"):
             create_inmemory_index(embeddings, labels)
 
     def test_empty_embeddings_raise(self) -> None:

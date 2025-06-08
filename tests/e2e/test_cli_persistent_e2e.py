@@ -274,8 +274,10 @@ class TestCliPersistentE2E:
 
         db_file = temp_simgrep_home / ".config" / "simgrep" / "default_project" / "metadata.duckdb"
         conn = duckdb.connect(str(db_file))
-        initial_files = conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()[0]
+        row_initial = conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()
         conn.close()
+        assert row_initial is not None
+        initial_files = row_initial[0]
 
         decline_result = run_simgrep_command(
             ["index", str(sample_docs_dir_session)], env=env_vars, input_str="n\n"
@@ -284,6 +286,8 @@ class TestCliPersistentE2E:
         assert "Aborted" in decline_result.stderr
 
         conn = duckdb.connect(str(db_file))
-        after_files = conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()[0]
+        row_after = conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()
         conn.close()
+        assert row_after is not None
+        after_files = row_after[0]
         assert after_files == initial_files
