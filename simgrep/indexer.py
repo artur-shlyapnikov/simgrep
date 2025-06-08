@@ -136,15 +136,12 @@ class Indexer:
                 else:
                     self.console.print(f"Loaded existing vector index with {len(self.usearch_index)} items.")
                     if len(self.usearch_index) > 0:
-                        # The USearch index is iterable and yields keys
                         try:
-                            max_existing_label = max(self.usearch_index.keys)
+                            max_existing_label = self.usearch_index.keys[len(self.usearch_index.keys) - 1]
                             self._current_usearch_label = max_existing_label + 1
-                        except ValueError:  # Handles case where index is empty despite len > 0
-                            # (should not happen) or contains non-numeric keys (not expected)
+                        except Exception:
                             self.console.print(
-                                "[yellow]Warning: Could not determine max key from existing index, "
-                                "starting labels from 0.[/yellow]"
+                                "[yellow]Warning: Could not determine max key from existing index, starting labels from 0.[/yellow]"
                             )
                             self._current_usearch_label = 0
                     else:
