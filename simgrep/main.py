@@ -584,19 +584,28 @@ def index(
         resolve_path=True,  # Ensures path is absolute and symlinks resolved
         help="The path to the file or directory to index.",
     ),
+    rebuild: bool = typer.Option(
+        False,
+        "--rebuild",
+        help="Wipe existing data and rebuild the default project index from scratch.",
+    ),
 ) -> None:
     """
     Creates or updates a persistent index for the specified path in the default project.
-    WARNING: This command currently WIPES all existing data in the default project and re-indexes from scratch.
+    If --rebuild is provided, all existing data for the default project will be deleted
+    before indexing. Without --rebuild, indexing will update the project incrementally.
     """
     console.print(f"Starting indexing for path: [green]{path_to_index}[/green]")
-    console.print("[bold yellow]Warning: This will wipe and rebuild the default project's index.[/bold yellow]")
-    if not typer.confirm(
-        "Are you sure you want to wipe and rebuild the default project index?",
-        default=False,
-    ):
-        console.print("Aborted indexing.")
-        raise typer.Abort()
+    if rebuild:
+        console.print(
+            "[bold yellow]Warning: This will wipe and rebuild the default project's index.[/bold yellow]"
+        )
+        if not typer.confirm(
+            "Are you sure you want to wipe and rebuild the default project index?",
+            default=False,
+        ):
+            console.print("Aborted indexing.")
+            raise typer.Abort()
 
     try:
         global_simgrep_config: SimgrepConfig = load_or_create_global_config()
@@ -617,7 +626,7 @@ def index(
         )
 
         indexer_instance = Indexer(config=indexer_config, console=console)
-        indexer_instance.index_path(target_path=path_to_index, wipe_existing=True)
+        indexer_instance.index_path(target_path=path_to_index, wipe_existing=rebuild)
 
         console.print(f"[bold green]Successfully indexed '{path_to_index}' into the default project.[/bold green]")
 
