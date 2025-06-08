@@ -420,10 +420,8 @@ def delete_file_records(conn: duckdb.DuckDBPyConnection, file_id: int) -> List[i
         ).fetchall()
         labels = [int(r[0]) for r in labels_rows]
         with conn.cursor() as cursor:
-            cursor.execute("BEGIN TRANSACTION;")
             cursor.execute("DELETE FROM text_chunks WHERE file_id = ?;", [file_id])
             cursor.execute("DELETE FROM indexed_files WHERE file_id = ?;", [file_id])
-            cursor.execute("COMMIT;")
         return labels
     except duckdb.Error as e:
         logger.error(f"DuckDB error deleting records for file_id {file_id}: {e}")
