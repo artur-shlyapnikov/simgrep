@@ -8,7 +8,6 @@ from typing import (
     Tuple,
 )
 
-import duckdb  # Added duckdb
 import numpy as np
 import typer
 import usearch.index
@@ -23,13 +22,21 @@ from rich.progress import (
 # Assuming simgrep is installed or path is correctly set for sibling imports
 try:
     from .config import (
-        DEFAULT_K_RESULTS,  # Moved from main.py
+        DEFAULT_K_RESULTS,
         SimgrepConfigError,
+        add_project_to_config,
         load_or_create_global_config,
     )
     from .formatter import format_paths, format_show_basic
     from .indexer import Indexer, IndexerConfig, IndexerError
-    from .metadata_db import MetadataDBError, get_index_counts
+    from .metadata_db import (
+        MetadataDBError,
+        connect_global_db,
+        get_all_projects,
+        get_index_counts,
+        get_project_by_name,
+        insert_project,
+    )
     from .metadata_store import MetadataStore
     from .models import ChunkData, OutputMode, SimgrepConfig  # OutputMode moved here
     from .processor import (
@@ -57,11 +64,19 @@ except ImportError:
         from simgrep.config import (
             DEFAULT_K_RESULTS,
             SimgrepConfigError,
+            add_project_to_config,
             load_or_create_global_config,
         )
         from simgrep.formatter import format_paths, format_show_basic
         from simgrep.indexer import Indexer, IndexerConfig, IndexerError
-        from simgrep.metadata_db import MetadataDBError, get_index_counts
+        from simgrep.metadata_db import (
+            MetadataDBError,
+            connect_global_db,
+            get_all_projects,
+            get_index_counts,
+            get_project_by_name,
+            insert_project,
+        )
         from simgrep.metadata_store import MetadataStore
         from simgrep.models import ChunkData, OutputMode, SimgrepConfig
         from simgrep.processor import (
@@ -105,6 +120,8 @@ app = typer.Typer(
     add_completion=False,
     no_args_is_help=True,
 )
+project_app = typer.Typer(help="Manage simgrep projects.")
+app.add_typer(project_app, name="project")
 console = Console()
 
 
@@ -254,9 +271,7 @@ def search(
         return  # End of persistent search path
 
     # --- Ephemeral Search (path_to_search is provided) ---
-    console.print(
-        f"Performing ephemeral search for: '[bold blue]{query_text}[/bold blue]' in path: '[green]{path_to_search}[/green]'"
-    )
+    console.print(f"Performing ephemeral search for: '[bold blue]{query_text}[/bold blue]' in path: '[green]{path_to_search}[/green]'")
     store: Optional[MetadataStore] = None
     try:
         # --- Initialize In-Memory Database ---
@@ -312,9 +327,7 @@ def search(
                 try:
                     extracted_content = extract_text_from_file(file_path_item)
                     if not extracted_content.strip():
-                        console.print(
-                            f"    [yellow]Skipped: File '{file_path_item}' is empty or contains only whitespace.[/yellow]"
-                        )
+                        console.print(f"    [yellow]Skipped: File '{file_path_item}' is empty or contains only whitespace.[/yellow]")
                         files_skipped.append((file_path_item, "Empty or whitespace-only"))
                         progress.advance(processing_task)
                         continue
@@ -348,19 +361,13 @@ def search(
                         files_skipped.append((file_path_item, "No token-based chunks generated"))
 
                 except FileNotFoundError:
-                    console.print(
-                        f"    [bold red]Error: File not found during processing loop: {file_path_item}. Skipping.[/bold red]"
-                    )
+                    console.print(f"    [bold red]Error: File not found during processing loop: {file_path_item}. Skipping.[/bold red]")
                     files_skipped.append((file_path_item, "File not found during processing"))
                 except RuntimeError as e:
-                    console.print(
-                        f"    [bold red]Error processing or chunking file '{file_path_item}': {e}. Skipping.[/bold red]"
-                    )
+                    console.print(f"    [bold red]Error processing or chunking file '{file_path_item}': {e}. Skipping.[/bold red]")
                     files_skipped.append((file_path_item, str(e)))
                 except ValueError as ve:
-                    console.print(
-                        f"    [bold red]Error with chunking parameters for file '{file_path_item}': {ve}. Skipping.[/bold red]"
-                    )
+                    console.print(f"    [bold red]Error with chunking parameters for file '{file_path_item}': {ve}. Skipping.[/bold red]")
                     files_skipped.append((file_path_item, str(ve)))
                 except Exception as e:
                     console.print(f"    [bold red]Unexpected error processing file '{file_path_item}': {e}. Skipping.[/bold red]")
@@ -384,9 +391,7 @@ def search(
             if cd_item.source_file_id not in unique_files_metadata_dict:
                 unique_files_metadata_dict[cd_item.source_file_id] = cd_item.source_file_path
 
-        processed_files_metadata_for_db: List[Tuple[int, Path]] = [
-            (fid, fpath) for fid, fpath in unique_files_metadata_dict.items()
-        ]
+        processed_files_metadata_for_db: List[Tuple[int, Path]] = [(fid, fpath) for fid, fpath in unique_files_metadata_dict.items()]
 
         if processed_files_metadata_for_db:
             assert store is not None
@@ -406,17 +411,14 @@ def search(
 
         try:
             # Load embedding model once for ephemeral search
-            from .processor import load_embedding_model
             from sentence_transformers import SentenceTransformer
+
+            from .processor import load_embedding_model
 
             embedding_model_instance: Optional[SentenceTransformer] = None
             try:
-                console.print(
-                    f"  Loading embedding model '{global_simgrep_config.default_embedding_model_name}'..."
-                )
-                embedding_model_instance = load_embedding_model(
-                    global_simgrep_config.default_embedding_model_name
-                )
+                console.print(f"  Loading embedding model '{global_simgrep_config.default_embedding_model_name}'...")
+                embedding_model_instance = load_embedding_model(global_simgrep_config.default_embedding_model_name)
                 console.print("    Embedding model loaded.")
             except Exception as e_model_load:
                 console.print(f"[bold red]Fatal Error: Could not load embedding model.[/bold red]\n  Details: {e_model_load}")
@@ -462,13 +464,8 @@ def search(
             try:
                 console.print(f"  Creating in-memory index for {chunk_embeddings.shape[0]} chunk embedding(s)...")
                 usearch_labels_np = np.array([cd.usearch_label for cd in all_chunkdata_objects], dtype=np.int64)
-                vector_index: usearch.index.Index = create_inmemory_index(
-                    embeddings=chunk_embeddings, labels_for_usearch=usearch_labels_np
-                )
-                console.print(
-                    f"    Index created with {len(vector_index)} item(s). "
-                    f"Metric: {vector_index.metric}, DType: {str(vector_index.dtype)}"
-                )
+                vector_index: usearch.index.Index = create_inmemory_index(embeddings=chunk_embeddings, labels_for_usearch=usearch_labels_np)
+                console.print(f"    Index created with {len(vector_index)} item(s). " f"Metric: {vector_index.metric}, DType: {str(vector_index.dtype)}")
 
                 console.print(f"  Searching index for top {top} similar chunk(s)...")
                 search_matches = search_inmemory_index(
@@ -553,10 +550,7 @@ def search(
                         console.print("---")  # Visual separator
                         console.print(output_string)
                     else:
-                        console.print(
-                            f"[bold yellow]Warning: Could not retrieve details for chunk_id {matched_chunk_id} "
-                            f"from DB.[/bold yellow]"
-                        )
+                        console.print(f"[bold yellow]Warning: Could not retrieve details for chunk_id {matched_chunk_id} " f"from DB.[/bold yellow]")
 
     finally:
         if store:
@@ -589,9 +583,7 @@ def index(
     """
     console.print(f"Starting indexing for path: [green]{path_to_index}[/green]")
     if rebuild:
-        console.print(
-            "[bold yellow]Warning: This will wipe and rebuild the default project's index.[/bold yellow]"
-        )
+        console.print("[bold yellow]Warning: This will wipe and rebuild the default project's index.[/bold yellow]")
         if not typer.confirm(
             "Are you sure you want to wipe and rebuild the default project index?",
             default=False,
@@ -662,6 +654,60 @@ def status() -> None:
     finally:
         if store:
             store.close()
+
+
+@project_app.command("create")
+def project_create(name: str) -> None:
+    """Create a new named project."""
+    try:
+        cfg = load_or_create_global_config()
+    except SimgrepConfigError:
+        raise typer.Exit(code=1)
+
+    global_db_path = cfg.db_directory / "global_metadata.duckdb"
+    conn = connect_global_db(global_db_path)
+    try:
+        if get_project_by_name(conn, name) is not None:
+            console.print(f"[bold red]Project '{name}' already exists.[/bold red]")
+            raise typer.Exit(code=1)
+
+        proj_cfg = add_project_to_config(cfg, name)
+        insert_project(
+            conn,
+            project_name=name,
+            db_path=str(proj_cfg.db_path),
+            usearch_index_path=str(proj_cfg.usearch_index_path),
+            embedding_model_name=proj_cfg.embedding_model,
+        )
+        console.print(f"[green]Project '{name}' created.[/green]")
+    except (MetadataDBError, SimgrepConfigError) as e:
+        console.print(f"[bold red]Error creating project: {e}[/bold red]")
+        raise typer.Exit(code=1)
+    finally:
+        conn.close()
+
+
+@project_app.command("list")
+def project_list() -> None:
+    """List all configured projects."""
+    try:
+        cfg = load_or_create_global_config()
+    except SimgrepConfigError:
+        raise typer.Exit(code=1)
+
+    global_db_path = cfg.db_directory / "global_metadata.duckdb"
+    conn = connect_global_db(global_db_path)
+    try:
+        projects = get_all_projects(conn)
+    except MetadataDBError as e:
+        console.print(f"[bold red]Error listing projects: {e}[/bold red]")
+        raise typer.Exit(code=1)
+    finally:
+        conn.close()
+
+    for proj in projects:
+        label = " (default)" if proj == "default" else ""
+        console.print(f"{proj}{label}")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 import sys  # for printing to stderr
-from pathlib import Path
 import tomllib
+from pathlib import Path
 
 import tomli_w
 
@@ -40,10 +40,7 @@ def load_or_create_global_config() -> SimgrepConfig:
         config.db_directory.mkdir(parents=True, exist_ok=True)
         config.default_project_data_dir.mkdir(parents=True, exist_ok=True)
     except OSError as e:
-        error_message = (
-            f"Fatal: Could not create simgrep data directory at '{config.default_project_data_dir}'. "
-            f"Please check permissions. Error: {e}"
-        )
+        error_message = f"Fatal: Could not create simgrep data directory at '{config.default_project_data_dir}'. " f"Please check permissions. Error: {e}"
         print(error_message, file=sys.stderr)
         raise SimgrepConfigError(error_message) from e
 
@@ -104,3 +101,43 @@ def _create_default_project(config: SimgrepConfig):
         db_path=config.default_project_data_dir / "metadata.duckdb",
         usearch_index_path=config.default_project_data_dir / "index.usearch",
     )
+
+
+def add_project_to_config(config: SimgrepConfig, project_name: str) -> ProjectConfig:
+    """Create a new project entry in the config and write the file.
+
+    Parameters
+    ----------
+    config:
+        Existing loaded configuration which will be mutated.
+    project_name:
+        Name of the project to create.
+
+    Returns
+    -------
+    ProjectConfig
+        The newly created project configuration.
+    """
+
+    if project_name in config.projects:
+        raise SimgrepConfigError(f"Project '{project_name}' already exists in configuration")
+
+    project_dir = config.db_directory / "projects" / project_name
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    project_cfg = ProjectConfig(
+        name=project_name,
+        indexed_paths=[],
+        embedding_model=config.default_embedding_model_name,
+        db_path=project_dir / "metadata.duckdb",
+        usearch_index_path=project_dir / "index.usearch",
+    )
+
+    config.projects[project_name] = project_cfg
+    _write_config(config)
+    return project_cfg
+
+
+def save_config(config: SimgrepConfig) -> None:
+    """Persist the given configuration back to ``config.toml``."""
+    _write_config(config)
