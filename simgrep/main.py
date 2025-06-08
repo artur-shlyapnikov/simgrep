@@ -29,16 +29,8 @@ try:
     )
     from .formatter import format_paths, format_show_basic
     from .indexer import Indexer, IndexerConfig, IndexerError
-    from .metadata_db import (  # Added connect_persistent_db, MetadataDBError
-        MetadataDBError,
-        batch_insert_chunks,
-        batch_insert_files,
-        connect_persistent_db,
-        create_inmemory_db_connection,
-        get_index_counts,
-        retrieve_chunk_for_display,
-        setup_ephemeral_tables,
-    )
+    from .metadata_db import MetadataDBError, get_index_counts
+    from .metadata_store import MetadataStore
     from .models import ChunkData, OutputMode, SimgrepConfig  # OutputMode moved here
     from .processor import (
         ProcessedChunkInfo,
@@ -69,16 +61,8 @@ except ImportError:
         )
         from simgrep.formatter import format_paths, format_show_basic
         from simgrep.indexer import Indexer, IndexerConfig, IndexerError
-        from simgrep.metadata_db import (
-            MetadataDBError,  # Added
-            batch_insert_chunks,
-            batch_insert_files,
-            connect_persistent_db,  # Added
-            create_inmemory_db_connection,
-            get_index_counts,
-            retrieve_chunk_for_display,
-            setup_ephemeral_tables,
-        )
+        from simgrep.metadata_db import MetadataDBError, get_index_counts
+        from simgrep.metadata_store import MetadataStore
         from simgrep.models import ChunkData, OutputMode, SimgrepConfig
         from simgrep.processor import (
             ProcessedChunkInfo,
@@ -217,11 +201,11 @@ def search(
                 raise typer.Exit()
             raise typer.Exit(code=1)
 
-        persistent_db_conn: Optional[duckdb.DuckDBPyConnection] = None
+        persistent_store: Optional[MetadataStore] = None
         persistent_vector_index: Optional[usearch.index.Index] = None
         try:
             console.print("  Loading persistent database...")
-            persistent_db_conn = connect_persistent_db(default_project_db_file)
+            persistent_store = MetadataStore(persistent=True, db_path=default_project_db_file)
             console.print("  Loading persistent vector index...")
             persistent_vector_index = load_persistent_index(default_project_usearch_file)
 
@@ -250,7 +234,7 @@ def search(
             perform_persistent_search(
                 query_text=query_text,
                 console=console,
-                db_conn=persistent_db_conn,
+                metadata_store=persistent_store,
                 vector_index=persistent_vector_index,
                 global_config=global_simgrep_config,
                 output_mode=output,
@@ -264,8 +248,8 @@ def search(
             console.print(f"[bold red]Error during persistent search: {e}[/bold red]")
             raise typer.Exit(code=1)
         finally:
-            if persistent_db_conn:
-                persistent_db_conn.close()
+            if persistent_store:
+                persistent_store.close()
                 console.print("  Persistent database connection closed.")
         return  # End of persistent search path
 
@@ -273,12 +257,11 @@ def search(
     console.print(
         f"Performing ephemeral search for: '[bold blue]{query_text}[/bold blue]' in path: '[green]{path_to_search}[/green]'"
     )
-    db_conn: Optional[duckdb.DuckDBPyConnection] = None
+    store: Optional[MetadataStore] = None
     try:
         # --- Initialize In-Memory Database ---
         console.print("\n[bold]Setup: Initializing In-Memory Database[/bold]")
-        db_conn = create_inmemory_db_connection()
-        setup_ephemeral_tables(db_conn)
+        store = MetadataStore()
         console.print("  In-memory database and tables created.")
 
         # --- Load Tokenizer ---
@@ -406,10 +389,12 @@ def search(
         ]
 
         if processed_files_metadata_for_db:
-            batch_insert_files(db_conn, processed_files_metadata_for_db)
+            assert store is not None
+            store.batch_insert_files(processed_files_metadata_for_db)
             console.print(f"  Inserted metadata for {len(processed_files_metadata_for_db)} file(s) into DB.")
 
-        batch_insert_chunks(db_conn, all_chunkdata_objects)
+        assert store is not None
+        store.batch_insert_chunks(all_chunkdata_objects)
         console.print(f"  Inserted {len(all_chunkdata_objects)} chunk(s) into DB.")
 
         # --- Embedding Generation ---
@@ -521,7 +506,8 @@ def search(
             if output == OutputMode.paths:
                 paths_from_matches: List[Path] = []
                 for matched_chunk_id, _similarity_score in search_matches:
-                    retrieved_details = retrieve_chunk_for_display(db_conn, matched_chunk_id)
+                    assert store is not None
+                    retrieved_details = store.retrieve_chunk_for_display(matched_chunk_id)
                     if retrieved_details:
                         _text_content, retrieved_path, _start_char, _end_char = retrieved_details
                         paths_from_matches.append(retrieved_path)
@@ -549,7 +535,8 @@ def search(
             elif output == OutputMode.show:
                 console.print(f"\n[bold cyan]Search Results (Top {len(search_matches)}):[/bold cyan]")
                 for matched_chunk_id, similarity_score in search_matches:
-                    retrieved_details = retrieve_chunk_for_display(db_conn, matched_chunk_id)
+                    assert store is not None
+                    retrieved_details = store.retrieve_chunk_for_display(matched_chunk_id)
 
                     if retrieved_details:
                         retrieved_text, retrieved_path, _start_offset, _end_offset = retrieved_details
@@ -567,9 +554,9 @@ def search(
                         )
 
     finally:
-        if db_conn:
+        if store:
             console.print("\n[bold]Cleanup: Closing In-Memory Database[/bold]")
-            db_conn.close()
+            store.close()
             console.print("  Database connection closed.")
 
 
@@ -659,17 +646,17 @@ def status() -> None:
         )
         raise typer.Exit(code=1)
 
-    conn: Optional[duckdb.DuckDBPyConnection] = None
+    store: Optional[MetadataStore] = None
     try:
-        conn = connect_persistent_db(db_file)
-        files_count, chunks_count = get_index_counts(conn)
+        store = MetadataStore(persistent=True, db_path=db_file)
+        files_count, chunks_count = get_index_counts(store.conn)
         console.print(f"Default Project: {files_count} files indexed, {chunks_count} chunks.")
     except MetadataDBError as e:
         console.print(f"[bold red]Error retrieving status: {e}[/bold red]")
         raise typer.Exit(code=1)
     finally:
-        if conn:
-            conn.close()
+        if store:
+            store.close()
 
 
 if __name__ == "__main__":

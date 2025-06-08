@@ -4,7 +4,7 @@ import pytest
 from rich.console import Console
 
 from simgrep.indexer import Indexer, IndexerConfig, IndexerError
-from simgrep.metadata_db import connect_persistent_db
+from simgrep.metadata_store import MetadataStore
 from simgrep.processor import calculate_file_hash
 from simgrep.vector_store import load_persistent_index
 
@@ -92,9 +92,10 @@ class TestIndexerPersistent:
         assert indexer_config.usearch_index_path.exists()
 
         # Verify database content (basic checks)
-        db_conn = None
+        store = None
         try:
-            db_conn = connect_persistent_db(indexer_config.db_path)
+            store = MetadataStore(persistent=True, db_path=indexer_config.db_path)
+            db_conn = store.conn
 
             # Check indexed_files table: file1.txt, file2.md, subdir/file3.txt should be there
             # empty.txt might be skipped if it results in no chunks or is handled as empty.
@@ -136,8 +137,8 @@ class TestIndexerPersistent:
             assert res is not None and res[0] == 0
 
         finally:
-            if db_conn:
-                db_conn.close()
+            if store:
+                store.close()
 
         # Verify vector index content (basic checks)
         vector_index = load_persistent_index(indexer_config.usearch_index_path)
@@ -159,9 +160,10 @@ class TestIndexerPersistent:
         assert indexer_config.db_path.exists()
         assert indexer_config.usearch_index_path.exists()
 
-        db_conn = None
+        store = None
         try:
-            db_conn = connect_persistent_db(indexer_config.db_path)
+            store = MetadataStore(persistent=True, db_path=indexer_config.db_path)
+            db_conn = store.conn
             file_count_result = db_conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()
             assert file_count_result is not None
             assert file_count_result[0] == 1  # Only one file indexed
@@ -170,8 +172,8 @@ class TestIndexerPersistent:
             assert chunk_count_result is not None
             assert chunk_count_result[0] > 0
         finally:
-            if db_conn:
-                db_conn.close()
+            if store:
+                store.close()
 
         vector_index = load_persistent_index(indexer_config.usearch_index_path)
         assert vector_index is not None
@@ -188,9 +190,9 @@ class TestIndexerPersistent:
 
         file_to_check = sample_files_dir / "file1.txt"
 
-        db_conn = connect_persistent_db(indexer_config.db_path)
+        store2 = MetadataStore(persistent=True, db_path=indexer_config.db_path)
         try:
-            row = db_conn.execute(
+            row = store2.conn.execute(
                 "SELECT content_hash, last_modified_os FROM indexed_files WHERE file_path = ?;",
                 [str(file_to_check.resolve())],
             ).fetchone()
@@ -201,7 +203,7 @@ class TestIndexerPersistent:
             assert db_hash == expected_hash
             assert abs(db_ts.timestamp() - file_to_check.stat().st_mtime) < 1.0
         finally:
-            db_conn.close()
+            store2.close()
 
     def test_index_empty_directory(
         self,
@@ -226,9 +228,10 @@ class TestIndexerPersistent:
         else:
             assert not indexer_config.usearch_index_path.exists()
 
-        db_conn = None
+        store_check = None
         try:
-            db_conn = connect_persistent_db(indexer_config.db_path)
+            store_check = MetadataStore(persistent=True, db_path=indexer_config.db_path)
+            db_conn = store_check.conn
             file_count_result = db_conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()
             assert file_count_result is not None
             assert file_count_result[0] == 0
@@ -237,8 +240,8 @@ class TestIndexerPersistent:
             assert chunk_count_result is not None
             assert chunk_count_result[0] == 0
         finally:
-            if db_conn:
-                db_conn.close()
+            if store_check:
+                store_check.close()
 
     def test_index_path_non_existent_target(
         self,
@@ -255,15 +258,16 @@ class TestIndexerPersistent:
         # So, it should behave like an empty directory.
         indexer.index_path(target_path=non_existent_path, wipe_existing=True)
 
-        db_conn = None
+        store_tmp = None
         try:
-            db_conn = connect_persistent_db(indexer_config.db_path)
+            store_tmp = MetadataStore(persistent=True, db_path=indexer_config.db_path)
+            db_conn = store_tmp.conn
             file_count_result = db_conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()
             assert file_count_result is not None
             assert file_count_result[0] == 0
         finally:
-            if db_conn:
-                db_conn.close()
+            if store_tmp:
+                store_tmp.close()
 
         if indexer_config.usearch_index_path.exists():
             idx = load_persistent_index(indexer_config.usearch_index_path)
@@ -290,8 +294,9 @@ class TestIndexerPersistent:
         file1_path = (sample_files_dir / "file1.txt").resolve()
         file2_path = (sample_files_dir / "file2.md").resolve()
 
-        conn = connect_persistent_db(indexer_config.db_path)
+        store_before = MetadataStore(persistent=True, db_path=indexer_config.db_path)
         try:
+            conn = store_before.conn
             file2_chunks_before_row = conn.execute(
                 "SELECT COUNT(*) FROM text_chunks tc JOIN indexed_files f ON tc.file_id=f.file_id WHERE f.file_path = ?;",
                 [str(file2_path)],
@@ -308,7 +313,7 @@ class TestIndexerPersistent:
             total_chunks_before = total_chunks_before_row[0]
             file2_hash_before = file2_hash_before_row[0]
         finally:
-            conn.close()
+            store_before.close()
 
         idx_before = load_persistent_index(indexer_config.usearch_index_path)
         assert idx_before is not None
@@ -317,17 +322,17 @@ class TestIndexerPersistent:
         indexer2 = Indexer(config=indexer_config, console=test_console)
         indexer2.index_path(target_path=sample_files_dir, wipe_existing=False)
 
-        conn = connect_persistent_db(indexer_config.db_path)
+        store_after = MetadataStore(persistent=True, db_path=indexer_config.db_path)
         try:
-            file2_hash_after_row = conn.execute(
+            file2_hash_after_row = store_after.conn.execute(
                 "SELECT content_hash FROM indexed_files WHERE file_path = ?;",
                 [str(file2_path)],
             ).fetchone()
-            file2_chunks_after_row = conn.execute(
+            file2_chunks_after_row = store_after.conn.execute(
                 "SELECT COUNT(*) FROM text_chunks tc JOIN indexed_files f ON tc.file_id=f.file_id WHERE f.file_path = ?;",
                 [str(file2_path)],
             ).fetchone()
-            total_chunks_nochange_row = conn.execute("SELECT COUNT(*) FROM text_chunks;").fetchone()
+            total_chunks_nochange_row = store_after.conn.execute("SELECT COUNT(*) FROM text_chunks;").fetchone()
             assert file2_hash_after_row is not None
             assert file2_chunks_after_row is not None
             assert total_chunks_nochange_row is not None
@@ -335,7 +340,7 @@ class TestIndexerPersistent:
             file2_chunks_after = file2_chunks_after_row[0]
             total_chunks_nochange = total_chunks_nochange_row[0]
         finally:
-            conn.close()
+            store_after.close()
 
         idx_nochange = load_persistent_index(indexer_config.usearch_index_path)
         assert idx_nochange is not None
@@ -352,13 +357,13 @@ class TestIndexerPersistent:
         indexer3 = Indexer(config=indexer_config, console=test_console)
         indexer3.index_path(target_path=sample_files_dir, wipe_existing=False)
 
-        conn = connect_persistent_db(indexer_config.db_path)
+        store_final = MetadataStore(persistent=True, db_path=indexer_config.db_path)
         try:
-            new_hash_row = conn.execute(
+            new_hash_row = store_final.conn.execute(
                 "SELECT content_hash FROM indexed_files WHERE file_path = ?;",
                 [str(file1_path)],
             ).fetchone()
-            file2_chunks_after_mod_row = conn.execute(
+            file2_chunks_after_mod_row = store_final.conn.execute(
                 "SELECT COUNT(*) FROM text_chunks tc JOIN indexed_files f ON tc.file_id=f.file_id WHERE f.file_path = ?;",
                 [str(file2_path)],
             ).fetchone()
@@ -367,7 +372,7 @@ class TestIndexerPersistent:
             new_hash_db = new_hash_row[0]
             file2_chunks_after_mod = file2_chunks_after_mod_row[0]
         finally:
-            conn.close()
+            store_final.close()
 
         assert new_hash_db == new_hash1
         assert file2_chunks_after_mod == file2_chunks_before

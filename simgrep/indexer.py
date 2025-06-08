@@ -23,14 +23,7 @@ from .exceptions import (
 )
 
 # assuming these are in .exceptions
-from .metadata_db import (
-    batch_insert_text_chunks,
-    clear_persistent_project_data,
-    connect_persistent_db,
-    delete_file_records,
-    get_all_indexed_file_records,
-    insert_indexed_file_record,
-)
+from .metadata_store import MetadataStore
 from .processor import (
     ProcessedChunkInfo,
     calculate_file_hash,
@@ -63,6 +56,7 @@ class Indexer:
         self.config = config
         self.console = console
         self.db_conn: Optional[duckdb.DuckDBPyConnection] = None
+        self.metadata_store: Optional[MetadataStore] = None
         self.usearch_index: Optional[usearch.index.Index] = None
         self._current_usearch_label: int = 0  # global counter for unique usearch labels
 
@@ -101,19 +95,22 @@ class Indexer:
         self.console.print("Preparing data stores (database and vector index)...")
         # database
         try:
-            self.db_conn = connect_persistent_db(self.config.db_path)
+            self.metadata_store = MetadataStore(persistent=True, db_path=self.config.db_path)
+            self.db_conn = self.metadata_store.conn
             self.console.print(f"Connected to database: {self.config.db_path}")
 
-            if wipe_existing:
+            if wipe_existing and self.metadata_store:
                 self.console.print(f"Wiping existing data from database: {self.config.db_path}...")
-                clear_persistent_project_data(self.db_conn)
-                self._current_usearch_label = 0  # reset label counter when wiping
+                self.metadata_store.clear_persistent_project_data()
+                self._current_usearch_label = 0
                 self.console.print("Database wiped.")
         except MetadataDBError as e:
-            self.db_conn = None  # ensure it's none if setup failed
+            self.db_conn = None
+            self.metadata_store = None
             raise IndexerError(f"Database preparation failed: {e}") from e
         except Exception as e_db_unexpected:  # catch-all for unexpected db errors
-            self.db_conn = None  # ensure it's none if setup failed unexpectedly
+            self.db_conn = None
+            self.metadata_store = None
             raise IndexerError(f"Unexpected error during database preparation: {e_db_unexpected}") from e_db_unexpected
 
         # vector store
@@ -157,7 +154,7 @@ class Indexer:
         # final checks
         if self.usearch_index is None:
             raise IndexerError("USearch index is None at the end of _prepare_data_stores.")
-        if self.db_conn is None:
+        if self.metadata_store is None:
             raise IndexerError("DB connection is None at the end of _prepare_data_stores.")
 
     def _process_and_index_file(self, file_path: pathlib.Path, progress: Progress, task_id: TaskID) -> Tuple[int, int]:
@@ -167,7 +164,7 @@ class Indexer:
 
         progress.update(task_id, description=f"Processing: {file_display_name}...")
 
-        if not self.db_conn:  # should be set by _prepare_data_stores
+        if not self.metadata_store:  # should be set by _prepare_data_stores
             self.console.print(f"[bold red]Error: DB connection not available for file {file_path}. Skipping.[/bold red]")
             errors_this_file += 1
             progress.update(
@@ -184,8 +181,8 @@ class Indexer:
             file_size = file_stat.st_size
             last_modified_ts = file_stat.st_mtime
 
-            file_id = insert_indexed_file_record(
-                self.db_conn,
+            assert self.metadata_store is not None
+            file_id = self.metadata_store.insert_indexed_file_record(
                 file_path=str(file_path.resolve()),
                 content_hash=content_hash,
                 file_size_bytes=file_size,
@@ -253,7 +250,8 @@ class Indexer:
                 )
                 self._current_usearch_label += 1
 
-            batch_insert_text_chunks(self.db_conn, chunk_db_records)
+            assert self.metadata_store is not None
+            self.metadata_store.batch_insert_text_chunks(chunk_db_records)
 
             if self.usearch_index is None:  # should be initialized
                 raise IndexerError("USearch index is None during file processing.")
@@ -320,7 +318,7 @@ class Indexer:
 
         try:
             self._prepare_data_stores(wipe_existing)
-            if self.db_conn is None or self.usearch_index is None:  # guard
+            if self.metadata_store is None or self.usearch_index is None:
                 raise IndexerError("Data stores were not properly initialized (db_conn or usearch_index is None).")
 
             # file discovery
@@ -347,8 +345,8 @@ class Indexer:
             existing_records: Dict[pathlib.Path, Tuple[int, str]] = {}
             if not wipe_existing:
                 try:
-                    assert self.db_conn is not None
-                    for fid, path_str, chash in get_all_indexed_file_records(self.db_conn):
+                    assert self.metadata_store is not None
+                    for fid, path_str, chash in self.metadata_store.get_all_indexed_file_records():
                         existing_records[pathlib.Path(path_str).resolve()] = (fid, chash)
                 except MetadataDBError as e:
                     raise IndexerError(f"Failed to fetch existing file records: {e}") from e
@@ -358,7 +356,8 @@ class Indexer:
                 deleted_paths = existing_paths - current_paths
                 for del_p in deleted_paths:
                     fid, _ = existing_records[del_p]
-                    removed_labels = delete_file_records(self.db_conn, fid)
+                    assert self.metadata_store is not None
+                    removed_labels = self.metadata_store.delete_file_records(fid)
                     if self.usearch_index is not None and removed_labels:
                         self.usearch_index.remove(keys=np.array(removed_labels, dtype=np.int64))
 
@@ -397,7 +396,8 @@ class Indexer:
                             )
                             total_files_processed += 1
                             continue
-                        removed_labels = delete_file_records(self.db_conn, stored_id)
+                        assert self.metadata_store is not None
+                        removed_labels = self.metadata_store.delete_file_records(stored_id)
                         if self.usearch_index is not None and removed_labels:
                             self.usearch_index.remove(keys=np.array(removed_labels, dtype=np.int64))
 
@@ -433,10 +433,8 @@ class Indexer:
             # import traceback; self.console.print(traceback.format_exc())
             raise IndexerError(f"Unexpected critical error: {e}") from e  # wrap in indexererror
         finally:
-            if self.db_conn is not None:
+            if self.metadata_store is not None:
                 try:
-                    # duckdb auto-commits by default unless explicit transaction started.
-                    # self.db_conn.commit() # generally not needed for duckdb auto-commit mode
-                    self.db_conn.close()
+                    self.metadata_store.close()
                 except Exception as e:
                     self.console.print(f"[bold red]Error closing database connection: {e}[/bold red]")

@@ -12,6 +12,7 @@ pytest.importorskip("usearch.index")
 
 from simgrep.models import OutputMode, SimgrepConfig
 from simgrep.searcher import perform_persistent_search
+from simgrep.metadata_store import MetadataStore
 
 
 # Fixtures
@@ -60,14 +61,14 @@ def populated_persistent_index_for_searcher(
     persistent_search_test_data_path: Path,
     default_simgrep_config_for_search_tests: SimgrepConfig,
 ) -> Generator[
-    Tuple[duckdb.DuckDBPyConnection, usearch.index.Index, SimgrepConfig], None, None
+    Tuple[MetadataStore, usearch.index.Index, SimgrepConfig], None, None
 ]:
     """
     Indexes dummy data and provides the DB connection, USearch index, and config for tests.
     This is session-scoped for efficiency as indexing can be slow.
     """
     from simgrep.indexer import Indexer, IndexerConfig
-    from simgrep.metadata_db import connect_persistent_db
+    from simgrep.metadata_store import MetadataStore
     from simgrep.vector_store import load_persistent_index
 
     cfg = default_simgrep_config_for_search_tests
@@ -98,7 +99,7 @@ def populated_persistent_index_for_searcher(
 
     indexer.index_path(target_path=persistent_search_test_data_path, wipe_existing=True)
 
-    db_conn = connect_persistent_db(db_file)
+    store = MetadataStore(persistent=True, db_path=db_file)
     vector_index = load_persistent_index(usearch_file)
 
     if vector_index is None:
@@ -106,10 +107,10 @@ def populated_persistent_index_for_searcher(
             "Failed to load persistent vector index in 'populated_persistent_index_for_searcher' fixture."
         )
 
-    yield db_conn, vector_index, cfg
+    yield store, vector_index, cfg
 
     # Teardown: close DB connection. Temp files are handled by tmp_path_factory.
-    db_conn.close()
+    store.close()
     # Optional: clean up the specific index files if desired, though tmp_path_factory handles the root temp dir.
     # if db_file.exists(): db_file.unlink()
     # if usearch_file.exists(): usearch_file.unlink()
@@ -119,19 +120,19 @@ class TestSearcherPersistentIntegration:
     def test_perform_persistent_search_show_mode_with_results(
         self,
         populated_persistent_index_for_searcher: Tuple[
-            duckdb.DuckDBPyConnection, usearch.index.Index, SimgrepConfig
+            MetadataStore, usearch.index.Index, SimgrepConfig
         ],
         test_console: Console,
         capsys: pytest.CaptureFixture,
         persistent_search_test_data_path: Path,
     ) -> None:
-        db_conn, vector_index_val, global_cfg = populated_persistent_index_for_searcher
+        store, vector_index_val, global_cfg = populated_persistent_index_for_searcher
         query = "simgrep information retrieval"  # Should match content in file1.txt
 
         perform_persistent_search(
             query_text=query,
             console=test_console,
-            db_conn=db_conn,
+            metadata_store=store,
             vector_index=vector_index_val,
             global_config=global_cfg,
             output_mode=OutputMode.show,
@@ -161,19 +162,19 @@ class TestSearcherPersistentIntegration:
     def test_perform_persistent_search_paths_mode_with_results(
         self,
         populated_persistent_index_for_searcher: Tuple[
-            duckdb.DuckDBPyConnection, usearch.index.Index, SimgrepConfig
+            MetadataStore, usearch.index.Index, SimgrepConfig
         ],
         test_console: Console,
         capsys: pytest.CaptureFixture,
         persistent_search_test_data_path: Path,
     ) -> None:
-        db_conn, vector_index_val, global_cfg = populated_persistent_index_for_searcher
+        store, vector_index_val, global_cfg = populated_persistent_index_for_searcher
         query = "semantic search"  # Should match content in file2.txt
 
         perform_persistent_search(
             query_text=query,
             console=test_console,
-            db_conn=db_conn,
+            metadata_store=store,
             vector_index=vector_index_val,
             global_config=global_cfg,
             output_mode=OutputMode.paths,
@@ -195,18 +196,18 @@ class TestSearcherPersistentIntegration:
     def test_perform_persistent_search_show_mode_no_results(
         self,
         populated_persistent_index_for_searcher: Tuple[
-            duckdb.DuckDBPyConnection, usearch.index.Index, SimgrepConfig
+            MetadataStore, usearch.index.Index, SimgrepConfig
         ],
         test_console: Console,
         capsys: pytest.CaptureFixture,
     ) -> None:
-        db_conn, vector_index_val, global_cfg = populated_persistent_index_for_searcher
+        store, vector_index_val, global_cfg = populated_persistent_index_for_searcher
         query = "zzxxyy_non_existent_term_qwerty_12345"  # Highly unlikely to match
 
         perform_persistent_search(
             query_text=query,
             console=test_console,
-            db_conn=db_conn,
+            metadata_store=store,
             vector_index=vector_index_val,
             global_config=global_cfg,
             output_mode=OutputMode.show,
@@ -224,18 +225,18 @@ class TestSearcherPersistentIntegration:
     def test_perform_persistent_search_paths_mode_no_results(
         self,
         populated_persistent_index_for_searcher: Tuple[
-            duckdb.DuckDBPyConnection, usearch.index.Index, SimgrepConfig
+            MetadataStore, usearch.index.Index, SimgrepConfig
         ],
         test_console: Console,
         capsys: pytest.CaptureFixture,
     ) -> None:
-        db_conn, vector_index_val, global_cfg = populated_persistent_index_for_searcher
+        store, vector_index_val, global_cfg = populated_persistent_index_for_searcher
         query = "zzxxyy_non_existent_term_qwerty_12345"  # Highly unlikely to match
 
         perform_persistent_search(
             query_text=query,
             console=test_console,
-            db_conn=db_conn,
+            metadata_store=store,
             vector_index=vector_index_val,
             global_config=global_cfg,
             output_mode=OutputMode.paths,
@@ -253,20 +254,20 @@ class TestSearcherPersistentIntegration:
     def test_perform_persistent_search_respects_k_results(
         self,
         populated_persistent_index_for_searcher: Tuple[
-            duckdb.DuckDBPyConnection,
+            MetadataStore,
             usearch.index.Index,
             SimgrepConfig,
         ],
         test_console: Console,
         capsys: pytest.CaptureFixture,
     ) -> None:
-        db_conn, vector_index_val, global_cfg = populated_persistent_index_for_searcher
+        store, vector_index_val, global_cfg = populated_persistent_index_for_searcher
         query = "simgrep"
 
         perform_persistent_search(
             query_text=query,
             console=test_console,
-            db_conn=db_conn,
+            metadata_store=store,
             vector_index=vector_index_val,
             global_config=global_cfg,
             output_mode=OutputMode.show,
@@ -279,7 +280,7 @@ class TestSearcherPersistentIntegration:
         perform_persistent_search(
             query_text=query,
             console=test_console,
-            db_conn=db_conn,
+            metadata_store=store,
             vector_index=vector_index_val,
             global_config=global_cfg,
             output_mode=OutputMode.show,
@@ -292,7 +293,7 @@ class TestSearcherPersistentIntegration:
     def test_perform_persistent_search_paths_relative_output(
         self,
         populated_persistent_index_for_searcher: Tuple[
-            duckdb.DuckDBPyConnection,
+            MetadataStore,
             usearch.index.Index,
             SimgrepConfig,
         ],
@@ -300,13 +301,13 @@ class TestSearcherPersistentIntegration:
         capsys: pytest.CaptureFixture,
         persistent_search_test_data_path: Path,
     ) -> None:
-        db_conn, vector_index_val, global_cfg = populated_persistent_index_for_searcher
+        store, vector_index_val, global_cfg = populated_persistent_index_for_searcher
         query = "semantic search"  # matches file2.txt
 
         perform_persistent_search(
             query_text=query,
             console=test_console,
-            db_conn=db_conn,
+            metadata_store=store,
             vector_index=vector_index_val,
             global_config=global_cfg,
             output_mode=OutputMode.paths,
