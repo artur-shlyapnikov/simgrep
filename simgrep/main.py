@@ -13,6 +13,12 @@ import numpy as np
 import typer
 import usearch.index
 from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+)
 
 # Assuming simgrep is installed or path is correctly set for sibling imports
 try:
@@ -310,59 +316,74 @@ def search(
         global_usearch_label_counter: int = 0
 
         console.print("\n[bold]Step 1 & 2: Processing files, extracting and chunking text (token-based)[/bold]")
-        for file_idx, file_path_item in enumerate(files_to_process):
-            console.print(f"  ({file_idx + 1}/{len(files_to_process)}) Processing: [dim]{file_path_item}[/dim]")
-            try:
-                extracted_content = extract_text_from_file(file_path_item)
-                if not extracted_content.strip():
-                    console.print(f"    [yellow]Skipped: File '{file_path_item}' is empty or contains only whitespace.[/yellow]")
-                    files_skipped.append((file_path_item, "Empty or whitespace-only"))
-                    continue
-
-                intermediate_chunks_info: List[ProcessedChunkInfo] = chunk_text_by_tokens(
-                    full_text=extracted_content,
-                    tokenizer=tokenizer,
-                    chunk_size_tokens=global_simgrep_config.default_chunk_size_tokens,
-                    overlap_tokens=global_simgrep_config.default_chunk_overlap_tokens,
-                )
-
-                if intermediate_chunks_info:
-                    for partial_chunk in intermediate_chunks_info:
-                        chunk_data_item = ChunkData(
-                            text=partial_chunk["text"],
-                            source_file_path=file_path_item,
-                            source_file_id=file_idx,
-                            usearch_label=global_usearch_label_counter,
-                            start_char_offset=partial_chunk["start_char_offset"],
-                            end_char_offset=partial_chunk["end_char_offset"],
-                            token_count=partial_chunk["token_count"],
+        progress_columns = [
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        ]
+        with Progress(*progress_columns, console=console, transient=False) as progress:
+            processing_task = progress.add_task("Processing files...", total=len(files_to_process))
+            for file_idx, file_path_item in enumerate(files_to_process):
+                progress.update(processing_task, description=f"Processing: {file_path_item.name}")
+                try:
+                    extracted_content = extract_text_from_file(file_path_item)
+                    if not extracted_content.strip():
+                        console.print(
+                            f"    [yellow]Skipped: File '{file_path_item}' is empty or contains only whitespace.[/yellow]"
                         )
-                        all_chunkdata_objects.append(chunk_data_item)
-                        global_usearch_label_counter += 1
-                    console.print(f"    Extracted {len(intermediate_chunks_info)} token-based chunk(s).")
-                else:
-                    console.print(
-                        f"    [yellow]No token-based chunks generated for '{file_path_item}' "
-                        f"(text might be too short or empty for current parameters).[/yellow]"
-                    )
-                    files_skipped.append((file_path_item, "No token-based chunks generated"))
+                        files_skipped.append((file_path_item, "Empty or whitespace-only"))
+                        progress.advance(processing_task)
+                        continue
 
-            except FileNotFoundError:
-                console.print(
-                    f"    [bold red]Error: File not found during processing loop: {file_path_item}. Skipping.[/bold red]"
-                )
-                files_skipped.append((file_path_item, "File not found during processing"))
-            except RuntimeError as e:
-                console.print(f"    [bold red]Error processing or chunking file '{file_path_item}': {e}. Skipping.[/bold red]")
-                files_skipped.append((file_path_item, str(e)))
-            except ValueError as ve:
-                console.print(
-                    f"    [bold red]Error with chunking parameters for file '{file_path_item}': {ve}. Skipping.[/bold red]"
-                )
-                files_skipped.append((file_path_item, str(ve)))
-            except Exception as e:
-                console.print(f"    [bold red]Unexpected error processing file '{file_path_item}': {e}. Skipping.[/bold red]")
-                files_skipped.append((file_path_item, f"Unexpected: {str(e)}"))
+                    intermediate_chunks_info: List[ProcessedChunkInfo] = chunk_text_by_tokens(
+                        full_text=extracted_content,
+                        tokenizer=tokenizer,
+                        chunk_size_tokens=global_simgrep_config.default_chunk_size_tokens,
+                        overlap_tokens=global_simgrep_config.default_chunk_overlap_tokens,
+                    )
+
+                    if intermediate_chunks_info:
+                        for partial_chunk in intermediate_chunks_info:
+                            chunk_data_item = ChunkData(
+                                text=partial_chunk["text"],
+                                source_file_path=file_path_item,
+                                source_file_id=file_idx,
+                                usearch_label=global_usearch_label_counter,
+                                start_char_offset=partial_chunk["start_char_offset"],
+                                end_char_offset=partial_chunk["end_char_offset"],
+                                token_count=partial_chunk["token_count"],
+                            )
+                            all_chunkdata_objects.append(chunk_data_item)
+                            global_usearch_label_counter += 1
+                        console.print(f"    Extracted {len(intermediate_chunks_info)} token-based chunk(s).")
+                    else:
+                        console.print(
+                            f"    [yellow]No token-based chunks generated for '{file_path_item}' "
+                            f"(text might be too short or empty for current parameters).[/yellow]"
+                        )
+                        files_skipped.append((file_path_item, "No token-based chunks generated"))
+
+                except FileNotFoundError:
+                    console.print(
+                        f"    [bold red]Error: File not found during processing loop: {file_path_item}. Skipping.[/bold red]"
+                    )
+                    files_skipped.append((file_path_item, "File not found during processing"))
+                except RuntimeError as e:
+                    console.print(
+                        f"    [bold red]Error processing or chunking file '{file_path_item}': {e}. Skipping.[/bold red]"
+                    )
+                    files_skipped.append((file_path_item, str(e)))
+                except ValueError as ve:
+                    console.print(
+                        f"    [bold red]Error with chunking parameters for file '{file_path_item}': {ve}. Skipping.[/bold red]"
+                    )
+                    files_skipped.append((file_path_item, str(ve)))
+                except Exception as e:
+                    console.print(f"    [bold red]Unexpected error processing file '{file_path_item}': {e}. Skipping.[/bold red]")
+                    files_skipped.append((file_path_item, f"Unexpected: {str(e)}"))
+                finally:
+                    progress.advance(processing_task)
 
         if files_skipped:
             console.print("\n[bold yellow]Summary of skipped files:[/bold yellow]")

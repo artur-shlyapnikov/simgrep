@@ -26,14 +26,14 @@ class TestCliEphemeralE2E:
 
         env_vars = {"HOME": str(temp_simgrep_home)}
 
-        show_result = run_simgrep_command(
-            ["search", "bananas", str(docs_dir)], env=env_vars
-        )
+        show_result = run_simgrep_command(["search", "bananas", str(docs_dir)], env=env_vars)
         assert show_result.returncode == 0
         assert "File:" in show_result.stdout
+        assert "Processing:" in show_result.stdout
+        assert "100%" in show_result.stdout
 
-        paths_result = run_simgrep_command(
-            ["search", "bananas", str(docs_dir), "--output", "paths"], env=env_vars
-        )
+        paths_result = run_simgrep_command(["search", "bananas", str(docs_dir), "--output", "paths"], env=env_vars)
         assert paths_result.returncode == 0
         assert ".txt" in paths_result.stdout
+        assert "Processing:" in paths_result.stdout
+        assert "100%" in paths_result.stdout
