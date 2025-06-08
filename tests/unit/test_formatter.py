@@ -87,3 +87,7 @@ class TestFormatPaths:
         result = format_paths([outside_file], use_relative=True, base_path=base_path)
 
         assert result == str(outside_file.resolve())
+
+    def test_empty_paths_returns_no_matches_message(self) -> None:
+        result = format_paths([], use_relative=False, base_path=None)
+        assert result == "No matching files found."
