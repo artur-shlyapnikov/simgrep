@@ -260,17 +260,22 @@
 * **Deliverable 4.5: `simgrep project` Subcommands (create, list)**
   * **Goal:** Allow users to create and list named projects.
   * **Tasks:**
-        1. In `main.py`, add `project` Typer subcommand.
-        2. `simgrep project create <name>`:
-            *Adds entry to global `projects` table.
-            * Updates `config.toml` (or relies on DB for project path discovery).
-            * Creates dedicated directory for project's DB/USearch (e.g., `~/.config/simgrep/projects/<name>/`).
-        3. `simgrep project list`: Lists projects from global DB.
+        1. In `main.py`, define a new Typer command group `project`.
+        2. Implement `project create <name>`:
+            * Validate that `<name>` is not already present in the global `projects` table.
+            * Determine the project's data directory: `~/.config/simgrep/projects/<name>/`.
+            * Create this directory and paths for `metadata.duckdb` and `index.usearch`.
+            * Insert a row into the global `projects` table with these paths and the default embedding model.
+            * Add a matching entry to `config.toml` under `projects` (use helper in `config.py`).
+        3. Implement `project list`:
+            * Query `projects` table via `metadata_db.get_all_projects()` (new helper) and print project names.
+            * Mark the default project in the output for clarity.
+        4. Expose these subcommands under `simgrep project`.
   * **Key Modules:** `simgrep/main.py`, `simgrep/config.py`, `simgrep/metadata_db.py`
   * **What to Test:**
-    * `simgrep project create my_research`.
-    * `simgrep project list` shows "default" and "my_research".
-    * Project-specific directories are created.
+    * `simgrep project create my_research` creates `~/.config/simgrep/projects/my_research/` with DB and index files.
+    * `simgrep project list` shows "default" and "my_research" (default flagged).
+    * `config.toml` contains a `[projects.my_research]` section matching the created paths.
 
 * **Deliverable 4.6: `index` & `search` with `--project <name>`**
   * **Goal:** Target indexing and searching to specific named projects.
