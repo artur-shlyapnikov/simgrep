@@ -111,7 +111,9 @@ class TestCliPersistentE2E:
 
         # 1. Index the sample documents
         index_result = run_simgrep_command(
-            ["index", str(sample_docs_dir_session)], env=env_vars, input_str="y\n"
+            ["index", str(sample_docs_dir_session), "--rebuild"],
+            env=env_vars,
+            input_str="y\n",
         )
         assert index_result.returncode == 0
         assert "Successfully indexed" in index_result.stdout
@@ -141,7 +143,9 @@ class TestCliPersistentE2E:
 
         # 1. Index (assuming it's clean or wiped by indexer logic)
         run_simgrep_command(
-            ["index", str(sample_docs_dir_session)], env=env_vars, input_str="y\n"
+            ["index", str(sample_docs_dir_session), "--rebuild"],
+            env=env_vars,
+            input_str="y\n",
         )  # Ensure index is fresh
 
         # 2. Search with --output paths
@@ -157,7 +161,9 @@ class TestCliPersistentE2E:
     def test_search_persistent_no_matches(self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path) -> None:
         env_vars = {"HOME": str(temp_simgrep_home)}
         run_simgrep_command(
-            ["index", str(sample_docs_dir_session)], env=env_vars, input_str="y\n"
+            ["index", str(sample_docs_dir_session), "--rebuild"],
+            env=env_vars,
+            input_str="y\n",
         )
 
         search_result = run_simgrep_command(["search", "nonexistentqueryxyz"], env=env_vars)
@@ -172,7 +178,9 @@ class TestCliPersistentE2E:
     ) -> None:
         env_vars = {"HOME": str(temp_simgrep_home)}
         run_simgrep_command(
-            ["index", str(sample_docs_dir_session)], env=env_vars, input_str="y\n"
+            ["index", str(sample_docs_dir_session), "--rebuild"],
+            env=env_vars,
+            input_str="y\n",
         )
 
         db_file = temp_simgrep_home / ".config" / "simgrep" / "default_project" / "metadata.duckdb"
@@ -214,7 +222,7 @@ class TestCliPersistentE2E:
         empty_dir.mkdir()
 
         index_result = run_simgrep_command(
-            ["index", str(empty_dir)], env=env_vars, input_str="y\n"
+            ["index", str(empty_dir), "--rebuild"], env=env_vars, input_str="y\n"
         )
         assert index_result.returncode == 0
         assert "No files found to index" in index_result.stdout
@@ -235,7 +243,9 @@ class TestCliPersistentE2E:
         env_vars = {"HOME": str(temp_simgrep_home)}
 
         index_result = run_simgrep_command(
-            ["index", str(sample_docs_dir_session)], env=env_vars, input_str="y\n"
+            ["index", str(sample_docs_dir_session), "--rebuild"],
+            env=env_vars,
+            input_str="y\n",
         )
         assert index_result.returncode == 0
         # doc3.md should be ignored by default patterns
@@ -252,7 +262,9 @@ class TestCliPersistentE2E:
         env_vars = {"HOME": str(temp_simgrep_home)}
 
         run_simgrep_command(
-            ["index", str(sample_docs_dir_session)], env=env_vars, input_str="y\n"
+            ["index", str(sample_docs_dir_session), "--rebuild"],
+            env=env_vars,
+            input_str="y\n",
         )
 
         top1_result = run_simgrep_command(["search", "apples", "--top", "1"], env=env_vars)
@@ -269,7 +281,9 @@ class TestCliPersistentE2E:
         env_vars = {"HOME": str(temp_simgrep_home)}
 
         run_simgrep_command(
-            ["index", str(sample_docs_dir_session)], env=env_vars, input_str="y\n"
+            ["index", str(sample_docs_dir_session), "--rebuild"],
+            env=env_vars,
+            input_str="y\n",
         )
 
         db_file = temp_simgrep_home / ".config" / "simgrep" / "default_project" / "metadata.duckdb"
@@ -280,7 +294,9 @@ class TestCliPersistentE2E:
         initial_files = row_initial[0]
 
         decline_result = run_simgrep_command(
-            ["index", str(sample_docs_dir_session)], env=env_vars, input_str="n\n"
+            ["index", str(sample_docs_dir_session), "--rebuild"],
+            env=env_vars,
+            input_str="n\n",
         )
         assert decline_result.returncode == 1
         assert "Aborted" in decline_result.stderr
