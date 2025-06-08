@@ -14,7 +14,7 @@ When you run `simgrep "your query" ./path/to/search`:
 
 *   **Searches:**
     *   A single file.
-    *   Recursively through a directory (files matching `--pattern`; defaults to `*.txt`).
+    *   Recursively through a directory. Use `--pattern` to specify glob(s) for files (defaults to `*.txt`). Pass multiple `--pattern` options to include several patterns.
 *   **Processing:**
     *   Extracts text from files using `unstructured`.
     *   Chunks text using token-based strategies (configurable model, size, overlap - defaults used for now).
