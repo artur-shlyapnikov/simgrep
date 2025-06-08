@@ -163,11 +163,12 @@ def search(
         resolve_path=True,
         help="The path to a text file or directory for ephemeral search. If omitted, searches the default persistent index.",
     ),
-    patterns: Optional[List[str]] = typer.Option(
+    patterns: Optional[Tuple[str, ...]] = typer.Option(
         None,
         "--pattern",
         "-p",
         help="Glob pattern(s) for files when searching directories. Can be used multiple times. Defaults to '*.txt'.",
+        multiple=True,
     ),
     output: OutputMode = typer.Option(
         OutputMode.show,  # Default output mode
@@ -295,7 +296,7 @@ def search(
         files_to_process: List[Path] = []
         files_skipped: List[Tuple[Path, str]] = []
 
-        search_patterns = patterns or ["*.txt"]
+        search_patterns = list(patterns) if patterns else ["*.txt"]
         files_to_process = gather_files_to_process(path_to_search, search_patterns)
 
         if path_to_search.is_file():
