@@ -406,12 +406,17 @@ def search(
 
         try:
             # Load embedding model once for ephemeral search
+            from .processor import load_embedding_model
             from sentence_transformers import SentenceTransformer
 
             embedding_model_instance: Optional[SentenceTransformer] = None
             try:
-                console.print(f"  Loading embedding model '{global_simgrep_config.default_embedding_model_name}'...")
-                embedding_model_instance = SentenceTransformer(global_simgrep_config.default_embedding_model_name)
+                console.print(
+                    f"  Loading embedding model '{global_simgrep_config.default_embedding_model_name}'..."
+                )
+                embedding_model_instance = load_embedding_model(
+                    global_simgrep_config.default_embedding_model_name
+                )
                 console.print("    Embedding model loaded.")
             except Exception as e_model_load:
                 console.print(f"[bold red]Fatal Error: Could not load embedding model.[/bold red]\n  Details: {e_model_load}")

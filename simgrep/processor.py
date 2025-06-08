@@ -4,6 +4,7 @@ from typing import List, Optional, TypedDict, cast
 
 import numpy as np
 import unstructured.partition.auto as auto_partition
+from functools import lru_cache
 from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
 from unstructured.documents.elements import Element
@@ -34,10 +35,9 @@ def extract_text_from_file(file_path: Path) -> str:
         raise RuntimeError(f"Failed to extract text from {file_path}") from e
 
 
+@lru_cache(maxsize=None)
 def load_tokenizer(model_name: str) -> PreTrainedTokenizerBase:
-    """
-    Loads a Hugging Face tokenizer.
-    """
+    """Load and cache a Hugging Face tokenizer."""
     try:
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         return cast(PreTrainedTokenizerBase, tokenizer)
@@ -45,7 +45,18 @@ def load_tokenizer(model_name: str) -> PreTrainedTokenizerBase:
         raise RuntimeError(
             f"Failed to load tokenizer for model '{model_name}'. "
             "Ensure the model name is correct and an internet connection "
-            "is available for the first download. Original error: {e}"
+            f"is available for the first download. Original error: {e}"
+        ) from e
+
+
+@lru_cache(maxsize=None)
+def load_embedding_model(model_name: str) -> SentenceTransformer:
+    """Load and cache a sentence-transformer model."""
+    try:
+        return SentenceTransformer(model_name)
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to load embedding model '{model_name}'. Original error: {e}"
         ) from e
 
 
