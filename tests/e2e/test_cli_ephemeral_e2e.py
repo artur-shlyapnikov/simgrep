@@ -37,3 +37,15 @@ class TestCliEphemeralE2E:
         assert ".txt" in paths_result.stdout
         assert "Processing:" in paths_result.stdout
         assert "100%" in paths_result.stdout
+
+    def test_ephemeral_search_single_file_paths_mode(self, tmp_path: pathlib.Path, temp_simgrep_home: pathlib.Path) -> None:
+        file_path = tmp_path / "single.txt"
+        file_path.write_text("grapefruit and apples")
+
+        env_vars = {"HOME": str(temp_simgrep_home)}
+
+        result = run_simgrep_command(["search", "grapefruit", str(file_path), "--output", "paths"], env=env_vars)
+        assert result.returncode == 0
+        assert "single.txt" in result.stdout
+        assert "Processing:" in result.stdout
+        assert "100%" in result.stdout
