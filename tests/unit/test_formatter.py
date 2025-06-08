@@ -44,17 +44,21 @@ class TestFormatPaths:
     def test_relative_paths_missing_base_warns_and_falls_back_to_absolute(
         self,
         tmp_path: Path,
-        capsys: pytest.CaptureFixture[str],
     ) -> None:
         file1 = tmp_path / "f1.txt"
         file2 = tmp_path / "f2.txt"
         file1.write_text("1")
         file2.write_text("2")
 
-        test_console = Console()
-        result = format_paths([file1, file2], use_relative=True, base_path=None, console=test_console)
-        captured = capsys.readouterr()
-        assert "base_path was not provided to format_paths" in captured.out
+        test_console = Console(record=True)
+        result = format_paths(
+            [file1, file2],
+            use_relative=True,
+            base_path=None,
+            console=test_console,
+        )
+        output_text = test_console.export_text()
+        assert "base_path was not provided to format_paths" in output_text
 
         expected = "\n".join(
             sorted(
