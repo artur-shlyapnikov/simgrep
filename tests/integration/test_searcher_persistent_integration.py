@@ -288,3 +288,32 @@ class TestSearcherPersistentIntegration:
         )
         out_two = capsys.readouterr().out
         assert out_two.count("---") >= 2
+
+    def test_perform_persistent_search_paths_relative_output(
+        self,
+        populated_persistent_index_for_searcher: Tuple[
+            duckdb.DuckDBPyConnection,
+            usearch.index.Index,
+            SimgrepConfig,
+        ],
+        test_console: Console,
+        capsys: pytest.CaptureFixture,
+        persistent_search_test_data_path: Path,
+    ) -> None:
+        db_conn, vector_index_val, global_cfg = populated_persistent_index_for_searcher
+        query = "semantic search"  # matches file2.txt
+
+        perform_persistent_search(
+            query_text=query,
+            console=test_console,
+            db_conn=db_conn,
+            vector_index=vector_index_val,
+            global_config=global_cfg,
+            output_mode=OutputMode.paths,
+            k_results=2,
+            display_relative_paths=True,
+            base_path_for_relativity=persistent_search_test_data_path,
+            min_score=0.25,
+        )
+        captured = capsys.readouterr()
+        assert "file2.txt" in captured.out
