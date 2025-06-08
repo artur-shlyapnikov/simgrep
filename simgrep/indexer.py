@@ -31,6 +31,7 @@ from .processor import (
     extract_text_from_file,
     generate_embeddings,
     load_tokenizer,
+    load_embedding_model,
 )
 from .vector_store import load_persistent_index, save_persistent_index
 
@@ -68,11 +69,10 @@ class Indexer:
             raise IndexerError(f"Failed to load tokenizer: {e}") from e
 
         try:
-            self.console.print(f"Loading embedding model: '{self.config.embedding_model_name}'...")
-            # Import SentenceTransformer here or at the top of the file
-            from sentence_transformers import SentenceTransformer
-
-            self.embedding_model: SentenceTransformer = SentenceTransformer(self.config.embedding_model_name)
+            self.console.print(
+                f"Loading embedding model: '{self.config.embedding_model_name}'..."
+            )
+            self.embedding_model = load_embedding_model(self.config.embedding_model_name)
             self.console.print("Embedding model loaded.")
 
             self.console.print("Determining embedding dimension...")
