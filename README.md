@@ -41,6 +41,12 @@ Search both text and markdown files:
 simgrep search "apples" docs --pattern "*.txt" --pattern "*.md"
 ```
 
+Limit results to the top 3 matches:
+
+```bash
+simgrep search "apples" docs --top 3
+```
+
 ## Near Future Plans (Persistent Indexing - Phase 3)
 
 *   **Persistent Indexing:**

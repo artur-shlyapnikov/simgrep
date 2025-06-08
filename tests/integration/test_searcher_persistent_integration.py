@@ -249,3 +249,42 @@ class TestSearcherPersistentIntegration:
         assert (
             "No matching files found." in captured.out
         ), "Expected 'no results' message for paths mode."
+
+    def test_perform_persistent_search_respects_k_results(
+        self,
+        populated_persistent_index_for_searcher: Tuple[
+            duckdb.DuckDBPyConnection,
+            usearch.index.Index,
+            SimgrepConfig,
+        ],
+        test_console: Console,
+        capsys: pytest.CaptureFixture,
+    ) -> None:
+        db_conn, vector_index_val, global_cfg = populated_persistent_index_for_searcher
+        query = "simgrep"
+
+        perform_persistent_search(
+            query_text=query,
+            console=test_console,
+            db_conn=db_conn,
+            vector_index=vector_index_val,
+            global_config=global_cfg,
+            output_mode=OutputMode.show,
+            k_results=1,
+            min_score=0.1,
+        )
+        out_one = capsys.readouterr().out
+        assert out_one.count("---") == 1
+
+        perform_persistent_search(
+            query_text=query,
+            console=test_console,
+            db_conn=db_conn,
+            vector_index=vector_index_val,
+            global_config=global_cfg,
+            output_mode=OutputMode.show,
+            k_results=2,
+            min_score=0.1,
+        )
+        out_two = capsys.readouterr().out
+        assert out_two.count("---") >= 2
