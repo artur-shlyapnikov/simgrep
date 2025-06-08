@@ -307,3 +307,24 @@ class TestCliPersistentE2E:
         assert row_after is not None
         after_files = row_after[0]
         assert after_files == initial_files
+
+    def test_persistent_search_relative_paths(
+        self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path
+    ) -> None:
+        env_vars = {"HOME": str(temp_simgrep_home)}
+
+        run_simgrep_command(
+            ["index", str(sample_docs_dir_session), "--rebuild"],
+            env=env_vars,
+            input_str="y\n",
+        )
+
+        search_result = run_simgrep_command(
+            ["search", "apples", "--output", "paths", "--relative-paths"],
+            env=env_vars,
+            cwd=sample_docs_dir_session,
+        )
+        assert search_result.returncode == 0
+        assert "doc1.txt" in search_result.stdout
+        assert "subdir/doc_sub.txt" in search_result.stdout
+        assert str(sample_docs_dir_session) not in search_result.stdout
