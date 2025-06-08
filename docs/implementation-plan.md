@@ -413,6 +413,36 @@
 
 ---
 
+**Phase 7: Import Dependency Extraction**
+
+*Goal: Provide a way to output the full import tree for a given source file.*
+
+* **Deliverable 7.1: `dependency_analyzer.py`**
+  * **Goal:** Parse direct imports for supported languages.
+  * **Tasks:**
+        1. Create new module `dependency_analyzer.py` with language-specific parsers (Python `ast`, TypeScript/Java via `tree-sitter` or similar).
+        2. Implement `get_direct_imports(file_path: Path) -> List[Path]` resolving files within indexed paths.
+  * **Key Modules:** `simgrep/dependency_analyzer.py`
+  * **What to Test:** Unit tests on sample Python/TS/Java files verifying import detection.
+
+* **Deliverable 7.2: Recursive Import Graph**
+  * **Goal:** Build a dependency tree by following imports recursively.
+  * **Tasks:**
+        1. Add function `build_import_tree(file_path: Path, seen: Set[Path]) -> Dict[Path, List[Path]]`.
+        2. Handle cycles gracefully and limit traversal to project files.
+  * **Key Modules:** `dependency_analyzer.py`
+  * **What to Test:** Import graph generation on small code samples with nested imports.
+
+* **Deliverable 7.3: `imports` Output Mode**
+  * **Goal:** Expose import tree via the CLI.
+  * **Tasks:**
+        1. Add `imports` to `--output` Enum in `main.py` and `formatter.py`.
+        2. Format results as a readable tree or JSON list of paths.
+  * **Key Modules:** `simgrep/main.py`, `simgrep/formatter.py`, `simgrep/dependency_analyzer.py`
+  * **What to Test (E2E):** `simgrep search main.py --output imports` shows the transitive list of imports.
+
+---
+
 **Cross-Cutting Concerns (Throughout Development):**
 
 * **Version Control:** `git init` from D0.1. Commit after each deliverable.

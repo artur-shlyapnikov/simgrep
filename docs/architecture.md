@@ -34,6 +34,7 @@ The tool is designed to be intuitive for simple use cases ("semantic grep replac
 *   **Performance:** Fast indexing (especially incremental) and search.
 *   **Flexibility:** Support various file types and configurable embedding models.
 *   **Versatile Output Modes:** Cater to diverse workflows including RAG, code retrieval, and information discovery.
+*   **Import Graph Extraction:** Output complete dependency trees for supported programming languages (initially Python, TypeScript, Java).
 *   **Lean & Modern Stack:** Utilize `uv` for project management, `mypy` for strict typing, DuckDB for metadata, and USearch for vector indexing.
 
 **3. Non-Goals**
@@ -122,6 +123,12 @@ The tool is designed to be intuitive for simple use cases ("semantic grep replac
         *   File Parsing: Extracts text content from various file types.
         *   Text Chunking: Splits text into manageable, semantically coherent chunks using token-based strategies (configurable size and overlap).
         *   Embedding Generation: Converts text chunks into vector embeddings using the configured model.
+*   **Import Dependency Analyzer (`dependency_analyzer.py`):**
+    *   Technology: Python `ast`, TypeScript/Java parsers (`tree-sitter` or language-specific libraries).
+    *   Responsibilities:
+        *   Parse code files to detect `import` statements and resolve file/module paths.
+        *   Recursively walk dependencies to build a full import tree for supported languages (Python, TypeScript, Java).
+        *   Provide data structures for the Output Formatter to display or serialize the dependency graph.
 *   **Vector Store (USearch) (`vector_store.py`):**
     *   Technology: `usearch`.
     *   Responsibilities: Stores, manages, and searches dense vector embeddings. Persists index to disk. Provides unique labels for vectors.
@@ -192,6 +199,10 @@ The tool is designed to be intuitive for simple use cases ("semantic grep replac
         *   `end_char_offset INTEGER`
         *   `token_count INTEGER`
         *   `embedding_hash VARCHAR` (Hash of the embedding vector, for potential future use)
+    *   `file_dependencies`:
+        *   `file_id INTEGER REFERENCES indexed_files(file_id) ON DELETE CASCADE`
+        *   `imports_file_id INTEGER REFERENCES indexed_files(file_id) ON DELETE CASCADE`
+        *   `PRIMARY KEY (file_id, imports_file_id)`
 
 **5.4. Configuration Management**
 
@@ -280,6 +291,7 @@ The tool is designed to be intuitive for simple use cases ("semantic grep replac
     *   `copy-chunks`: Concatenates only the relevant chunk texts (with their source file path as a comment/header) and copies to clipboard.
     *   `json`: Outputs detailed results (file path, chunk text, score, offsets, metadata) as a JSON array.
     *   `count`: Shows number of matching chunks and files.
+    *   `imports`: Displays the full dependency tree for a single code file, recursively resolving imports for Python, TypeScript, and Java.
 
 **7. User Experience (UX) Design**
 
