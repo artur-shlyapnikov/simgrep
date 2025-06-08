@@ -1,10 +1,8 @@
 # simgrep
 
-**Work In Progress**
+`simgrep` is a command-line tool for semantic search in local files. It finds text snippets based on meaning, not just exact keywords.
 
-`simgrep` is a command-line tool for semantic search in local files. It aims to find text snippets based on meaning, not just exact keywords.
-
-It's designed for ephemeral (one-off) searches and will soon support persistent project-based indexing.
+It supports quick one-off searches and persistent indexing for a default project.
 
 See the [Architecture Document](docs/architecture.md) for more details.
 
@@ -51,18 +49,16 @@ Limit results to the top 3 matches:
 simgrep search "apples" docs --top 3
 ```
 
-## Near Future Plans (Persistent Indexing - Phase 3)
+## Persistent Indexing
 
-*   **Persistent Indexing:**
-    *   `simgrep index <path>`: Create or update a persistent index for a specified path (initially for a default project).
-    *   Store embeddings in a persistent USearch index on disk.
-    *   Store file and chunk metadata in a persistent DuckDB database on disk.
-*   **Search Persistent Index:**
-    *   `simgrep search "your query"`: Search against the default persistent index without specifying a path.
-*   **Configuration & Status:**
-    *   Basic global configuration (e.g., for database paths, default model).
-    *   `simgrep status`: Show information about the current state of the default index (e.g., number of files/chunks indexed).
-*   **Incremental Indexing:**
-    *   Efficiently update the index by only processing new or modified files.
+*   **Indexing:**
+    *   `simgrep index <path>` builds or updates the default project's index for the given path.
+    *   Embeddings are stored in a USearch index on disk and metadata in a DuckDB database.
+*   **Searching:**
+    *   `simgrep search "your query"` searches the default index when no path is provided.
+*   **Status:**
+    *   `simgrep status` shows how many files and chunks are indexed.
+*   **Incremental Updates:**
+    *   Only new or changed files are processed on subsequent indexing runs.
 
 (Further phases include named projects, more output modes like RAG, and advanced configuration as outlined in the [Implementation Plan](docs/implementation-plan.md) and [Architecture Document](docs/architecture.md)).
