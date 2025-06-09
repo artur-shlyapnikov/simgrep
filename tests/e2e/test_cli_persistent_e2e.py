@@ -117,7 +117,8 @@ class TestCliPersistentE2E:
         )
         assert index_result.returncode == 0
         assert "Successfully indexed" in index_result.stdout
-        assert "default project" in index_result.stdout
+        # Output refers to the project name in the format "project 'default'"
+        assert "project 'default'" in index_result.stdout
         # Check that .txt files were indexed (default pattern)
         assert "3 files processed" in index_result.stdout  # doc1.txt, doc2.txt, doc_sub.txt
         assert "0 errors encountered" in index_result.stdout
@@ -125,7 +126,8 @@ class TestCliPersistentE2E:
         # 2. Search the persistent index (show mode - default)
         search_result = run_simgrep_command(["search", "apples"], env=env_vars)
         assert search_result.returncode == 0
-        assert "Searching for: 'apples' in default persistent index" in search_result.stdout
+        # Search output also references the project explicitly
+        assert "Searching for: 'apples' in project 'default'" in search_result.stdout
         assert "doc1.txt" in search_result.stdout
         assert "doc2.txt" in search_result.stdout
         assert "markdown" not in search_result.stdout.lower()  # doc3.md should not be indexed by default
@@ -213,8 +215,11 @@ class TestCliPersistentE2E:
         # Do not run index command
         search_result = run_simgrep_command(["search", "anything"], env=env_vars)
         assert search_result.returncode == 1  # Should fail if index doesn't exist
-        assert "Default persistent index not found" in search_result.stdout
-        assert "Please run 'simgrep index <path>' first" in search_result.stdout
+        assert (
+            "Persistent index for project 'default' not found" in search_result.stdout
+            or "Default persistent index not found" in search_result.stdout
+        )
+        assert "Please run 'simgrep index <path>" in search_result.stdout
 
     def test_index_empty_directory(self, temp_simgrep_home: pathlib.Path, tmp_path: pathlib.Path) -> None:
         env_vars = {"HOME": str(temp_simgrep_home)}
@@ -235,6 +240,7 @@ class TestCliPersistentE2E:
             "The persistent vector index is empty" in search_result.stdout
             or "No relevant chunks found" in search_result.stdout
             or "Default persistent index not found" in search_result.stdout
+            or "Persistent index for project 'default' not found" in search_result.stdout
         )
 
     def test_index_non_txt_files_are_ignored_by_default(
