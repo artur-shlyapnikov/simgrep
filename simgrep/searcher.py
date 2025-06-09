@@ -36,7 +36,7 @@ def perform_persistent_search(
     if output_mode != OutputMode.json:
         console.print(f"  Embedding query: '[italic blue]{query_text}[/italic blue]' using model '{embedding_model_name}'...")
     try:
-        query_embedding = generate_embeddings(texts=[query_text], model_name=embedding_model_name)
+        query_embedding = generate_embeddings(texts=[query_text], model_name=embedding_model_name, is_query=True)
     except RuntimeError as e:
         console.print(f"[bold red]Failed to generate query embedding:[/bold red]\n  {e}")
         raise  # re-raise for main.py to catch and exit

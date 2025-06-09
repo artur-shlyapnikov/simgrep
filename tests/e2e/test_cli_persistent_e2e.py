@@ -126,15 +126,18 @@ class TestCliPersistentE2E:
         assert search_result.exit_code == 0
         # Search output also references the project explicitly
         assert "Searching for: 'apples' in project 'default'" in search_result.stdout
-        assert "doc1.txt" in search_result.stdout
-        assert "doc2.txt" in search_result.stdout
+        # Check for presence of filenames in the output, ignoring line wraps
+        clean_stdout = search_result.stdout.replace("\n", "").replace("\r", "")
+        assert "doc1.txt" in clean_stdout
+        assert "doc2.txt" in clean_stdout
         assert "markdown" not in search_result.stdout.lower()  # doc3.md should not be indexed by default
 
         # Check for a term present in a .txt file in a subdirectory
         search_banana_result = run_simgrep_command(["search", "bananas"])
         assert search_banana_result.exit_code == 0
-        assert "doc1.txt" in search_banana_result.stdout
-        assert os.path.join("subdir", "doc_sub.txt") in search_banana_result.stdout  # Check subpath
+        clean_banana_stdout = search_banana_result.stdout.replace("\n", "").replace("\r", "")
+        assert "doc1.txt" in clean_banana_stdout
+        assert os.path.join("subdir", "doc_sub.txt") in clean_banana_stdout  # Check subpath
 
     def test_index_and_search_persistent_paths_mode(self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path) -> None:
         # 1. Add path and index (assuming it's clean or wiped by indexer logic)
@@ -350,12 +353,14 @@ class TestCliPersistentE2E:
         assert "2 files processed" in index_result.stdout  # doc1.txt and util.txt
 
         # Search and verify
-        search_docs_res = run_simgrep_command(["search", "docs", "--project", "multi-path-proj", "--min-score", "0.2"])
+        search_docs_res = run_simgrep_command(["search", "docs", "--project", "multi-path-proj", "--min-score", "0.5"])
         assert search_docs_res.exit_code == 0
-        assert "doc1.txt" in search_docs_res.stdout
-        assert "util.txt" not in search_docs_res.stdout
+        clean_docs_stdout = search_docs_res.stdout.replace("\n", "").replace("\r", "")
+        assert "doc1.txt" in clean_docs_stdout
+        assert "util.txt" not in clean_docs_stdout
 
-        search_src_res = run_simgrep_command(["search", "src", "--project", "multi-path-proj", "--min-score", "0.2"])
+        search_src_res = run_simgrep_command(["search", "src", "--project", "multi-path-proj", "--min-score", "0.5"])
         assert search_src_res.exit_code == 0
-        assert "util.txt" in search_src_res.stdout
-        assert "doc1.txt" not in search_src_res.stdout
+        clean_src_stdout = search_src_res.stdout.replace("\n", "").replace("\r", "")
+        assert "util.txt" in clean_src_stdout
+        assert "doc1.txt" not in clean_src_stdout

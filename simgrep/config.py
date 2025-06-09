@@ -34,10 +34,8 @@ def load_or_create_global_config() -> SimgrepConfig:
     Raises:
         SimgrepConfigError: If the data directory cannot be created.
     """
-    # Start with a default config object.
     config = SimgrepConfig()
 
-    # ensure directories exist
     try:
         config.db_directory.mkdir(parents=True, exist_ok=True)
         config.default_project_data_dir.mkdir(parents=True, exist_ok=True)
@@ -46,23 +44,17 @@ def load_or_create_global_config() -> SimgrepConfig:
         print(error_message, file=sys.stderr)
         raise SimgrepConfigError(error_message) from e
 
-    # Load from TOML file if it exists, otherwise write the default.
     if config.config_file.exists():
         with open(config.config_file, "rb") as f:
             data = tomllib.load(f)
-        # Load data into our config object, overriding defaults.
         config = SimgrepConfig(**data)
     else:
-        # Write the default config to a new TOML file.
         _write_config(config)
 
-    # Ensure global DB and default project entry exist.
     global_db_path = config.db_directory / "global_metadata.duckdb"
     conn = connect_global_db(global_db_path)
     try:
         if get_project_by_name(conn, "default") is None:
-            # 'default' project does not exist in the DB, so create it.
-            # This happens on the very first run.
             default_proj_config = _create_default_project(config)
             insert_project(
                 conn,

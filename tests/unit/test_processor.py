@@ -326,7 +326,7 @@ class TestGenerateEmbeddings:
         texts = ["Hello world", "Simgrep is amazing"]
         try:
             # Use the pre-loaded model
-            embeddings = generate_embeddings(texts, model=sentence_transformer_model)
+            embeddings = generate_embeddings(texts, model_name=self.VALID_MODEL_NAME, model=sentence_transformer_model)
             assert isinstance(embeddings, np.ndarray)
             assert embeddings.shape[0] == len(texts)
             assert embeddings.shape[1] > 0  # embedding dimension
@@ -341,7 +341,7 @@ class TestGenerateEmbeddings:
         texts: List[str] = []
         try:
             # Use the pre-loaded model
-            embeddings = generate_embeddings(texts, model=sentence_transformer_model)
+            embeddings = generate_embeddings(texts, model_name=self.VALID_MODEL_NAME, model=sentence_transformer_model)
             assert isinstance(embeddings, np.ndarray)
             assert embeddings.shape[0] == 0
             if embeddings.ndim == 1:

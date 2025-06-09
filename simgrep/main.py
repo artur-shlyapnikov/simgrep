@@ -40,7 +40,13 @@ try:
         insert_project,
     )
     from .metadata_store import MetadataStore
-    from .models import ChunkData, OutputMode, ProjectConfig, SearchResult, SimgrepConfig
+    from .models import (
+        ChunkData,
+        OutputMode,
+        ProjectConfig,
+        SearchResult,
+        SimgrepConfig,
+    )
     from .processor import (
         ProcessedChunkInfo,
         chunk_text_by_tokens,
@@ -80,7 +86,13 @@ except ImportError:
             insert_project,
         )
         from simgrep.metadata_store import MetadataStore
-        from simgrep.models import ChunkData, OutputMode, ProjectConfig, SearchResult, SimgrepConfig
+        from simgrep.models import (
+            ChunkData,
+            OutputMode,
+            ProjectConfig,
+            SearchResult,
+            SimgrepConfig,
+        )
         from simgrep.processor import (
             ProcessedChunkInfo,
             chunk_text_by_tokens,
@@ -192,9 +204,15 @@ def search(
         help="Project name to use for persistent search.",
     ),
     file_filter: Optional[List[str]] = typer.Option(
-        None, "--file-filter", help="Filter results to files matching glob pattern(s) (e.g., '*.py'). Applied after semantic search."
+        None,
+        "--file-filter",
+        help="Filter results to files matching glob pattern(s) (e.g., '*.py'). Applied after semantic search.",
     ),
-    keyword: Optional[str] = typer.Option(None, "--keyword", help="Additionally filter result chunks by a case-insensitive keyword."),
+    keyword: Optional[str] = typer.Option(
+        None,
+        "--keyword",
+        help="Additionally filter result chunks by a case-insensitive keyword.",
+    ),
     min_score: float = typer.Option(
         0.1,
         "--min-score",
@@ -480,7 +498,9 @@ def search(
                 console.print(f"  Embedding query: '[italic blue]{query_text}[/italic blue]'...")
             query_embedding = generate_embeddings(
                 texts=[query_text],
+                model_name=global_simgrep_config.default_embedding_model_name,
                 model=embedding_model_instance,  # Pass pre-loaded model
+                is_query=True,
             )
             if not is_json_output:
                 console.print(f"    Query embedding shape: {query_embedding.shape}")
@@ -490,7 +510,9 @@ def search(
                 console.print(f"  Embedding {len(chunk_texts_for_embedding)} text chunk(s)...")
             chunk_embeddings = generate_embeddings(
                 texts=chunk_texts_for_embedding,
+                model_name=global_simgrep_config.default_embedding_model_name,
                 model=embedding_model_instance,  # Pass pre-loaded model
+                is_query=False,
             )
             if not is_json_output:
                 console.print(f"    Chunk embeddings shape: {chunk_embeddings.shape}")
@@ -684,7 +706,6 @@ def index(
         project_db_file = project_cfg.db_path
         project_usearch_file = project_cfg.usearch_index_path
 
-        # Prepare configuration for the Indexer
         indexer_config = IndexerConfig(
             project_name=project,
             db_path=project_db_file,
@@ -692,7 +713,7 @@ def index(
             embedding_model_name=project_cfg.embedding_model,
             chunk_size_tokens=global_simgrep_config.default_chunk_size_tokens,
             chunk_overlap_tokens=global_simgrep_config.default_chunk_overlap_tokens,
-            file_scan_patterns=["*.txt"],  # Initially hardcode to .txt, make configurable later
+            file_scan_patterns=["*.txt"],
         )
 
         indexer_instance = Indexer(config=indexer_config, console=console)

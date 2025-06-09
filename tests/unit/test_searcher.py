@@ -30,7 +30,7 @@ class MinimalStore:
         return []
 
 
-def fake_generate_embeddings(texts: list[str], model_name: str) -> np.ndarray:
+def fake_generate_embeddings(texts: list[str], model_name: str, is_query: bool = False) -> np.ndarray:
     return np.zeros((1, 3), dtype=np.float32)
 
 

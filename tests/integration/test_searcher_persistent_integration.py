@@ -189,9 +189,7 @@ class TestSearcherPersistentIntegration:
         )
         captured = capsys.readouterr()
         assert "Embedding query" in captured.out, "Initial 'Embedding query' print message missing."
-        assert (
-            "No relevant chunks found in the persistent index (after filtering)." in captured.out
-        ), "Expected 'no results' message for show mode."
+        assert "No relevant chunks found in the persistent index (after filtering)." in captured.out, "Expected 'no results' message for show mode."
 
     def test_perform_persistent_search_paths_mode_no_results(
         self,

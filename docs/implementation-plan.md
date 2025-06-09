@@ -316,23 +316,6 @@
   * **Key Modules:** `simgrep/formatter.py`, `simgrep/main.py`, `simgrep/models.py`
   * **What to Test (E2E):** `simgrep search "test" --output json > results.json`. Validate JSON.
 
-* **Deliverable 5.2: `copy-chunks` and `copy-files` Output Modes**
-  * **Goal:** Easy copying of results to clipboard.
-  * **Tasks:**
-        1. `uv add pyperclip`
-        2. In `formatter.py`, implement `format_copy_chunks(results: List[ChunkData])` and `format_copy_files(results: List[ChunkData])`. These will use `pyperclip.copy()`.
-        3. Add to `--output` Enum.
-  * **Key Modules:** `simgrep/formatter.py`, `simgrep/main.py`
-  * **What to Test (E2E):** Verify clipboard content after running these commands.
-
-* **Deliverable 5.3: Basic `rag` Output Mode (Context Formatting Only)**
-  * **Goal:** Prepare context for an LLM, print to stdout.
-  * **Tasks:**
-        1. In `formatter.py`, implement `format_rag_context(results: List[ChunkData], question: Optional[str]) -> str`.
-        2. Add "rag" to `--output` Enum. Add optional `--question <text>` to `search` command.
-  * **Key Modules:** `simgrep/formatter.py`, `simgrep/main.py`
-  * **What to Test (E2E):** `simgrep search "info" --output rag --question "Summarize?"` prints formatted prompt.
-
 * **Deliverable 5.4: `count` Output Mode**
   * **Goal:** Show counts of matching chunks and files.
   * **Tasks:**
@@ -448,14 +431,10 @@
 
 ---
 
-**Cross-Cutting Concerns (Throughout Development):**
-
-* **Version Control:** `git init` from D0.1. Commit after each deliverable.
-* **Testing:**
-  * **Unit Tests (`tests/unit/`):** For pure functions in `processor.py`, `formatter.py`, config loading logic. Start adding these from Phase 2.
-  * **Integration Tests (`tests/integration/`):** For interactions between components (e.g., `indexer` correctly writing to `metadata_db` and `vector_store`). Start from Phase 3.
-  * **E2E Tests (`tests/e2e/`):** Shell scripts or Python scripts using `subprocess` to run CLI commands and assert stdout/stderr/file outputs. Continuously expand.
-* **Documentation:**
-  * Update `README.md` with installation, basic usage as features are added.
-  * Ensure `simgrep <command> --help` is always informative.
-* **Linting/Formatting:** Run `uv run ruff format .` and `uv run ruff check --fix .` regularly.
+* **Deliverable x: Basic `rag` Output Mode (Context Formatting Only)**
+  * **Goal:** Prepare context for an LLM, print to stdout.
+  * **Tasks:**
+        1. In `formatter.py`, implement `format_rag_context(results: List[ChunkData], question: Optional[str]) -> str`.
+        2. Add "rag" to `--output` Enum. Add optional `--question <text>` to `search` command.
+  * **Key Modules:** `simgrep/formatter.py`, `simgrep/main.py`
+  * **What to Test (E2E):** `simgrep search "info" --output rag --question "Summarize?"` prints formatted prompt.

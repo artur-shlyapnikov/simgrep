@@ -129,8 +129,9 @@ def chunk_text_by_tokens(
 
 def generate_embeddings(
     texts: List[str],
-    model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
+    model_name: str,
     model: Optional[SentenceTransformer] = None,
+    is_query: bool = False,
 ) -> np.ndarray:
     """
     Generates vector embeddings for a list of input texts using a specified
@@ -138,8 +139,11 @@ def generate_embeddings(
 
     Args:
         texts: A list of strings to embed.
-        model_name: The name of the sentence-transformer model to use if `model` is not provided.
-        model: An optional pre-loaded SentenceTransformer model instance.
+        model_name: The name of the sentence-transformer model to use.
+        model: An optional pre-loaded SentenceTransformer model instance. If not provided,
+               the model will be loaded using the model_name.
+        is_query: If True, indicates that the texts are search queries, which may
+                  trigger model-specific prompting (e.g., for Qwen models).
 
     Returns:
         A NumPy array of embeddings.
@@ -150,11 +154,16 @@ def generate_embeddings(
     try:
         active_model: SentenceTransformer
         if model is None:
-            active_model = SentenceTransformer(model_name)
+            active_model = load_embedding_model(model_name)
         else:
             active_model = model
 
-        embeddings = active_model.encode(texts, show_progress_bar=False)
+        encode_kwargs = {}
+        if is_query and "qwen" in model_name.lower():
+            # Use the instruction prompt for queries with Qwen models
+            encode_kwargs["prompt_name"] = "query"
+
+        embeddings = active_model.encode(texts, show_progress_bar=False, **encode_kwargs)
         return embeddings
     except Exception as e:
         # Determine which model name to report in the error

@@ -69,7 +69,7 @@ class Indexer:
             self.console.print("Embedding model loaded.")
 
             self.console.print("Determining embedding dimension...")
-            dummy_emb = generate_embeddings(["simgrep_test_string"], model=self.embedding_model)
+            dummy_emb = generate_embeddings(["simgrep_test_string"], model_name=self.config.embedding_model_name, model=self.embedding_model, is_query=False)
             if dummy_emb.ndim != 2 or dummy_emb.shape[0] == 0 or dummy_emb.shape[1] == 0:
                 raise IndexerError(
                     f"Could not determine embedding dimension using model {self.config.embedding_model_name}. Dummy embedding shape: {dummy_emb.shape}"
@@ -160,7 +160,7 @@ class Indexer:
     def _generate_embeddings_for_chunks(self, chunks: List[ProcessedChunkInfo]) -> np.ndarray:
         """Generate embeddings for chunk texts."""
         chunk_texts = [c["text"] for c in chunks]
-        return generate_embeddings(chunk_texts, model=self.embedding_model)
+        return generate_embeddings(chunk_texts, model_name=self.config.embedding_model_name, model=self.embedding_model, is_query=False)
 
     def _store_processed_chunks(
         self,
