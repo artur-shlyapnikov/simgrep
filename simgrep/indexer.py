@@ -185,7 +185,7 @@ class Indexer:
                 {
                     "file_id": file_id,
                     "usearch_label": current_label,
-                    "chunk_text_snippet": chunk_info["text"][:255],
+                    "chunk_text": chunk_info["text"],
                     "start_char_offset": chunk_info["start_char_offset"],
                     "end_char_offset": chunk_info["end_char_offset"],
                     "token_count": chunk_info["token_count"],

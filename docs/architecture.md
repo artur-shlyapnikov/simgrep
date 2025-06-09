@@ -182,22 +182,20 @@ The tool is designed to be intuitive for simple use cases ("semantic grep replac
         *   `absolute_path VARCHAR UNIQUE NOT NULL`
         *   `added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`
     *   `indexed_files`:
-        *   `file_id INTEGER PRIMARY KEY`
-        *   `project_id INTEGER REFERENCES projects(project_id) ON DELETE CASCADE`
-        *   `file_path VARCHAR NOT NULL` (Relative to an indexed_path root, or absolute)
+        *   `file_id BIGINT PRIMARY KEY`
+        *   `file_path VARCHAR NOT NULL UNIQUE` (Absolute, resolved path)
         *   `content_hash VARCHAR NOT NULL` (SHA256 of file content)
         *   `file_size_bytes BIGINT`
         *   `last_modified_os TIMESTAMP`
-        *   `last_indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`
-        *   `UNIQUE (project_id, file_path)`
+        *   `last_indexed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`
     *   `text_chunks`:
-        *   `chunk_id INTEGER PRIMARY KEY`
-        *   `file_id INTEGER REFERENCES indexed_files(file_id) ON DELETE CASCADE`
+        *   `chunk_id BIGINT PRIMARY KEY`
+        *   `file_id BIGINT REFERENCES indexed_files(file_id)`
         *   `usearch_label BIGINT UNIQUE NOT NULL` (Links to USearch vector)
-        *   `chunk_text_snippet VARCHAR` (First N chars for quick preview, full text retrievable from file)
-        *   `start_char_offset INTEGER`
-        *   `end_char_offset INTEGER`
-        *   `token_count INTEGER`
+        *   `chunk_text TEXT NOT NULL` (The full text of the chunk)
+        *   `start_char_offset INTEGER NOT NULL`
+        *   `end_char_offset INTEGER NOT NULL`
+        *   `token_count INTEGER NOT NULL`
         *   `embedding_hash VARCHAR` (Hash of the embedding vector, for potential future use)
     *   `file_dependencies`:
         *   `file_id INTEGER REFERENCES indexed_files(file_id) ON DELETE CASCADE`
@@ -373,4 +371,3 @@ The tool is designed to be intuitive for simple use cases ("semantic grep replac
 *   **Linting/Formatting:** `Ruff`
 *   **Type Checking:** `mypy` (strictest)
 *   **Clipboard:** `pyperclip`
-

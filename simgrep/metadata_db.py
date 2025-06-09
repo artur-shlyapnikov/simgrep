@@ -157,11 +157,11 @@ def retrieve_chunk_for_display(conn: duckdb.DuckDBPyConnection, chunk_id: int) -
 
 def retrieve_chunk_details_persistent(conn: duckdb.DuckDBPyConnection, usearch_label: int) -> Optional[Tuple[str, pathlib.Path, int, int]]:
     """
-    Retrieves chunk details (snippet, file path, offsets) from persistent tables
+    Retrieves chunk details (full text, file path, offsets) from persistent tables
     using the usearch_label.
     """
     query = """
-        SELECT tc.chunk_text_snippet, f.file_path, tc.start_char_offset, tc.end_char_offset
+        SELECT tc.chunk_text, f.file_path, tc.start_char_offset, tc.end_char_offset
         FROM text_chunks tc
         JOIN indexed_files f ON tc.file_id = f.file_id
         WHERE tc.usearch_label = ?;
@@ -170,10 +170,10 @@ def retrieve_chunk_details_persistent(conn: duckdb.DuckDBPyConnection, usearch_l
     try:
         result = conn.execute(query, [usearch_label]).fetchone()
         if result:
-            text_snippet, file_path_str, start_offset, end_offset = result
+            text_content, file_path_str, start_offset, end_offset = result
             logger.debug(f"Chunk with usearch_label {usearch_label} found: {file_path_str}")
             return (
-                str(text_snippet),
+                str(text_content),
                 pathlib.Path(file_path_str),
                 int(start_offset),
                 int(end_offset),
@@ -222,7 +222,7 @@ def _create_persistent_tables_if_not_exist(conn: duckdb.DuckDBPyConnection) -> N
                 chunk_id BIGINT PRIMARY KEY DEFAULT nextval('text_chunks_chunk_id_seq'),
                 file_id BIGINT NOT NULL REFERENCES indexed_files(file_id),
                 usearch_label BIGINT UNIQUE NOT NULL,
-                chunk_text_snippet VARCHAR NOT NULL, -- store empty string if no snippet
+                chunk_text TEXT NOT NULL,
                 start_char_offset INTEGER NOT NULL,
                 end_char_offset INTEGER NOT NULL,
                 token_count INTEGER NOT NULL,
@@ -340,7 +340,7 @@ def batch_insert_text_chunks(conn: duckdb.DuckDBPyConnection, chunk_records: Lis
             (
                 record["file_id"],
                 record["usearch_label"],
-                record["chunk_text_snippet"],
+                record["chunk_text"],
                 record["start_char_offset"],
                 record["end_char_offset"],
                 record["token_count"],
@@ -356,7 +356,7 @@ def batch_insert_text_chunks(conn: duckdb.DuckDBPyConnection, chunk_records: Lis
             cursor.executemany(
                 """
                 INSERT INTO text_chunks (
-                    file_id, usearch_label, chunk_text_snippet,
+                    file_id, usearch_label, chunk_text,
                     start_char_offset, end_char_offset, token_count, embedding_hash
                 ) VALUES (?, ?, ?, ?, ?, ?, ?);
                 """,

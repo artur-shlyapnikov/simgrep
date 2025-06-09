@@ -105,7 +105,7 @@ class TestPersistentMetadataDB:
             assert (
                 text_chunks_schema.get("usearch_label") == "BIGINT"
             )  # not null unique
-            assert text_chunks_schema.get("chunk_text_snippet") == "VARCHAR"  # not null
+            assert text_chunks_schema.get("chunk_text") == "VARCHAR"  # not null
             assert text_chunks_schema.get("start_char_offset") == "INTEGER"  # not null
             assert text_chunks_schema.get("end_char_offset") == "INTEGER"  # not null
             assert text_chunks_schema.get("token_count") == "INTEGER"  # not null
@@ -201,7 +201,7 @@ class TestPersistentMetadataDB:
             # insert into text_chunks referencing file1_id
             conn.execute(
                 "INSERT INTO text_chunks "
-                "(file_id, usearch_label, chunk_text_snippet, "
+                "(file_id, usearch_label, chunk_text, "
                 "start_char_offset, end_char_offset, token_count) "
                 "VALUES (?, ?, ?, ?, ?, ?)",
                 [file1_id, 1001, "snippet1", 0, 10, 5],
@@ -216,7 +216,7 @@ class TestPersistentMetadataDB:
                 ),
             ):
                 conn.execute(
-                    "INSERT INTO text_chunks (file_id, usearch_label, chunk_text_snippet, "
+                    "INSERT INTO text_chunks (file_id, usearch_label, chunk_text, "
                     "start_char_offset, end_char_offset, token_count) "
                     "VALUES (?, ?, ?, ?, ?, ?)",
                     [9999, 1002, "snippet2", 0, 10, 5],
@@ -245,7 +245,7 @@ class TestPersistentMetadataDB:
                 ),
             ):
                 insert_sql = (
-                    "INSERT INTO text_chunks (file_id, usearch_label, chunk_text_snippet, "
+                    "INSERT INTO text_chunks (file_id, usearch_label, chunk_text, "
                     "start_char_offset, end_char_offset, token_count) "
                     "VALUES (?, ?, ?, ?, ?, ?)"
                 )
@@ -275,7 +275,7 @@ class TestPersistentMetadataDB:
             assert chunk_count == 1
 
             retrieved_snippet_result = conn_reopened.execute(
-                "SELECT chunk_text_snippet FROM text_chunks WHERE usearch_label = ?",
+                "SELECT chunk_text FROM text_chunks WHERE usearch_label = ?",
                 [1001],
             ).fetchone()
             assert retrieved_snippet_result is not None
