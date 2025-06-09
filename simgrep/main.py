@@ -192,6 +192,11 @@ def search(
             "Only used with '--output paths'."
         ),
     ),
+    project: str = typer.Option(
+        "default",
+        "--project",
+        help="Project name to use for persistent search.",
+    ),
 ) -> None:
     """Searches for a query within files.
 
@@ -200,18 +205,23 @@ def search(
     persistent index is searched instead.
     """
     global_simgrep_config: SimgrepConfig = load_or_create_global_config()  # Load config early
+    project_cfg = global_simgrep_config.projects.get(project)
+    if project_cfg is None:
+        console.print(f"[bold red]Error: Project '{project}' not found.[/bold red]")
+        raise typer.Exit(code=1)
 
     if path_to_search is None:
         # --- Persistent Search ---
-        console.print(f"Searching for: '[bold blue]{query_text}[/bold blue]' in [magenta]default persistent index[/magenta]")
-        default_project_db_file = global_simgrep_config.default_project_data_dir / "metadata.duckdb"
-        default_project_usearch_file = global_simgrep_config.default_project_data_dir / "index.usearch"
+        console.print(
+            f"Searching for: '[bold blue]{query_text}[/bold blue]' in project '[magenta]{project}[/magenta]'"
+        )
+        project_db_file = project_cfg.db_path
+        project_usearch_file = project_cfg.usearch_index_path
 
-        if not default_project_db_file.exists() or not default_project_usearch_file.exists():
+        if not project_db_file.exists() or not project_usearch_file.exists():
             console.print(
-                f"[bold yellow]Warning: Default persistent index not found at "
-                f"'{global_simgrep_config.default_project_data_dir}'.[/bold yellow]\n"
-                f"Please run 'simgrep index <path>' first to create an index."
+                f"[bold yellow]Warning: Persistent index for project '{project}' not found at '{project_cfg.db_path.parent}'.[/bold yellow]\n"
+                f"Please run 'simgrep index <path> --project {project}' first to create an index."
             )
             if output == OutputMode.paths:
                 console.print("No matching files found.")
@@ -222,13 +232,13 @@ def search(
         persistent_vector_index: Optional[usearch.index.Index] = None
         try:
             console.print("  Loading persistent database...")
-            persistent_store = MetadataStore(persistent=True, db_path=default_project_db_file)
+            persistent_store = MetadataStore(persistent=True, db_path=project_db_file)
             console.print("  Loading persistent vector index...")
-            persistent_vector_index = load_persistent_index(default_project_usearch_file)
+            persistent_vector_index = load_persistent_index(project_usearch_file)
 
             if persistent_vector_index is None:
                 console.print(
-                    f"[bold red]Error: Vector index file loaded as None from {default_project_usearch_file}. "
+                    f"[bold red]Error: Vector index file loaded as None from {project_usearch_file}. "
                     "Index might be corrupted or empty after a failed write.[/bold red]"
                 )
                 raise typer.Exit(code=1)
@@ -573,19 +583,23 @@ def index(
     rebuild: bool = typer.Option(
         False,
         "--rebuild",
-        help="Wipe existing data and rebuild the default project index from scratch.",
+        help="Wipe existing data and rebuild the project's index from scratch.",
+    ),
+    project: str = typer.Option(
+        "default",
+        "--project",
+        help="Project name to index.",
     ),
 ) -> None:
     """
-    Creates or updates a persistent index for the specified path in the default project.
-    If --rebuild is provided, all existing data for the default project will be deleted
-    before indexing. Without --rebuild, indexing will update the project incrementally.
+    Creates or updates a persistent index for the specified path within a project.
+    If --rebuild is provided, existing data for that project will be deleted before indexing.
     """
-    console.print(f"Starting indexing for path: [green]{path_to_index}[/green]")
+    console.print(f"Starting indexing for path: [green]{path_to_index}[/green] into project '[magenta]{project}[/magenta]'")
     if rebuild:
-        console.print("[bold yellow]Warning: This will wipe and rebuild the default project's index.[/bold yellow]")
+        console.print(f"[bold yellow]Warning: This will wipe and rebuild the '{project}' project index.[/bold yellow]")
         if not typer.confirm(
-            "Are you sure you want to wipe and rebuild the default project index?",
+            f"Are you sure you want to wipe and rebuild the '{project}' project index?",
             default=False,
         ):
             console.print("Aborted indexing.")
@@ -593,16 +607,19 @@ def index(
 
     try:
         global_simgrep_config: SimgrepConfig = load_or_create_global_config()
+        project_cfg = global_simgrep_config.projects.get(project)
+        if project_cfg is None:
+            console.print(f"[bold red]Error: Project '{project}' not found.[/bold red]")
+            raise typer.Exit(code=1)
 
-        # Construct paths for the default project
-        default_project_db_file = global_simgrep_config.default_project_data_dir / "metadata.duckdb"
-        default_project_usearch_file = global_simgrep_config.default_project_data_dir / "index.usearch"
+        project_db_file = project_cfg.db_path
+        project_usearch_file = project_cfg.usearch_index_path
 
         # Prepare configuration for the Indexer
         indexer_config = IndexerConfig(
-            project_name="default_project",  # For logging/context
-            db_path=default_project_db_file,
-            usearch_index_path=default_project_usearch_file,
+            project_name=project,
+            db_path=project_db_file,
+            usearch_index_path=project_usearch_file,
             embedding_model_name=global_simgrep_config.default_embedding_model_name,
             chunk_size_tokens=global_simgrep_config.default_chunk_size_tokens,
             chunk_overlap_tokens=global_simgrep_config.default_chunk_overlap_tokens,
@@ -612,7 +629,7 @@ def index(
         indexer_instance = Indexer(config=indexer_config, console=console)
         indexer_instance.index_path(target_path=path_to_index, wipe_existing=rebuild)
 
-        console.print(f"[bold green]Successfully indexed '{path_to_index}' into the default project.[/bold green]")
+        console.print(f"[bold green]Successfully indexed '{path_to_index}' into project '{project}'.[/bold green]")
 
     except SimgrepConfigError as e:
         console.print(f"[bold red]Configuration Error:[/bold red]\n  {e}")
