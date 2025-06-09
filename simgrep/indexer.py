@@ -23,15 +23,15 @@ from .exceptions import (
 )
 
 # assuming these are in .exceptions
-from .metadata_store import PersistentMetadataStore, BaseMetadataStore
+from .metadata_store import PersistentMetadataStore
 from .processor import (
     ProcessedChunkInfo,
     calculate_file_hash,
     chunk_text_by_tokens,
     extract_text_from_file,
     generate_embeddings,
-    load_tokenizer,
     load_embedding_model,
+    load_tokenizer,
 )
 from .vector_store import load_persistent_index, save_persistent_index
 

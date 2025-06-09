@@ -40,7 +40,6 @@ try:
     from .metadata_store import (
         EphemeralMetadataStore,
         PersistentMetadataStore,
-        BaseMetadataStore,
     )
     from .models import ChunkData, OutputMode, SimgrepConfig  # OutputMode moved here
     from .processor import (
@@ -84,7 +83,6 @@ except ImportError:
         from simgrep.metadata_store import (
             EphemeralMetadataStore,
             PersistentMetadataStore,
-            BaseMetadataStore,
         )
         from simgrep.models import ChunkData, OutputMode, SimgrepConfig
         from simgrep.processor import (
