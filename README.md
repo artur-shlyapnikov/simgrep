@@ -2,66 +2,106 @@
 
 `simgrep` is a command-line tool for semantic search in local files. It finds text snippets based on meaning, not just exact keywords.
 
-It supports quick one-off searches and persistent indexing. A default project is created automatically, and you can manage additional projects.
+## Installation
 
-See the [Architecture Document](docs/architecture.md) for more details.
-
-## Use Cases
-See [use-case diagrams](docs/use-cases.md) for ephemeral search, persistent indexing, and RAG-based answering.
-
-
-## Current Capabilities (Ephemeral Search)
-
-When you run `simgrep "your query" ./path/to/search`:
-
-*   **Searches:**
-    *   A single file.
-    *   Recursively through a directory. Use `--pattern` to specify glob(s) for files (defaults to `*.txt`). Pass multiple `--pattern` options to include several patterns.
-*   **Processing:**
-    *   Extracts text from files using `unstructured`.
-    *   Chunks text using token-based strategies (configurable model, size, overlap - defaults used for now).
-    *   Generates embeddings for your query and text chunks (uses `sentence-transformers`).
-    *   Manages chunk metadata (source file, offsets) using an in-memory DuckDB.
-*   **Finds & Displays:**
-    *   Performs semantic similarity search using an in-memory USearch index.
-    *   Outputs results showing the relevant file, similarity score, and the text chunk (`--output show`, default).
-    *   Lists unique file paths containing matches (`--output paths`).
-    *   Display a full dependency tree for a code file (`--output imports`).
-    *   Limit the number of matches returned with `--top N` (alias `--k`).
-
-### Examples
-
-Search only markdown files:
+From source:
 
 ```bash
-simgrep search "apples" docs --pattern "*.md"
+# recommended: use uv to create a virtual environment
+uv venv
+source .venv/bin/activate
+
+# Install the package
+uv pip install .
 ```
 
-Search both text and markdown files:
+For development, use `make install` to install in editable mode with dev dependencies.
+
+## How it works
+
+`simgrep` works in two main modes:
+
+* Quick search. For one-off searches. It indexes files in memory, performs the search, and discards the index.
+* Projects. For searching the same set of files repeatedly (like a codebase). It creates a persistent index on disk, allowing for fast subsequent searches and incremental updates.
+
+## Usage examples
+
+### Quick search
+
+This is the fastest way to get started. `simgrep` will build a temporary index for your search path.
+
+**Search a directory for a concept:**
+Find text related to "database connection errors" in your project's `src` folder.
 
 ```bash
-simgrep search "apples" docs --pattern "*.txt" --pattern "*.md"
+simgrep search "database connection errors" ./src
 ```
 
-Limit results to the top 3 matches:
+**Filter by file type:**
+Search only within Python files. Use `--pattern` for glob patterns.
 
 ```bash
-simgrep search "apples" docs --top 3
+simgrep search "async function examples" ./my_project --pattern "*.py"
 ```
 
-## Persistent Indexing
+You can specify multiple patterns:
 
-*   **Indexing:**
-    *   `simgrep index <path> [--project NAME]` builds or updates a project's index. If `--project` is omitted, the default project is used.
-    *   Embeddings are stored in a USearch index on disk and metadata in a DuckDB database.
-*   **Searching:**
-    *   `simgrep search "your query" [--project NAME]` searches the chosen project's index (default project if omitted).
-*   **Projects:**
-    *   `simgrep project create <name>` creates a new project directory and database.
-    *   `simgrep project list` shows all available projects.
-*   **Status:**
-    *   `simgrep status` shows how many files and chunks are indexed for the default project.
-*   **Incremental Updates:**
-    *   Only new or changed files are processed on subsequent indexing runs.
+```bash
+simgrep search "api documentation" ./docs --pattern "*.md" --pattern "*.rst"
+```
 
-(Further phases include additional output modes like RAG and more configuration options. See the [Implementation Plan](docs/implementation-plan.md) and [Architecture Document](docs/architecture.md) for details.)
+**Change output format:**
+Instead of showing matching text, just list the files that contain matches.
+
+```bash
+simgrep search "user authentication flow" ./docs --output paths
+```
+
+**Limit the number of results:**
+Get the top 3 most relevant results. Use `--top` or its alias `--k`.
+
+```bash
+simgrep search "database connection pool" ./configs --top 3
+```
+
+### Working with Projects
+
+Use projects to create a reusable index for a directory you search often, like a large codebase or your notes. This is much faster for subsequent searches.
+
+**1. Create a project:**
+First, create a named project for your codebase.
+
+```bash
+simgrep project create my-codebase
+```
+
+**2. Add paths to the project:**
+Tell `simgrep` which directories to include in this project. You can add multiple paths.
+
+```bash
+simgrep project add-path ./my-codebase/backend --project my-codebase
+simgrep project add-path ./my-codebase/docs --project my-codebase
+```
+
+**3. Index your project:**
+Build the index. This may take some time for the first run.
+
+```bash
+simgrep index --project my-codebase
+```
+
+*Note: If `--project` is omitted, `simgrep` uses a `default` project.*
+
+**4. Search your project:**
+Now you can search without specifying a path. `simgrep` will use your project's persistent index.
+
+```bash
+simgrep search "user session management" --project my-codebase
+```
+
+**5. Update the index:**
+When you change your files, run `index` again. It will incrementally update the index by only processing new and modified files, which is very fast.
+
+```bash
+simgrep index --project my-codebase
+```
