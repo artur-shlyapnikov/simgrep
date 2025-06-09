@@ -1,5 +1,5 @@
 import os
-import pathlib  # use pathlib consistently
+import pathlib
 from typing import Any, Dict, List, Optional, Tuple
 
 import duckdb

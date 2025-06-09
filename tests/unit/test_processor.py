@@ -85,7 +85,6 @@ def file_with_unicode_name(tmp_path: Path) -> Path:
     return file_path
 
 
-# tests for extract_text_from_file
 class TestExtractTextFromFile:
     def test_extract_from_existing_file(self, temp_text_file: Path) -> None:
         expected_content = "Hello World.\nThis is a test file.\nSimgrep is cool."
@@ -156,9 +155,8 @@ class TestExtractTextFromFile:
             pytest.fail(f"extract_text_from_file failed on UTF-8 file with BOM: {e}")
 
 
-# tests for load_tokenizer
 class TestLoadTokenizer:
-    VALID_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"  # a common small model
+    VALID_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
     INVALID_MODEL_NAME = "this-model-does-not-exist-ever-12345"
 
     def test_load_valid_tokenizer(self) -> None:
@@ -184,9 +182,8 @@ class TestLoadTokenizer:
             load_tokenizer(self.INVALID_MODEL_NAME)
 
 
-# tests for chunk_text_by_tokens
 class TestChunkTextByTokens:
-    MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"  # for consistency
+    MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
     @pytest.fixture(scope="class")
     def tokenizer(self) -> PreTrainedTokenizerBase:
@@ -226,7 +223,7 @@ class TestChunkTextByTokens:
         # this assertion might be fragile if the model tokenizes differently than expected.
         # for this test, we assume it tokenizes as one token per word here.
 
-        chunks = chunk_text_by_tokens(text, tokenizer, len(actual_token_ids), 0)  # no overlap
+        chunks = chunk_text_by_tokens(text, tokenizer, len(actual_token_ids), 0)
         assert len(chunks) == 1
         # all-minilm-l6-v2 is uncased, so output text will be lowercased.
         assert chunks[0]["text"].strip() == text.strip().lower()
@@ -348,7 +345,6 @@ class TestChunkTextByTokens:
         assert chunk3["token_count"] == 2
 
 
-# tests for generate_embeddings
 class TestGenerateEmbeddings:
     VALID_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
     INVALID_MODEL_NAME = "this-model-does-not-exist-ever-12345"
@@ -368,7 +364,6 @@ class TestGenerateEmbeddings:
 
         texts = ["Hello world", "Simgrep is amazing"]
         try:
-            # Use the pre-loaded model
             embeddings = generate_embeddings(
                 texts,
                 model_name=self.VALID_MODEL_NAME,
@@ -376,7 +371,7 @@ class TestGenerateEmbeddings:
             )
             assert isinstance(embeddings, np.ndarray)
             assert embeddings.shape[0] == len(texts)
-            assert embeddings.shape[1] > 0  # embedding dimension
+            assert embeddings.shape[1] > 0
         except RuntimeError as e:
             pytest.fail(f"Failed to generate embeddings with a valid model: {e}")
 
@@ -387,7 +382,6 @@ class TestGenerateEmbeddings:
 
         texts: List[str] = []
         try:
-            # Use the pre-loaded model
             embeddings = generate_embeddings(
                 texts,
                 model_name=self.VALID_MODEL_NAME,

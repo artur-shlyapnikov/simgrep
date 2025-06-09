@@ -1,4 +1,4 @@
-import sys  # For printing to stderr in case of config error
+import sys
 import warnings
 from importlib.metadata import version
 from pathlib import Path
@@ -21,7 +21,6 @@ from rich.progress import (
     TextColumn,
 )
 
-# Assuming simgrep is installed or path is correctly set for sibling imports
 try:
     from .config import (
         DEFAULT_K_RESULTS,
@@ -40,13 +39,11 @@ try:
         get_index_counts,
         get_project_by_name,
         get_project_config,
-        insert_project,
     )
     from .metadata_store import MetadataStore
     from .models import (
         ChunkData,
         OutputMode,
-        ProjectConfig,
         SearchResult,
         SimgrepConfig,
     )
@@ -57,10 +54,14 @@ try:
         generate_embeddings,
         load_tokenizer,
     )
-    from .searcher import perform_persistent_search  # Added perform_persistent_search
-    from .utils import find_project_root, gather_files_to_process, get_project_name_from_local_config
+    from .searcher import perform_persistent_search
+    from .utils import (
+        find_project_root,
+        gather_files_to_process,
+        get_project_name_from_local_config,
+    )
     from .vector_store import (
-        VectorStoreError,  # Added VectorStoreError
+        VectorStoreError,
         create_inmemory_index,
         load_persistent_index,
         search_inmemory_index,
@@ -78,7 +79,12 @@ except ImportError:
             initialize_global_config,
             load_global_config,
         )
-        from simgrep.formatter import format_count, format_json, format_paths, format_show_basic
+        from simgrep.formatter import (
+            format_count,
+            format_json,
+            format_paths,
+            format_show_basic,
+        )
         from simgrep.indexer import Indexer, IndexerConfig, IndexerError
         from simgrep.metadata_db import (
             MetadataDBError,
@@ -89,13 +95,11 @@ except ImportError:
             get_index_counts,
             get_project_by_name,
             get_project_config,
-            insert_project,
         )
         from simgrep.metadata_store import MetadataStore
         from simgrep.models import (
             ChunkData,
             OutputMode,
-            ProjectConfig,
             SearchResult,
             SimgrepConfig,
         )
@@ -106,9 +110,13 @@ except ImportError:
             generate_embeddings,
             load_tokenizer,
         )
-        from simgrep.searcher import perform_persistent_search  # Added
-        from simgrep.utils import find_project_root, gather_files_to_process, get_project_name_from_local_config
-        from simgrep.vector_store import (  # Added
+        from simgrep.searcher import perform_persistent_search
+        from simgrep.utils import (
+            find_project_root,
+            gather_files_to_process,
+            get_project_name_from_local_config,
+        )
+        from simgrep.vector_store import (
             VectorStoreError,
             create_inmemory_index,
             load_persistent_index,
@@ -117,7 +125,6 @@ except ImportError:
     else:
         raise
 
-# Suppress specific warnings from sentence_transformers if needed, or handle them appropriately
 warnings.filterwarnings(
     "ignore",
     category=FutureWarning,
@@ -125,7 +132,6 @@ warnings.filterwarnings(
 )
 
 
-# Initialize Typer app and Rich console
 app = typer.Typer(
     name="simgrep",
     help="A command-line tool for semantic search in local files.",
@@ -188,7 +194,10 @@ def init(
     if global_init:
         config_for_path = SimgrepConfig()
         if config_for_path.config_file.exists():
-            if not typer.confirm(f"Global config file already exists at {config_for_path.config_file}. Overwrite?", default=False):
+            if not typer.confirm(
+                f"Global config file already exists at {config_for_path.config_file}. Overwrite?",
+                default=False,
+            ):
                 console.print("Aborted.")
                 raise typer.Abort()
 
@@ -315,10 +324,8 @@ def search(
     persistent index is searched instead.
     """
     is_machine_readable_output = output in (OutputMode.json, OutputMode.paths)
-    is_json_output = output == OutputMode.json
 
     if path_to_search is None:
-        # --- Persistent Search ---
         try:
             global_simgrep_config = load_global_config()
         except SimgrepConfigError as e:
@@ -455,7 +462,12 @@ def search(
             BarColumn(),
             TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
         ]
-        with Progress(*progress_columns, console=console, transient=False, disable=is_machine_readable_output) as progress:
+        with Progress(
+            *progress_columns,
+            console=console,
+            transient=False,
+            disable=is_machine_readable_output,
+        ) as progress:
             processing_task = progress.add_task("Processing files...", total=len(files_to_process))
             for file_idx, file_path_item in enumerate(files_to_process):
                 progress.update(processing_task, description=f"Processing: {file_path_item.name}")
@@ -703,7 +715,14 @@ def search(
 
             if not ephemeral_results:
                 if output == OutputMode.paths:
-                    console.print(format_paths(file_paths=[], use_relative=False, base_path=None, console=console))
+                    console.print(
+                        format_paths(
+                            file_paths=[],
+                            use_relative=False,
+                            base_path=None,
+                            console=console,
+                        )
+                    )
                 elif output == OutputMode.json:
                     console.print("[]")
                 elif output == OutputMode.count_results:

@@ -11,16 +11,15 @@ from simgrep.metadata_store import MetadataStore
 
 @pytest.fixture
 def persistent_db_path(tmp_path: pathlib.Path) -> pathlib.Path:
-    """provides a path for a persistent DB file within the temp directory."""
+    """Provides a path for a persistent DB file within the temp directory."""
     return tmp_path / "persistent_dbs" / "test_simgrep.duckdb"
 
 
 def get_table_schema(conn: duckdb.DuckDBPyConnection, table_name: str) -> Dict[str, str]:
-    """helper to get table schema (column name -> type)."""
+    """Helper to get table schema (column name -> type)."""
     # duckdb's describe returns more info; pragma table_info is sqlite-like.
     # for duckdb, using describe is idiomatic.
     columns_info = conn.execute(f"DESCRIBE {table_name};").fetchall()
-    # example row from describe: ('file_id', 'INTEGER', 'NO', None, None, 'YES')
     # (column_name, column_type, null, key, default, extra)
     return {info[0]: info[1] for info in columns_info}
 
@@ -55,7 +54,7 @@ def get_table_constraints(conn: duckdb.DuckDBPyConnection, table_name: str) -> L
 
 class TestPersistentMetadataDB:
     def test_connect_persistent_db_new_creation(self, persistent_db_path: pathlib.Path) -> None:
-        """test creating a new persistent DB: file and tables are created."""
+        """Test creating a new persistent DB: file and tables are created."""
         assert not persistent_db_path.exists()
         assert not persistent_db_path.parent.exists()
 
@@ -66,58 +65,53 @@ class TestPersistentMetadataDB:
             assert isinstance(conn, duckdb.DuckDBPyConnection)
             assert persistent_db_path.exists()
             assert persistent_db_path.is_file()
-            assert persistent_db_path.parent.exists()  # check directory creation
+            assert persistent_db_path.parent.exists()
 
-            # verify tables exist
             tables = conn.execute("SHOW TABLES;").fetchall()
             table_names = [table[0] for table in tables]
             assert "indexed_files" in table_names
             assert "text_chunks" in table_names
 
-            # verify indexed_files schema
             indexed_files_schema = get_table_schema(conn, "indexed_files")
-            assert indexed_files_schema.get("file_id") == "BIGINT"  # pk (bigserial becomes bigint)
-            assert indexed_files_schema.get("file_path") == "VARCHAR"  # not null unique
-            assert indexed_files_schema.get("content_hash") == "VARCHAR"  # not null
+            assert indexed_files_schema.get("file_id") == "BIGINT"
+            assert indexed_files_schema.get("file_path") == "VARCHAR"
+            assert indexed_files_schema.get("content_hash") == "VARCHAR"
             assert indexed_files_schema.get("file_size_bytes") == "BIGINT"
             assert indexed_files_schema.get("last_modified_os") == "TIMESTAMP"
-            assert indexed_files_schema.get("last_indexed_at") == "TIMESTAMP"  # not null default
+            assert indexed_files_schema.get("last_indexed_at") == "TIMESTAMP"
 
-            # verify text_chunks schema
             text_chunks_schema = get_table_schema(conn, "text_chunks")
-            assert text_chunks_schema.get("chunk_id") == "BIGINT"  # pk (bigserial becomes bigint)
-            assert text_chunks_schema.get("file_id") == "BIGINT"  # not null fk
-            assert text_chunks_schema.get("usearch_label") == "BIGINT"  # not null unique
-            assert text_chunks_schema.get("chunk_text") == "VARCHAR"  # not null
-            assert text_chunks_schema.get("start_char_offset") == "INTEGER"  # not null
-            assert text_chunks_schema.get("end_char_offset") == "INTEGER"  # not null
-            assert text_chunks_schema.get("token_count") == "INTEGER"  # not null
-            assert text_chunks_schema.get("embedding_hash") == "VARCHAR"  # nullable
+            assert text_chunks_schema.get("chunk_id") == "BIGINT"
+            assert text_chunks_schema.get("file_id") == "BIGINT"
+            assert text_chunks_schema.get("usearch_label") == "BIGINT"
+            assert text_chunks_schema.get("chunk_text") == "VARCHAR"
+            assert text_chunks_schema.get("start_char_offset") == "INTEGER"
+            assert text_chunks_schema.get("end_char_offset") == "INTEGER"
+            assert text_chunks_schema.get("token_count") == "INTEGER"
+            assert text_chunks_schema.get("embedding_hash") == "VARCHAR"
 
         finally:
             if store:
                 store.close()
 
     def test_connect_persistent_db_existing_db(self, persistent_db_path: pathlib.Path) -> None:
-        """test connecting to an existing DB: tables are still there, no errors."""
-        # first, create the db
+        """Test connecting to an existing DB: tables are still there, no errors."""
         store1 = None
         try:
             store1 = MetadataStore(persistent=True, db_path=persistent_db_path)
             conn1 = store1.conn
-            # add some dummy data to ensure it persists
             conn1.execute(
                 "INSERT INTO indexed_files (file_path, content_hash, file_size_bytes) VALUES (?, ?, ?)",
                 ["/test/file.txt", "hash123", 100],
             )
-            conn1.commit()  # duckdb auto-commits by default unless in explicit transaction
+            # duckdb auto-commits by default unless in explicit transaction
+            conn1.commit()
         finally:
             if store1:
                 store1.close()
 
         assert persistent_db_path.exists()
 
-        # connect again
         store2 = None
         try:
             store2 = MetadataStore(persistent=True, db_path=persistent_db_path)
@@ -127,7 +121,6 @@ class TestPersistentMetadataDB:
             assert "indexed_files" in table_names
             assert "text_chunks" in table_names
 
-            # check if data is still there
             result = conn2.execute("SELECT COUNT(*) FROM indexed_files WHERE file_path = '/test/file.txt';").fetchone()
             assert result is not None
             count = result[0]
@@ -137,13 +130,13 @@ class TestPersistentMetadataDB:
                 store2.close()
 
     def test_connect_persistent_db_directory_creation_failure(self, persistent_db_path: pathlib.Path) -> None:
-        """test handling of OSError if DB directory creation fails."""
+        """Test handling of OSError if DB directory creation fails."""
         # to simulate this, we make the parent of the db_path a file, so mkdir fails.
         parent_dir_of_db_parent = persistent_db_path.parent.parent
         parent_dir_of_db_parent.mkdir(parents=True, exist_ok=True)
 
-        path_that_should_be_dir = persistent_db_path.parent  # e.g., .../persistent_dbs/
-        path_that_should_be_dir.touch()  # create it as a file
+        path_that_should_be_dir = persistent_db_path.parent
+        path_that_should_be_dir.touch()
 
         with pytest.raises(
             MetadataDBError,
@@ -152,13 +145,12 @@ class TestPersistentMetadataDB:
             MetadataStore(persistent=True, db_path=persistent_db_path)
 
     def test_data_persistence_and_fk_constraint(self, persistent_db_path: pathlib.Path) -> None:
-        """test inserting data, checking FK constraints, and persistence."""
+        """Test inserting data, checking FK constraints, and persistence."""
         store = None
         try:
             store = MetadataStore(persistent=True, db_path=persistent_db_path)
             conn = store.conn
 
-            # insert into indexed_files
             file_path1 = "/path/to/file1.txt"
             content_hash1 = "abc"
             conn.execute(
@@ -169,7 +161,6 @@ class TestPersistentMetadataDB:
             assert file1_id_result is not None
             file1_id = file1_id_result[0]
 
-            # insert into text_chunks referencing file1_id
             conn.execute(
                 "INSERT INTO text_chunks "
                 "(file_id, usearch_label, chunk_text, "
@@ -188,7 +179,7 @@ class TestPersistentMetadataDB:
                     "start_char_offset, end_char_offset, token_count) "
                     "VALUES (?, ?, ?, ?, ?, ?)",
                     [9999, 1002, "snippet2", 0, 10, 5],
-                )  # 9999 is a non-existent file_id
+                )
 
             # try inserting duplicate file_path (unique constraint violation)
             with pytest.raises(
@@ -198,7 +189,7 @@ class TestPersistentMetadataDB:
                 conn.execute(
                     "INSERT INTO indexed_files (file_path, content_hash, file_size_bytes) " "VALUES (?, ?, ?)",
                     [file_path1, "def", 2048],
-                )  # same file_path1
+                )
 
             # try inserting duplicate usearch_label (unique constraint violation)
             with pytest.raises(
@@ -215,7 +206,6 @@ class TestPersistentMetadataDB:
             if store:
                 store.close()
 
-        # reconnect and verify data
         store_reopened = None
         try:
             store_reopened = MetadataStore(persistent=True, db_path=persistent_db_path)

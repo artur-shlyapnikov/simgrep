@@ -36,12 +36,16 @@ def run_simgrep_command(
     if env:
         console.print(f"[dim]Env overrides: {env}[/dim]")
 
+    # Set a wide terminal for consistent output in tests, preventing line wrapping.
+    e2e_env = env.copy() if env else {}
+    e2e_env.setdefault("COLUMNS", "200")
+
     original_cwd = None
     if cwd:
         original_cwd = pathlib.Path.cwd()
         os.chdir(cwd)
 
-    result = runner.invoke(app, args, input=input_str, env=env)
+    result = runner.invoke(app, args, input=input_str, env=e2e_env)
 
     if original_cwd:
         os.chdir(original_cwd)
@@ -219,7 +223,7 @@ class TestCliPersistentE2E:
 
     def test_search_persistent_no_matches(self, populated_persistent_index: None) -> None:
         search_result = run_simgrep_command(["search", "nonexistentqueryxyz"])
-        assert search_result.exit_code == 0  # Should exit cleanly
+        assert search_result.exit_code == 0
         # Accept either 'No relevant chunks found' or only low scores in output
         assert "No relevant chunks found" in search_result.stdout or "Score:" in search_result.stdout
 
@@ -244,7 +248,7 @@ class TestCliPersistentE2E:
         # After global init, should fail because index is missing
         run_simgrep_command(["init", "--global"])
         search_result_after_init = run_simgrep_command(["search", "anything"])
-        assert search_result_after_init.exit_code == 1  # Should fail if index doesn't exist
+        assert search_result_after_init.exit_code == 1
         assert "Persistent index for project 'default' not found" in search_result_after_init.stdout
         assert "Please run 'simgrep index" in search_result_after_init.stdout
 
@@ -266,7 +270,7 @@ class TestCliPersistentE2E:
         assert "No relevant chunks found" in search_result.stdout
 
     def test_index_non_txt_files_are_ignored_by_default(self, populated_persistent_index: None) -> None:
-        search_result = run_simgrep_command(["search", "markdown"])  # "markdown" is in doc3.md
+        search_result = run_simgrep_command(["search", "markdown"])
         assert search_result.exit_code == 0
         # Accept either 'No relevant chunks found' or only low scores in output
         assert "No relevant chunks found" in search_result.stdout or "Score:" in search_result.stdout

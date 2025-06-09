@@ -29,7 +29,6 @@ def test_project_create_and_list(tmp_path: Path) -> None:
         init_result = runner.invoke(app, ["init", "--global"])
         assert init_result.exit_code == 0
 
-        # create project
         result = runner.invoke(app, ["project", "create", "myproj"])
         assert result.exit_code == 0
 

@@ -102,16 +102,14 @@ class TestIndexerPersistent:
             # noprocess.py should be skipped due to pattern.
             file_count_result = db_conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()
             assert file_count_result is not None
-            # Expecting 3 files: file1.txt, file2.md, subdir/file3.txt
             # The exact count depends on how empty files are handled by the indexer logic for DB insertion.
             # If empty files are added to indexed_files, count would be 4.
             # Current Indexer._process_and_index_file skips chunking for empty files but still adds to DB.
             assert file_count_result[0] == 4
 
-            # Check text_chunks table: should have some chunks
             chunk_count_result = db_conn.execute("SELECT COUNT(*) FROM text_chunks;").fetchone()
             assert chunk_count_result is not None
-            assert chunk_count_result[0] > 0  # Expecting some chunks from the non-empty files
+            assert chunk_count_result[0] > 0
 
             # Verify specific file paths
             expected_file1_path = str((sample_files_dir / "file1.txt").resolve())
@@ -140,10 +138,9 @@ class TestIndexerPersistent:
             if store:
                 store.close()
 
-        # Verify vector index content (basic checks)
         vector_index = load_persistent_index(indexer_config.usearch_index_path)
         assert vector_index is not None
-        assert len(vector_index) > 0  # Should have embeddings for the chunks
+        assert len(vector_index) > 0
 
     def test_index_path_single_file(
         self,
@@ -166,7 +163,7 @@ class TestIndexerPersistent:
             db_conn = store.conn
             file_count_result = db_conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()
             assert file_count_result is not None
-            assert file_count_result[0] == 1  # Only one file indexed
+            assert file_count_result[0] == 1
 
             chunk_count_result = db_conn.execute("SELECT COUNT(*) FROM text_chunks;").fetchone()
             assert chunk_count_result is not None
