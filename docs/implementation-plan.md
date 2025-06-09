@@ -262,11 +262,11 @@
   * **Tasks:**
         1. In `main.py`, define a new Typer command group `project`.
         2. Implement `project create <name>`:
-            * Validate that `<name>` is not already present in the global `projects` table.
+            *Validate that `<name>` is not already present in the global `projects` table.
             * Determine the project's data directory: `~/.config/simgrep/projects/<name>/`.
-            * Create this directory and paths for `metadata.duckdb` and `index.usearch`.
+            *Create this directory and paths for `metadata.duckdb` and `index.usearch`.
             * Insert a row into the global `projects` table with these paths and the default embedding model.
-            * Add a matching entry to `config.toml` under `projects` (use helper in `config.py`).
+            *Add a matching entry to `config.toml` under `projects` (use helper in `config.py`).
         3. Implement `project list`:
             * Query `projects` table via `metadata_db.get_all_projects()` (new helper) and print project names.
             * Mark the default project in the output for clarity.
@@ -289,7 +289,7 @@
         3. `simgrep search "termA" --project projA` (uses projA's index).
         4. `simgrep search "termA"` (uses default project's index, likely no results for termA).
 
-* **Deliverable 4.7: `simgrep project add-path <path> [--project <name>]`**
+* **Deliverable 4.7: `simgrep project add-path <path> [--project <name>]`** ✅
   * **Goal:** Associate multiple directory/file paths with a project for indexing.
   * **Tasks:**
         1. Add `project add-path <path_to_add>` subcommand.

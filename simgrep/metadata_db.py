@@ -526,7 +526,8 @@ def connect_global_db(path: pathlib.Path) -> duckdb.DuckDBPyConnection:
             """
             CREATE TABLE IF NOT EXISTS project_indexed_paths (
                 project_id BIGINT REFERENCES projects(project_id),
-                path VARCHAR NOT NULL
+                path VARCHAR NOT NULL,
+                PRIMARY KEY (project_id, path)
             );
             """
         )
@@ -573,6 +574,20 @@ def get_project_by_name(conn: duckdb.DuckDBPyConnection, project_name: str) -> O
         return None
     except duckdb.Error as e:
         raise MetadataDBError("Failed to fetch project") from e
+
+
+def add_project_path(conn: duckdb.DuckDBPyConnection, project_id: int, path: str) -> None:
+    """Adds an indexed path to a project, ignoring duplicates."""
+    try:
+        # ON CONFLICT is supported in DuckDB >= 0.8.0. pyproject.toml requires >= 0.10.0
+        conn.execute(
+            "INSERT INTO project_indexed_paths (project_id, path) VALUES (?, ?) ON CONFLICT DO NOTHING;",
+            [project_id, path],
+        )
+        logger.info(f"Added/ensured path '{path}' is associated with project_id {project_id}.")
+    except duckdb.Error as e:
+        logger.error(f"DuckDB error adding path '{path}' to project {project_id}: {e}")
+        raise MetadataDBError(f"Failed to add path to project {project_id}") from e
 
 
 def get_all_projects(conn: duckdb.DuckDBPyConnection) -> List[str]:

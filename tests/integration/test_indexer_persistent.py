@@ -83,9 +83,9 @@ class TestIndexerPersistent:
         assert not indexer_config.usearch_index_path.exists()
 
         try:
-            indexer.index_path(target_path=sample_files_dir, wipe_existing=True)
+            indexer.run_index(target_paths=[sample_files_dir], wipe_existing=True)
         except IndexerError as e:
-            pytest.fail(f"indexer.index_path failed: {e}")
+            pytest.fail(f"indexer.run_index failed: {e}")
 
         # Verify database and index files were created
         assert indexer_config.db_path.exists()
@@ -155,7 +155,7 @@ class TestIndexerPersistent:
         indexer = Indexer(config=indexer_config, console=test_console)
         single_file_to_index = sample_files_dir / "file1.txt"
 
-        indexer.index_path(target_path=single_file_to_index, wipe_existing=True)
+        indexer.run_index(target_paths=[single_file_to_index], wipe_existing=True)
 
         assert indexer_config.db_path.exists()
         assert indexer_config.usearch_index_path.exists()
@@ -186,7 +186,7 @@ class TestIndexerPersistent:
         sample_files_dir: pathlib.Path,
     ) -> None:
         indexer = Indexer(config=indexer_config, console=test_console)
-        indexer.index_path(target_path=sample_files_dir, wipe_existing=True)
+        indexer.run_index(target_paths=[sample_files_dir], wipe_existing=True)
 
         file_to_check = sample_files_dir / "file1.txt"
 
@@ -216,7 +216,7 @@ class TestIndexerPersistent:
         empty_dir = tmp_path / "empty_test_dir"
         empty_dir.mkdir()
 
-        indexer.index_path(target_path=empty_dir, wipe_existing=True)
+        indexer.run_index(target_paths=[empty_dir], wipe_existing=True)
 
         # DB and Index files should still be created (or wiped and recreated empty)
         assert indexer_config.db_path.exists()
@@ -253,10 +253,10 @@ class TestIndexerPersistent:
         indexer = Indexer(config=indexer_config, console=test_console)
         non_existent_path = tmp_path / "does_not_exist_dir"
 
-        # Indexer.index_path itself doesn't check existence, assumes valid path from CLI.
+        # Indexer.run_index itself doesn't check existence, assumes valid path from CLI.
         # If it proceeds, rglob on non-existent path is fine, returns no files.
         # So, it should behave like an empty directory.
-        indexer.index_path(target_path=non_existent_path, wipe_existing=True)
+        indexer.run_index(target_paths=[non_existent_path], wipe_existing=True)
 
         store_tmp = None
         try:
@@ -289,7 +289,7 @@ class TestIndexerPersistent:
         sample_files_dir: pathlib.Path,
     ) -> None:
         indexer = Indexer(config=indexer_config, console=test_console)
-        indexer.index_path(target_path=sample_files_dir, wipe_existing=True)
+        indexer.run_index(target_paths=[sample_files_dir], wipe_existing=True)
 
         file1_path = (sample_files_dir / "file1.txt").resolve()
         file2_path = (sample_files_dir / "file2.md").resolve()
@@ -320,7 +320,7 @@ class TestIndexerPersistent:
         index_size_before = len(idx_before)
 
         indexer2 = Indexer(config=indexer_config, console=test_console)
-        indexer2.index_path(target_path=sample_files_dir, wipe_existing=False)
+        indexer2.run_index(target_paths=[sample_files_dir], wipe_existing=False)
 
         store_after = MetadataStore(persistent=True, db_path=indexer_config.db_path)
         try:
@@ -355,7 +355,7 @@ class TestIndexerPersistent:
         new_hash1 = calculate_file_hash(file1_path)
 
         indexer3 = Indexer(config=indexer_config, console=test_console)
-        indexer3.index_path(target_path=sample_files_dir, wipe_existing=False)
+        indexer3.run_index(target_paths=[sample_files_dir], wipe_existing=False)
 
         store_final = MetadataStore(persistent=True, db_path=indexer_config.db_path)
         try:

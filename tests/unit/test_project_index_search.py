@@ -32,9 +32,12 @@ def test_project_index_and_search(tmp_path: Path) -> None:
         result = runner.invoke(app, ["project", "create", "projA"])
         assert result.exit_code == 0
 
+        result = runner.invoke(app, ["project", "add-path", str(data_dir), "--project", "projA"])
+        assert result.exit_code == 0
+
         result = runner.invoke(
             app,
-            ["index", str(data_dir), "--project", "projA", "--rebuild"],
+            ["index", "--project", "projA", "--rebuild"],
             input="y\n",
         )
         assert result.exit_code == 0

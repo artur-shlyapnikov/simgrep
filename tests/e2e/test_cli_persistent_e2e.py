@@ -103,10 +103,13 @@ class TestCliPersistentE2E:
         With CliRunner, env vars are passed directly. No need for a separate dict.
         The monkeypatch in temp_simgrep_home handles home dir isolation.
         """
+        # 1. Add path to default project
+        add_path_result = run_simgrep_command(["project", "add-path", str(sample_docs_dir_session), "--project", "default"])
+        assert add_path_result.exit_code == 0
 
-        # 1. Index the sample documents
+        # 2. Index the sample documents
         index_result = run_simgrep_command(
-            ["index", str(sample_docs_dir_session), "--rebuild"],
+            ["index", "--project", "default", "--rebuild"],
             input_str="y\n",
         )
         assert index_result.exit_code == 0
@@ -117,7 +120,7 @@ class TestCliPersistentE2E:
         assert "3 files processed" in index_result.stdout  # doc1.txt, doc2.txt, doc_sub.txt
         assert "0 errors encountered" in index_result.stdout
 
-        # 2. Search the persistent index (show mode - default)
+        # 3. Search the persistent index (show mode - default)
         search_result = run_simgrep_command(["search", "apples"])
         assert search_result.exit_code == 0
         # Search output also references the project explicitly
@@ -133,9 +136,10 @@ class TestCliPersistentE2E:
         assert str(pathlib.Path("subdir") / "doc_sub.txt") in search_banana_result.stdout  # Check subpath
 
     def test_index_and_search_persistent_paths_mode(self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path) -> None:
-        # 1. Index (assuming it's clean or wiped by indexer logic)
+        # 1. Add path and index (assuming it's clean or wiped by indexer logic)
+        run_simgrep_command(["project", "add-path", str(sample_docs_dir_session)])
         run_simgrep_command(
-            ["index", str(sample_docs_dir_session), "--rebuild"],
+            ["index", "--rebuild"],
             input_str="y\n",
         )  # Ensure index is fresh
 
@@ -150,8 +154,9 @@ class TestCliPersistentE2E:
         assert "doc2.txt" in search_result.stdout
 
     def test_search_persistent_no_matches(self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path) -> None:
+        run_simgrep_command(["project", "add-path", str(sample_docs_dir_session)])
         run_simgrep_command(
-            ["index", str(sample_docs_dir_session), "--rebuild"],
+            ["index", "--rebuild"],
             input_str="y\n",
         )
 
@@ -165,8 +170,9 @@ class TestCliPersistentE2E:
         temp_simgrep_home: pathlib.Path,
         sample_docs_dir_session: pathlib.Path,
     ) -> None:
+        run_simgrep_command(["project", "add-path", str(sample_docs_dir_session)])
         run_simgrep_command(
-            ["index", str(sample_docs_dir_session), "--rebuild"],
+            ["index", "--rebuild"],
             input_str="y\n",
         )
 
@@ -201,7 +207,8 @@ class TestCliPersistentE2E:
         empty_dir = tmp_path / "empty_docs_for_e2e"
         empty_dir.mkdir()
 
-        index_result = run_simgrep_command(["index", str(empty_dir), "--rebuild"], input_str="y\n")
+        run_simgrep_command(["project", "add-path", str(empty_dir)])
+        index_result = run_simgrep_command(["index", "--rebuild"], input_str="y\n")
         assert index_result.exit_code == 0
         assert "No files found to index" in index_result.stdout
         assert "0 files processed" in index_result.stdout  # Or similar message indicating no work done
@@ -212,8 +219,9 @@ class TestCliPersistentE2E:
         assert "Persistent index for project 'default' not found" in search_result.stdout
 
     def test_index_non_txt_files_are_ignored_by_default(self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path) -> None:
+        run_simgrep_command(["project", "add-path", str(sample_docs_dir_session)])
         index_result = run_simgrep_command(
-            ["index", str(sample_docs_dir_session), "--rebuild"],
+            ["index", "--rebuild"],
             input_str="y\n",
         )
         assert index_result.exit_code == 0
@@ -226,8 +234,9 @@ class TestCliPersistentE2E:
         assert "No relevant chunks found" in search_result.stdout or "Score:" in search_result.stdout
 
     def test_search_top_option_limits_results(self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path) -> None:
+        run_simgrep_command(["project", "add-path", str(sample_docs_dir_session)])
         run_simgrep_command(
-            ["index", str(sample_docs_dir_session), "--rebuild"],
+            ["index", "--rebuild"],
             input_str="y\n",
         )
 
@@ -240,8 +249,9 @@ class TestCliPersistentE2E:
         assert top2_result.stdout.count("File:") >= 2
 
     def test_index_prompt_decline_prevents_reindexing(self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path) -> None:
+        run_simgrep_command(["project", "add-path", str(sample_docs_dir_session)])
         run_simgrep_command(
-            ["index", str(sample_docs_dir_session), "--rebuild"],
+            ["index", "--rebuild"],
             input_str="y\n",
         )
 
@@ -253,7 +263,7 @@ class TestCliPersistentE2E:
         initial_files = row_initial[0]
 
         decline_result = run_simgrep_command(
-            ["index", str(sample_docs_dir_session), "--rebuild"],
+            ["index", "--rebuild"],
             input_str="n\n",
         )
         assert decline_result.exit_code == 1
@@ -267,8 +277,9 @@ class TestCliPersistentE2E:
         assert after_files == initial_files
 
     def test_persistent_search_relative_paths(self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path) -> None:
+        run_simgrep_command(["project", "add-path", str(sample_docs_dir_session)])
         run_simgrep_command(
-            ["index", str(sample_docs_dir_session), "--rebuild"],
+            ["index", "--rebuild"],
             input_str="y\n",
         )
 
@@ -280,3 +291,41 @@ class TestCliPersistentE2E:
         assert "doc1.txt" in search_result.stdout
         assert "subdir/doc_sub.txt" in search_result.stdout
         assert str(sample_docs_dir_session) not in search_result.stdout
+
+    def test_project_add_path_and_index(self, temp_simgrep_home: pathlib.Path, tmp_path: pathlib.Path) -> None:
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "doc1.txt").write_text("content from docs")
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+        (src_dir / "util.txt").write_text("text from src")
+
+        # Create project
+        create_result = run_simgrep_command(["project", "create", "multi-path-proj"])
+        assert create_result.exit_code == 0
+
+        # Add paths
+        add_docs_result = run_simgrep_command(["project", "add-path", str(docs_dir), "--project", "multi-path-proj"])
+        assert add_docs_result.exit_code == 0
+        add_src_result = run_simgrep_command(["project", "add-path", str(src_dir), "--project", "multi-path-proj"])
+        assert add_src_result.exit_code == 0
+
+        # Check that adding the same path again does nothing and succeeds
+        add_src_again_result = run_simgrep_command(["project", "add-path", str(src_dir), "--project", "multi-path-proj"])
+        assert add_src_again_result.exit_code == 0
+
+        # Index the project
+        index_result = run_simgrep_command(["index", "--project", "multi-path-proj", "--rebuild"], input_str="y\n")
+        assert index_result.exit_code == 0
+        assert "2 files processed" in index_result.stdout  # doc1.txt and util.txt
+
+        # Search and verify
+        search_docs_res = run_simgrep_command(["search", "docs", "--project", "multi-path-proj", "--min-score", "0.2"])
+        assert search_docs_res.exit_code == 0
+        assert "doc1.txt" in search_docs_res.stdout
+        assert "util.txt" not in search_docs_res.stdout
+
+        search_src_res = run_simgrep_command(["search", "src", "--project", "multi-path-proj", "--min-score", "0.2"])
+        assert search_src_res.exit_code == 0
+        assert "util.txt" in search_src_res.stdout
+        assert "doc1.txt" not in search_src_res.stdout

@@ -90,7 +90,7 @@ def populated_persistent_index_for_searcher(
     indexer_console = Console(quiet=True)
     indexer = Indexer(config=indexer_config, console=indexer_console)
 
-    indexer.index_path(target_path=persistent_search_test_data_path, wipe_existing=True)
+    indexer.run_index(target_paths=[persistent_search_test_data_path], wipe_existing=True)
 
     store = MetadataStore(persistent=True, db_path=db_file)
     vector_index = load_persistent_index(usearch_file)

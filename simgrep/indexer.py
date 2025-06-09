@@ -307,7 +307,7 @@ class Indexer:
 
         return num_chunks_this_file, errors_this_file
 
-    def index_path(self, target_path: pathlib.Path, wipe_existing: bool) -> None:
+    def run_index(self, target_paths: List[pathlib.Path], wipe_existing: bool) -> None:
         total_files_processed = 0
         total_chunks_indexed = 0
         total_errors = 0
@@ -318,23 +318,26 @@ class Indexer:
                 raise IndexerError("Data stores were not properly initialized (db_conn or usearch_index is None).")
 
             # file discovery
-            files_to_process: List[pathlib.Path] = []
-            if target_path.is_file():
-                files_to_process.append(target_path)
-            elif target_path.is_dir():
-                self.console.print(f"Scanning directory '{target_path}' for files matching patterns: {self.config.file_scan_patterns}...")
-                found_files_set = set()
-                for pattern in self.config.file_scan_patterns:
-                    for file_p in target_path.rglob(pattern):
-                        if file_p.is_file():
-                            found_files_set.add(file_p.resolve())
-                files_to_process = sorted(list(found_files_set))
+            files_to_process: List[pathlib.Path]
+            all_found_files_set = set()
+            self.console.print(f"Scanning {len(target_paths)} path(s) for files matching patterns: {self.config.file_scan_patterns}...")
+            for target_path in target_paths:
+                if not target_path.exists():
+                    self.console.print(f"[yellow]Warning: Path '{target_path}' does not exist. Skipping.[/yellow]")
+                    continue
+                if target_path.is_file():
+                    all_found_files_set.add(target_path.resolve())
+                elif target_path.is_dir():
+                    for pattern in self.config.file_scan_patterns:
+                        for file_p in target_path.rglob(pattern):
+                            if file_p.is_file():
+                                all_found_files_set.add(file_p.resolve())
+            files_to_process = sorted(list(all_found_files_set))
 
             if not files_to_process:
-                self.console.print(f"[yellow]No files found to index at '{target_path}' with current patterns.[/yellow]")
-                # removed early return here to allow summary to print
+                self.console.print(f"[yellow]No files found to index in any of the provided paths with current patterns.[/yellow]")
             else:
-                self.console.print(f"Found {len(files_to_process)} file(s) to process.")
+                self.console.print(f"Found {len(files_to_process)} total file(s) to process.")
 
             existing_records: Dict[pathlib.Path, Tuple[int, str]] = {}
             if not wipe_existing:

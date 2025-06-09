@@ -30,6 +30,7 @@ try:
     from .indexer import Indexer, IndexerConfig, IndexerError
     from .metadata_db import (
         MetadataDBError,
+        add_project_path,
         connect_global_db,
         get_all_projects,
         get_index_counts,
@@ -193,6 +194,13 @@ def search(
         None, "--file-filter", help="Filter results to files matching glob pattern(s) (e.g., '*.py'). Applied after semantic search."
     ),
     keyword: Optional[str] = typer.Option(None, "--keyword", help="Additionally filter result chunks by a case-insensitive keyword."),
+    min_score: float = typer.Option(
+        0.1,
+        "--min-score",
+        help="Minimum similarity score for a result to be included (0.0 to 1.0).",
+        min=0.0,
+        max=1.0,
+    ),
 ) -> None:
     """Searches for a query within files.
 
@@ -272,6 +280,7 @@ def search(
                 # For persistent search, base_path_for_relativity might need to be CWD or a configured project root.
                 # For now, persistent search will show absolute paths if relative_paths is true but no base_path.
                 base_path_for_relativity=Path.cwd() if relative_paths else None,
+                min_score=min_score,
                 file_filter=file_filter,
                 keyword_filter=keyword,
             )
@@ -578,15 +587,6 @@ def search(
 
 @app.command()
 def index(
-    path_to_index: Path = typer.Argument(
-        ...,
-        exists=True,
-        file_okay=True,
-        dir_okay=True,
-        readable=True,
-        resolve_path=True,  # Ensures path is absolute and symlinks resolved
-        help="The path to the file or directory to index.",
-    ),
     rebuild: bool = typer.Option(
         False,
         "--rebuild",
@@ -599,10 +599,10 @@ def index(
     ),
 ) -> None:
     """
-    Creates or updates a persistent index for the specified path within a project.
+    Creates or updates a persistent index for all paths in a project.
     If --rebuild is provided, existing data for that project will be deleted before indexing.
     """
-    console.print(f"Starting indexing for path: [green]{path_to_index}[/green] into project '[magenta]{project}[/magenta]'")
+    console.print(f"Starting indexing for project '[magenta]{project}[/magenta]'")
     if rebuild:
         console.print(f"[bold yellow]Warning: This will wipe and rebuild the '{project}' project index.[/bold yellow]")
         if not typer.confirm(
@@ -626,6 +626,11 @@ def index(
             console.print(f"[bold red]Error: Project '{project}' not found.[/bold red]")
             raise typer.Exit(code=1)
 
+        if not project_cfg.indexed_paths:
+            console.print(f"[yellow]Warning: Project '{project}' has no paths to index.[/yellow]")
+            console.print(f"Use 'simgrep project add-path <path> --project {project}' to add paths.")
+            raise typer.Exit()
+
         project_db_file = project_cfg.db_path
         project_usearch_file = project_cfg.usearch_index_path
 
@@ -634,16 +639,16 @@ def index(
             project_name=project,
             db_path=project_db_file,
             usearch_index_path=project_usearch_file,
-            embedding_model_name=global_simgrep_config.default_embedding_model_name,
+            embedding_model_name=project_cfg.embedding_model,
             chunk_size_tokens=global_simgrep_config.default_chunk_size_tokens,
             chunk_overlap_tokens=global_simgrep_config.default_chunk_overlap_tokens,
             file_scan_patterns=["*.txt"],  # Initially hardcode to .txt, make configurable later
         )
 
         indexer_instance = Indexer(config=indexer_config, console=console)
-        indexer_instance.index_path(target_path=path_to_index, wipe_existing=rebuild)
+        indexer_instance.run_index(target_paths=project_cfg.indexed_paths, wipe_existing=rebuild)
 
-        console.print(f"[bold green]Successfully indexed '{path_to_index}' into project '{project}'.[/bold green]")
+        console.print(f"[bold green]Successfully indexed project '{project}'.[/bold green]")
 
     except SimgrepConfigError as e:
         console.print(f"[bold red]Configuration Error:[/bold red]\n  {e}")
@@ -724,6 +729,48 @@ def project_create(name: str) -> None:
         console.print(f"[green]Project '{name}' created.[/green]")
     except (MetadataDBError, SimgrepConfigError) as e:
         console.print(f"[bold red]Error creating project: {e}[/bold red]")
+        raise typer.Exit(code=1)
+    finally:
+        conn.close()
+
+
+@project_app.command("add-path")
+def project_add_path(
+    path_to_add: Path = typer.Argument(
+        ...,
+        exists=True,
+        file_okay=True,
+        dir_okay=True,
+        readable=True,
+        resolve_path=True,
+        help="The file or directory path to add to the project for indexing.",
+    ),
+    project: str = typer.Option(
+        "default",
+        "--project",
+        help="The name of the project to add the path to.",
+    ),
+) -> None:
+    """Adds a path to a project. Simgrep will scan this path during indexing."""
+    try:
+        cfg = load_or_create_global_config()
+    except SimgrepConfigError:
+        raise typer.Exit(code=1)
+
+    global_db_path = cfg.db_directory / "global_metadata.duckdb"
+    conn = connect_global_db(global_db_path)
+    try:
+        project_info = get_project_by_name(conn, project)
+        if project_info is None:
+            console.print(f"[bold red]Error: Project '{project}' not found.[/bold red]")
+            raise typer.Exit(code=1)
+
+        project_id = project_info[0]
+        add_project_path(conn, project_id, str(path_to_add))
+        console.print(f"Added path '[green]{path_to_add}[/green]' to project '[magenta]{project}[/magenta]'.")
+
+    except (MetadataDBError, SimgrepConfigError) as e:
+        console.print(f"[bold red]Error adding path to project: {e}[/bold red]")
         raise typer.Exit(code=1)
     finally:
         conn.close()
