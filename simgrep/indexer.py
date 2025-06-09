@@ -335,7 +335,7 @@ class Indexer:
             files_to_process = sorted(list(all_found_files_set))
 
             if not files_to_process:
-                self.console.print(f"[yellow]No files found to index in any of the provided paths with current patterns.[/yellow]")
+                self.console.print("[yellow]No files found to index in any of the provided paths with current patterns.[/yellow]")
             else:
                 self.console.print(f"Found {len(files_to_process)} total file(s) to process.")
 

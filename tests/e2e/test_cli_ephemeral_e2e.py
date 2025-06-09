@@ -91,3 +91,19 @@ class TestCliEphemeralE2E:
             assert "interesting data" in item["chunk_text"]
         except json.JSONDecodeError:
             pytest.fail("--output json did not produce valid JSON")
+
+    def test_ephemeral_search_count_mode(self, tmp_path: pathlib.Path, temp_simgrep_home: pathlib.Path) -> None:
+        docs_dir = tmp_path / "ephemeral_docs_count"
+        docs_dir.mkdir()
+        file1 = docs_dir / "one.txt"
+        file1.write_text("apples bananas")
+        file2 = docs_dir / "two.txt"
+        file2.write_text("bananas oranges")
+
+        result = run_simgrep_command(["search", "bananas", str(docs_dir), "--output", "count", "--min-score", "0.5"])
+        assert result.exit_code == 0
+        assert "2 matching chunks in 2 files" in result.stdout
+
+        result_no_match = run_simgrep_command(["search", "xyz", str(docs_dir), "--output", "count", "--min-score", "0.5"])
+        assert result_no_match.exit_code == 0
+        assert "0 matching chunks in 0 files." in result_no_match.stdout

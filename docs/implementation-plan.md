@@ -316,21 +316,13 @@
   * **Key Modules:** `simgrep/formatter.py`, `simgrep/main.py`, `simgrep/models.py`
   * **What to Test (E2E):** `simgrep search "test" --output json > results.json`. Validate JSON.
 
-* **Deliverable 5.4: `count` Output Mode**
+* **Deliverable 5.4: `count` Output Mode** ✅
   * **Goal:** Show counts of matching chunks and files.
   * **Tasks:**
         1. In `formatter.py`, implement `format_count(results: List[ChunkData]) -> str`.
         2. Add "count" to `--output` Enum.
   * **Key Modules:** `simgrep/formatter.py`, `simgrep/main.py`
   * **What to Test (E2E):** `simgrep search "test" --output count` shows "X matching chunks in Y files."
-
-* **Deliverable 5.5: Enhanced `show` Output with `Rich.Table`**
-  * **Goal:** Improve readability of default output.
-  * **Tasks:**
-        1. Refactor `format_show_basic` in `formatter.py` to use `Rich.Table`.
-        2. Include columns: File Path, Snippet (try to highlight query terms simply), Score, Location (line numbers if feasible - requires line number tracking in `ChunkData` which is a stretch goal for V1, char offsets are fine).
-  * **Key Modules:** `simgrep/formatter.py`
-  * **What to Test (E2E):** `simgrep search "test"` output is a well-formatted table.
 
 * **Deliverable 5.6: File Type Filtering (Include/Exclude in Project Config)**
   * **Goal:** Allow users to specify which file types to index.
@@ -438,3 +430,11 @@
         2. Add "rag" to `--output` Enum. Add optional `--question <text>` to `search` command.
   * **Key Modules:** `simgrep/formatter.py`, `simgrep/main.py`
   * **What to Test (E2E):** `simgrep search "info" --output rag --question "Summarize?"` prints formatted prompt.
+
+* **Deliverable x: Enhanced `show` Output with `Rich.Table`**
+  * **Goal:** Improve readability of default output.
+  * **Tasks:**
+        1. Refactor `format_show_basic` in `formatter.py` to use `Rich.Table`.
+        2. Include columns: File Path, Snippet (try to highlight query terms simply), Score, Location (line numbers if feasible - requires line number tracking in `ChunkData` which is a stretch goal for V1, char offsets are fine).
+  * **Key Modules:** `simgrep/formatter.py`
+  * **What to Test (E2E):** `simgrep search "test"` output is a well-formatted table.

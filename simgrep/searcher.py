@@ -6,7 +6,7 @@ from rich.console import Console
 
 from .config import DEFAULT_K_RESULTS, SimgrepConfig
 from .exceptions import MetadataDBError, VectorStoreError
-from .formatter import format_json, format_paths, format_show_basic
+from .formatter import format_count, format_json, format_paths, format_show_basic
 from .metadata_store import MetadataStore
 from .models import OutputMode, SearchResult
 from .processor import generate_embeddings
@@ -62,6 +62,8 @@ def perform_persistent_search(
             )
         elif output_mode == OutputMode.json:
             console.print("[]")
+        elif output_mode == OutputMode.count:
+            console.print(format_count([]))
         else:  # outputmode.show
             console.print("  No relevant chunks found in the persistent index.")
         return
@@ -106,6 +108,8 @@ def perform_persistent_search(
             )
         elif output_mode == OutputMode.json:
             console.print("[]")
+        elif output_mode == OutputMode.count:
+            console.print(format_count([]))
         else:  # outputmode.show
             console.print("  No relevant chunks found in the persistent index (after filtering).")
         return
@@ -140,3 +144,5 @@ def perform_persistent_search(
     elif output_mode == OutputMode.json:
         # Use a direct print for JSON to avoid Rich's wrapping
         print(format_json(final_results))
+    elif output_mode == OutputMode.count:
+        console.print(format_count(final_results))

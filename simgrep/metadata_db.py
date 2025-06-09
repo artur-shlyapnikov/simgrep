@@ -213,7 +213,7 @@ def retrieve_filtered_chunk_details(
 
     # AND clause for file_filter
     if file_filter:
-        file_filter_clauses = [f"f.file_path LIKE ?" for _ in file_filter]
+        file_filter_clauses = ["f.file_path LIKE ?" for _ in file_filter]
         query_parts.append(f"AND ({' OR '.join(file_filter_clauses)})")
         sql_like_patterns = [p.replace("*", "%") for p in file_filter]
         params.extend(sql_like_patterns)
@@ -228,6 +228,8 @@ def retrieve_filtered_chunk_details(
 
     try:
         cursor = conn.execute(full_query, params)
+        if cursor.description is None:
+            return []
         columns = [desc[0] for desc in cursor.description]
         rows = cursor.fetchall()
 

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List
+from typing import List
 
 from pydantic import BaseModel, Field
 
@@ -10,7 +10,8 @@ class OutputMode(str, Enum):
     show = "show"
     paths = "paths"
     json = "json"
-    # future: rag, copy-chunks, copy-files, count
+    count = "count"
+    # future: rag, copy-chunks, copy-files
 
 
 class ChunkData(BaseModel):

@@ -27,7 +27,7 @@ try:
         SimgrepConfigError,
         load_or_create_global_config,
     )
-    from .formatter import format_json, format_paths, format_show_basic
+    from .formatter import format_count, format_json, format_paths, format_show_basic
     from .indexer import Indexer, IndexerConfig, IndexerError
     from .metadata_db import (
         MetadataDBError,
@@ -74,7 +74,7 @@ except ImportError:
             SimgrepConfigError,
             load_or_create_global_config,
         )
-        from simgrep.formatter import format_json, format_paths, format_show_basic
+        from simgrep.formatter import format_count, format_json, format_paths, format_show_basic
         from simgrep.indexer import Indexer, IndexerConfig, IndexerError
         from simgrep.metadata_db import (
             MetadataDBError,
@@ -180,7 +180,7 @@ def search(
         OutputMode.show,  # Default output mode
         "--output",
         "-o",
-        help="Output mode. 'paths' lists unique file paths. 'json' provides detailed structured output.",
+        help="Output mode. 'paths' lists unique file paths. 'json' provides detailed structured output. 'count' shows number of matches.",
         case_sensitive=False,
     ),
     top: int = typer.Option(
@@ -588,12 +588,17 @@ def search(
                 )  # Handles "No matching files found."
             elif output == OutputMode.json:
                 console.print("[]")
+            elif output == OutputMode.count:
+                console.print(format_count([]))
             else:  # OutputMode.show or other future modes that might show "no results"
                 console.print("  No relevant chunks found for your query in the processed file(s).")
         else:
-            # First, gather all result details from the database
+            # First, gather all result details from the database, filtering by score
             ephemeral_results: List[Dict[str, Any]] = []
             for result in search_matches:
+                if result.score < min_score:
+                    continue
+
                 matched_chunk_id = result.label
                 assert store is not None
                 retrieved_details = store.retrieve_chunk_for_display(matched_chunk_id)
@@ -612,41 +617,57 @@ def search(
                 else:
                     console.print(f"[yellow]Warning: Could not retrieve details for chunk_id {matched_chunk_id} from DB.[/yellow]")
 
-            # Now, format based on output mode
-            if output == OutputMode.paths:
-                paths_from_matches = [res["file_path"] for res in ephemeral_results]
-                current_base_path_for_relativity: Optional[Path] = None
-                actual_use_relative = relative_paths
+            # Sort by score descending, as filtering might have disrupted order
+            ephemeral_results.sort(key=lambda r: r["score"], reverse=True)
 
-                if actual_use_relative:
-                    if path_to_search.is_dir():
-                        current_base_path_for_relativity = path_to_search
-                    else:  # path_to_search is a file
-                        current_base_path_for_relativity = path_to_search.parent
+            if not ephemeral_results:
+                if output == OutputMode.paths:
+                    console.print(format_paths(file_paths=[], use_relative=False, base_path=None, console=console))
+                elif output == OutputMode.json:
+                    console.print("[]")
+                elif output == OutputMode.count:
+                    console.print(format_count([]))
+                else:  # show
+                    console.print("  No relevant chunks found for your query in the processed file(s) (after filtering).")
+            else:
+                # Now, format based on output mode
+                if output == OutputMode.paths:
+                    paths_from_matches = [res["file_path"] for res in ephemeral_results]
+                    current_base_path_for_relativity: Optional[Path] = None
+                    actual_use_relative = relative_paths
 
-                output_string = format_paths(
-                    file_paths=paths_from_matches,
-                    use_relative=actual_use_relative,
-                    base_path=current_base_path_for_relativity,
-                    console=console,
-                )
-                if output_string:
-                    console.print(output_string)
+                    if actual_use_relative:
+                        if path_to_search.is_dir():
+                            current_base_path_for_relativity = path_to_search
+                        else:  # path_to_search is a file
+                            current_base_path_for_relativity = path_to_search.parent
 
-            elif output == OutputMode.show:
-                console.print(f"\n[bold cyan]Search Results (Top {len(ephemeral_results)}):[/bold cyan]")
-                for res in ephemeral_results:
-                    output_string = format_show_basic(
-                        file_path=res["file_path"],
-                        chunk_text=res["chunk_text"],
-                        score=res["score"],
+                    output_string = format_paths(
+                        file_paths=paths_from_matches,
+                        use_relative=actual_use_relative,
+                        base_path=current_base_path_for_relativity,
+                        console=console,
                     )
-                    console.print("---")  # Visual separator
-                    console.print(output_string)
+                    if output_string:
+                        console.print(output_string)
 
-            elif output == OutputMode.json:
-                # Use a direct print to avoid Rich's wrapping logic for JSON output
-                print(format_json(ephemeral_results))
+                elif output == OutputMode.show:
+                    console.print(f"\n[bold cyan]Search Results (Top {len(ephemeral_results)}):[/bold cyan]")
+                    for res in ephemeral_results:
+                        output_string = format_show_basic(
+                            file_path=res["file_path"],
+                            chunk_text=res["chunk_text"],
+                            score=res["score"],
+                        )
+                        console.print("---")  # Visual separator
+                        console.print(output_string)
+
+                elif output == OutputMode.json:
+                    # Use a direct print to avoid Rich's wrapping logic for JSON output
+                    print(format_json(ephemeral_results))
+
+                elif output == OutputMode.count:
+                    console.print(format_count(ephemeral_results))
 
     finally:
         if store:

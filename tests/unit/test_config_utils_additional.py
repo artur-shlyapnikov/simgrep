@@ -1,7 +1,5 @@
 from pathlib import Path
 
-import pytest
-
 from simgrep.config import (
     DEFAULT_K_RESULTS,
     SimgrepConfig,

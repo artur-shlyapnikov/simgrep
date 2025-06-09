@@ -103,3 +103,25 @@ def format_json(results: List[Dict[str, Any]]) -> str:
         serializable_results.append(serializable_res)
 
     return json.dumps(serializable_results, indent=2)
+
+
+def format_count(results: List[Dict[str, Any]]) -> str:
+    """
+    Formats the search results into a count summary.
+
+    Args:
+        results: A list of dictionaries, where each dictionary represents a search result.
+
+    Returns:
+        A string summarizing the number of matching chunks and files.
+    """
+    num_chunks = len(results)
+    if num_chunks == 0:
+        return "0 matching chunks in 0 files."
+
+    # Assumes 'file_path' is a key in each result dictionary.
+    # The searcher logic ensures this.
+    unique_files = {res["file_path"] for res in results if "file_path" in res}
+
+    num_files = len(unique_files)
+    return f"{num_chunks} matching chunks in {num_files} files."

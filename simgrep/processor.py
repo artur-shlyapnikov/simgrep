@@ -1,7 +1,7 @@
 import hashlib
 from functools import lru_cache
 from pathlib import Path
-from typing import List, Optional, TypedDict, cast
+from typing import Any, Dict, List, Optional, TypedDict, cast
 
 import numpy as np
 import unstructured.partition.auto as auto_partition
@@ -158,13 +158,13 @@ def generate_embeddings(
         else:
             active_model = model
 
-        encode_kwargs = {}
+        encode_kwargs: Dict[str, Any] = {"show_progress_bar": False}
         if is_query and "qwen" in model_name.lower():
             # Use the instruction prompt for queries with Qwen models
             encode_kwargs["prompt_name"] = "query"
 
-        embeddings = active_model.encode(texts, show_progress_bar=False, **encode_kwargs)
-        return embeddings
+        embeddings = active_model.encode(sentences=texts, **encode_kwargs)
+        return cast(np.ndarray, embeddings)
     except Exception as e:
         # Determine which model name to report in the error
         error_model_name = (

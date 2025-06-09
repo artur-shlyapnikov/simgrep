@@ -1,7 +1,6 @@
 import pytest
 from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
-from hypothesis.strategies import characters
 from transformers import PreTrainedTokenizerBase
 
 from simgrep.processor import chunk_text_by_tokens, load_tokenizer

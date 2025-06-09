@@ -364,3 +364,21 @@ class TestCliPersistentE2E:
         clean_src_stdout = search_src_res.stdout.replace("\n", "").replace("\r", "")
         assert "util.txt" in clean_src_stdout
         assert "doc1.txt" not in clean_src_stdout
+
+    def test_index_and_search_persistent_count_mode(self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path) -> None:
+        """
+        Tests persistent search with --output count.
+        """
+        # 1. Add path and index
+        run_simgrep_command(["project", "add-path", str(sample_docs_dir_session)])
+        run_simgrep_command(["index", "--rebuild"], input_str="y\n")
+
+        # 2. Search with --output count
+        search_result = run_simgrep_command(["search", "apples", "--output", "count", "--min-score", "0.4"])
+        assert search_result.exit_code == 0
+        assert "2 matching chunks in 2 files" in search_result.stdout
+
+        # 3. Test no matches
+        search_no_match_result = run_simgrep_command(["search", "nonexistentqueryxyz", "--output", "count", "--min-score", "0.4"])
+        assert search_no_match_result.exit_code == 0
+        assert "0 matching chunks in 0 files." in search_no_match_result.stdout
