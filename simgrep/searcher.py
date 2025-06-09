@@ -1,5 +1,5 @@
 import pathlib
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import usearch.index
 from rich.console import Console
@@ -45,10 +45,7 @@ def perform_persistent_search(
         console.print(f"[bold red]Error during vector search:[/bold red]\n  {e}")
         raise  # re-raise
 
-    # Filter by min_score
-    filtered_matches = [m for m in search_matches if m.score >= min_score]
-
-    if not filtered_matches:
+    if not search_matches:
         if output_mode == OutputMode.paths:
             # format_paths handles "no matching files found."
             console.print(
@@ -63,53 +60,69 @@ def perform_persistent_search(
             console.print("  No relevant chunks found in the persistent index.")
         return
 
+    label_to_score: Dict[int, float] = {m.label: m.score for m in search_matches}
+    usearch_labels = list(label_to_score.keys())
+
+    try:
+        # For now, filters are not exposed in CLI for persistent search, so pass None.
+        filtered_db_results = metadata_store.retrieve_filtered_chunk_details(usearch_labels=usearch_labels)
+    except MetadataDBError as e:
+        console.print(f"[yellow]Warning: Database error retrieving chunk details: {e}[/yellow]")
+        if output_mode == OutputMode.paths:
+            console.print(format_paths(file_paths=[], use_relative=False, base_path=None, console=console))
+        else:
+            console.print("  Could not retrieve chunk details from database.")
+        return
+
+    # Combine DB results with scores and filter by min_score
+    final_results = []
+    for record in filtered_db_results:
+        score = label_to_score.get(record["usearch_label"])
+        if score is not None and score >= min_score:
+            record["score"] = score
+            final_results.append(record)
+
+    # Sort by score descending
+    final_results.sort(key=lambda r: r["score"], reverse=True)
+
+    if not final_results:
+        if output_mode == OutputMode.paths:
+            console.print(
+                format_paths(
+                    file_paths=[],
+                    use_relative=display_relative_paths,
+                    base_path=base_path_for_relativity,
+                    console=console,
+                )
+            )
+        else:  # outputmode.show
+            console.print("  No relevant chunks found in the persistent index (after filtering).")
+        return
+
     # process and format results
     if output_mode == OutputMode.show:
-        console.print(f"\n[bold cyan]Search Results (Top {len(filtered_matches)} from persistent index):[/bold cyan]")
-        for result in filtered_matches:
-            matched_usearch_label = result.label
-            similarity_score = result.score
-            try:
-                retrieved_details = metadata_store.retrieve_chunk_details_persistent(matched_usearch_label)
-            except MetadataDBError as e:
-                console.print(f"[yellow]Warning: Database error retrieving details for chunk label {matched_usearch_label}: {e}[/yellow]")
-                continue  # skip this result
-
-            if retrieved_details:
-                text_snippet, file_path_obj, _start, _end = retrieved_details
-                output_string = format_show_basic(
-                    file_path=file_path_obj,
-                    chunk_text=text_snippet,  # using snippet from db for now
-                    score=similarity_score,
-                )
-                console.print("---")
-                console.print(output_string)
-            else:
-                console.print(f"[yellow]Warning: Could not retrieve details for chunk label {matched_usearch_label} from DB.[/yellow]")
+        console.print(f"\n[bold cyan]Search Results (Top {len(final_results)} from persistent index):[/bold cyan]")
+        for result in final_results:
+            output_string = format_show_basic(
+                file_path=result["file_path"],
+                chunk_text=result["chunk_text"],
+                score=result["score"],
+            )
+            console.print("---")
+            console.print(output_string)
     elif output_mode == OutputMode.paths:
         paths_from_matches: List[pathlib.Path] = []
-        unique_paths_seen = set()  # to ensure uniqueness before format_paths
-        for result in filtered_matches:
-            matched_usearch_label = result.label
-            try:
-                retrieved_details = metadata_store.retrieve_chunk_details_persistent(matched_usearch_label)
-            except MetadataDBError as e:
-                console.print(f"[yellow]Warning: Database error retrieving path for chunk label {matched_usearch_label}: {e}[/yellow]")
-                continue
-
-            if retrieved_details:
-                file_path_obj = retrieved_details[1]  # the file_path_obj
-                if file_path_obj not in unique_paths_seen:
-                    paths_from_matches.append(file_path_obj)
-                    unique_paths_seen.add(file_path_obj)
-            else:
-                console.print(f"[yellow]Warning: Could not retrieve path for chunk label {matched_usearch_label}.[/yellow]")
+        unique_paths_seen = set()
+        for result in final_results:
+            file_path_obj = result["file_path"]
+            if file_path_obj not in unique_paths_seen:
+                paths_from_matches.append(file_path_obj)
+                unique_paths_seen.add(file_path_obj)
 
         output_string = format_paths(
-            file_paths=paths_from_matches,  # already unique
+            file_paths=paths_from_matches,
             use_relative=display_relative_paths,
             base_path=base_path_for_relativity,
             console=console,
         )
-        # format_paths itself handles "no matching files found." if paths_from_matches is empty.
         console.print(output_string)

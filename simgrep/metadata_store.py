@@ -14,6 +14,7 @@ from .metadata_db import (
     insert_indexed_file_record,
     retrieve_chunk_details_persistent,
     retrieve_chunk_for_display,
+    retrieve_filtered_chunk_details,
     setup_ephemeral_tables,
 )
 from .models import ChunkData
@@ -49,6 +50,19 @@ class MetadataStore:
     # --- persistent table helpers ---
     def retrieve_chunk_details_persistent(self, usearch_label: int) -> Optional[Tuple[str, pathlib.Path, int, int]]:
         return retrieve_chunk_details_persistent(self.conn, usearch_label)
+
+    def retrieve_filtered_chunk_details(
+        self,
+        usearch_labels: List[int],
+        file_filter: Optional[List[str]] = None,
+        keyword_filter: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        return retrieve_filtered_chunk_details(
+            self.conn,
+            usearch_labels=usearch_labels,
+            file_filter=file_filter,
+            keyword_filter=keyword_filter,
+        )
 
     def clear_persistent_project_data(self) -> None:
         clear_persistent_project_data(self.conn)

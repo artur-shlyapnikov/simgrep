@@ -186,6 +186,66 @@ def retrieve_chunk_details_persistent(conn: duckdb.DuckDBPyConnection, usearch_l
         raise MetadataDBError(f"Failed to retrieve persistent chunk details for label {usearch_label}") from e
 
 
+def retrieve_filtered_chunk_details(
+    conn: duckdb.DuckDBPyConnection,
+    usearch_labels: List[int],
+    file_filter: Optional[List[str]] = None,
+    keyword_filter: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Retrieves chunk details from persistent tables, applying optional filters.
+    This function dynamically constructs the SQL query based on provided filters.
+    """
+    if not usearch_labels:
+        return []
+
+    query_parts = [
+        "SELECT f.file_path, tc.chunk_text, tc.start_char_offset, tc.end_char_offset, tc.usearch_label",
+        "FROM text_chunks AS tc",
+        "JOIN indexed_files AS f ON tc.file_id = f.file_id",
+    ]
+    params: List[Any] = []
+
+    # WHERE clause for usearch_labels
+    label_placeholders = ", ".join(["?"] * len(usearch_labels))
+    query_parts.append(f"WHERE tc.usearch_label IN ({label_placeholders})")
+    params.extend(usearch_labels)
+
+    # AND clause for file_filter
+    if file_filter:
+        file_filter_clauses = [f"f.file_path LIKE ?" for _ in file_filter]
+        query_parts.append(f"AND ({' OR '.join(file_filter_clauses)})")
+        sql_like_patterns = [p.replace("*", "%") for p in file_filter]
+        params.extend(sql_like_patterns)
+
+    # AND clause for keyword_filter
+    if keyword_filter:
+        query_parts.append("AND lower(tc.chunk_text) LIKE ?")
+        params.append(f"%{keyword_filter.lower()}%")
+
+    full_query = "\n".join(query_parts) + ";"
+    logger.debug(f"Executing filtered chunk retrieval query: {full_query} with params: {params}")
+
+    try:
+        cursor = conn.execute(full_query, params)
+        columns = [desc[0] for desc in cursor.description]
+        rows = cursor.fetchall()
+
+        results: List[Dict[str, Any]] = []
+        for row in rows:
+            record = dict(zip(columns, row))
+            # Convert file_path string to Path object
+            if "file_path" in record and isinstance(record["file_path"], str):
+                record["file_path"] = pathlib.Path(record["file_path"])
+            results.append(record)
+
+        return results
+
+    except duckdb.Error as e:
+        logger.error(f"DuckDB error retrieving filtered chunk details: {e}")
+        raise MetadataDBError("Failed to retrieve filtered chunk details") from e
+
+
 def _create_persistent_tables_if_not_exist(conn: duckdb.DuckDBPyConnection) -> None:
     """
     Creates persistent tables (indexed_files, text_chunks) if they don't already exist.
