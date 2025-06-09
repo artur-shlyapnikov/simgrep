@@ -22,35 +22,46 @@ class SimgrepConfigError(Exception):
     pass
 
 
-def load_or_create_global_config() -> SimgrepConfig:
+def load_global_config() -> SimgrepConfig:
     """
-    Loads simgrep config from TOML file, or creates a default one.
-    Ensures data directories and the global database with a 'default' project exist.
-    The SimgrepConfig object returned contains global defaults, not project-specific data.
+    Loads simgrep config from TOML file.
 
     Returns:
         An instance of SimgrepConfig.
 
     Raises:
-        SimgrepConfigError: If the data directory cannot be created.
+        SimgrepConfigError: If the config file does not exist.
     """
     config = SimgrepConfig()
+    if not config.config_file.exists():
+        raise SimgrepConfigError("Global config not found. Please run 'simgrep init --global' to create it.")
+
+    with open(config.config_file, "rb") as f:
+        data = tomllib.load(f)
+    return SimgrepConfig(**data)
+
+
+def initialize_global_config(overwrite: bool = False) -> None:
+    """
+    Creates the global simgrep configuration files and directories.
+    """
+    config = SimgrepConfig()
+    if config.config_file.exists() and not overwrite:
+        # This case will be handled in the CLI, but good to have a safeguard.
+        return
 
     try:
         config.db_directory.mkdir(parents=True, exist_ok=True)
         config.default_project_data_dir.mkdir(parents=True, exist_ok=True)
     except OSError as e:
-        error_message = f"Fatal: Could not create simgrep data directory at '{config.db_directory}'. " f"Please check permissions. Error: {e}"
+        error_message = f"Fatal: Could not create simgrep data directory at '{config.db_directory}'. Please check permissions. Error: {e}"
         print(error_message, file=sys.stderr)
         raise SimgrepConfigError(error_message) from e
 
-    if config.config_file.exists():
-        with open(config.config_file, "rb") as f:
-            data = tomllib.load(f)
-        config = SimgrepConfig(**data)
-    else:
-        _write_config(config)
+    # Write config.toml
+    _write_config(config)
 
+    # Create global DB and default project
     global_db_path = config.db_directory / "global_metadata.duckdb"
     conn = connect_global_db(global_db_path)
     try:
@@ -65,8 +76,6 @@ def load_or_create_global_config() -> SimgrepConfig:
             )
     finally:
         conn.close()
-
-    return config
 
 
 def _serialize_paths(obj: Any) -> Any:

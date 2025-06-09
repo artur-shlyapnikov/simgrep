@@ -17,6 +17,16 @@ uv pip install .
 
 For development, use `make install` to install in editable mode with dev dependencies.
 
+## First-Time Setup
+
+Before using persistent projects, run the one-time global setup:
+
+```bash
+simgrep init --global
+```
+
+This creates configuration files and databases in your home directory (`~/.config/simgrep/`).
+
 ## How it works
 
 `simgrep` works in two main modes:
@@ -68,40 +78,44 @@ simgrep search "database connection pool" ./configs --top 3
 
 Use projects to create a reusable index for a directory you search often, like a large codebase or your notes. This is much faster for subsequent searches.
 
-**1. Create a project:**
-First, create a named project for your codebase.
+**1. Initialize a project:**
+Navigate to your project's root directory and run:
 
 ```bash
-simgrep project create my-codebase
+cd /path/to/my-codebase
+simgrep init
 ```
 
-**2. Add paths to the project:**
-Tell `simgrep` which directories to include in this project. You can add multiple paths.
+This creates a `.simgrep` directory, registers a new project (e.g., `my-codebase`), and automatically adds the current directory as a path to be indexed.
+
+**2. Add more paths to the project (optional):**
+If your project has multiple source directories (e.g., `backend` and `docs`), you can add them. `simgrep` will automatically use the project context from your current directory.
 
 ```bash
-simgrep project add-path ./my-codebase/backend --project my-codebase
-simgrep project add-path ./my-codebase/docs --project my-codebase
+# from /path/to/my-codebase
+simgrep project add-path ./backend
+simgrep project add-path ./docs
 ```
 
 **3. Index your project:**
 Build the index. This may take some time for the first run.
 
 ```bash
-simgrep index --project my-codebase
+simgrep index
 ```
 
-*Note: If `--project` is omitted, `simgrep` uses a `default` project.*
+*Note: `simgrep` automatically detects you are in the `my-codebase` project. You can also be explicit with `--project my-codebase`.*
 
 **4. Search your project:**
 Now you can search without specifying a path. `simgrep` will use your project's persistent index.
 
 ```bash
-simgrep search "user session management" --project my-codebase
+simgrep search "user session management"
 ```
 
 **5. Update the index:**
 When you change your files, run `index` again. It will incrementally update the index by only processing new and modified files, which is very fast.
 
 ```bash
-simgrep index --project my-codebase
+simgrep index
 ```

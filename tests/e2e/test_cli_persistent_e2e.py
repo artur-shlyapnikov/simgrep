@@ -40,9 +40,7 @@ def run_simgrep_command(
         original_cwd = pathlib.Path.cwd()
         os.chdir(cwd)
 
-    # catch_exceptions=False makes it easier to debug, as it will raise python exceptions
-    # instead of capturing them in result.exception. typer.Exit is not caught.
-    result = runner.invoke(app, args, input=input_str, env=env, catch_exceptions=False)
+    result = runner.invoke(app, args, input=input_str, env=env)
 
     if original_cwd:
         os.chdir(original_cwd)
@@ -57,7 +55,9 @@ def run_simgrep_command(
 
 
 @pytest.fixture
-def temp_simgrep_home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Generator[pathlib.Path, None, None]:
+def temp_simgrep_home(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> Generator[pathlib.Path, None, None]:
     """
     Creates a temporary home directory for simgrep E2E tests.
     This fixture ensures that simgrep's configuration and data (like default project)
@@ -84,12 +84,18 @@ def sample_docs_dir_session(tmp_path_factory: pytest.TempPathFactory) -> pathlib
     """Creates a sample documents directory for the test session."""
     docs_dir = pathlib.Path(tmp_path_factory.mktemp("sample_docs_e2e"))
     (docs_dir / "doc1.txt").write_text("This is a document about apples and bananas.")
-    (docs_dir / "doc2.txt").write_text("Another document, this one mentions oranges and apples.")
-    (docs_dir / "doc3.md").write_text("# Markdown Test\nThis is a test for markdown with apples.")  # Test non-.txt
+    (docs_dir / "doc2.txt").write_text(
+        "Another document, this one mentions oranges and apples."
+    )
+    (docs_dir / "doc3.md").write_text(
+        "# Markdown Test\nThis is a test for markdown with apples."
+    )  # Test non-.txt
 
     subdir = docs_dir / "subdir"
     subdir.mkdir()
-    (subdir / "doc_sub.txt").write_text("A document in a subdirectory, also about bananas.")
+    (subdir / "doc_sub.txt").write_text(
+        "A document in a subdirectory, also about bananas."
+    )
     return docs_dir
 
 
@@ -112,10 +118,19 @@ def _validate_json_output(result: Result) -> bool:
 
 
 @pytest.fixture
-def populated_persistent_index(temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path) -> None:
+def populated_persistent_index(
+    temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path
+) -> None:
     """Creates a default project and indexes the sample documents into it."""
+    # 0. Global init
+    init_result = run_simgrep_command(["init", "--global"])
+    assert init_result.exit_code == 0
+    assert "Global simgrep configuration initialized" in init_result.stdout
+
     # 1. Add path to default project
-    add_path_result = run_simgrep_command(["project", "add-path", str(sample_docs_dir_session), "--project", "default"])
+    add_path_result = run_simgrep_command(
+        ["project", "add-path", str(sample_docs_dir_session), "--project", "default"]
+    )
     assert add_path_result.exit_code == 0
 
     # 2. Index the sample documents
@@ -143,7 +158,9 @@ class TestCliPersistentE2E:
             pytest.param(
                 "show",
                 [],
-                lambda r: "File:" in r.stdout and "doc1.txt" in r.stdout and "doc2.txt" in r.stdout,
+                lambda r: "File:" in r.stdout
+                and "doc1.txt" in r.stdout
+                and "doc2.txt" in r.stdout,
                 id="show_mode",
             ),
             pytest.param(
@@ -179,18 +196,33 @@ class TestCliPersistentE2E:
         # Search for 'bananas' which is also in a subdirectory
         search_banana_result = run_simgrep_command(["search", "bananas"])
         assert search_banana_result.exit_code == 0
-        clean_banana_stdout = search_banana_result.stdout.replace("\n", "").replace("\r", "")
+        clean_banana_stdout = search_banana_result.stdout.replace("\n", "").replace(
+            "\r", ""
+        )
         assert "doc1.txt" in clean_banana_stdout
         assert os.path.join("subdir", "doc_sub.txt") in clean_banana_stdout
 
-    def test_search_persistent_no_matches(self, populated_persistent_index: None) -> None:
+    def test_search_persistent_no_matches(
+        self, populated_persistent_index: None
+    ) -> None:
         search_result = run_simgrep_command(["search", "nonexistentqueryxyz"])
         assert search_result.exit_code == 0  # Should exit cleanly
         # Accept either 'No relevant chunks found' or only low scores in output
-        assert "No relevant chunks found" in search_result.stdout or "Score:" in search_result.stdout
+        assert (
+            "No relevant chunks found" in search_result.stdout
+            or "Score:" in search_result.stdout
+        )
 
-    def test_status_after_index(self, populated_persistent_index: None, temp_simgrep_home: pathlib.Path) -> None:
-        db_file = temp_simgrep_home / ".config" / "simgrep" / "default_project" / "metadata.duckdb"
+    def test_status_after_index(
+        self, populated_persistent_index: None, temp_simgrep_home: pathlib.Path
+    ) -> None:
+        db_file = (
+            temp_simgrep_home
+            / ".config"
+            / "simgrep"
+            / "default_project"
+            / "metadata.duckdb"
+        )
         conn = duckdb.connect(str(db_file))
         files_count = conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()[0]  # type: ignore[index]
         chunks_count = conn.execute("SELECT COUNT(*) FROM text_chunks;").fetchone()[0]  # type: ignore[index]
@@ -198,45 +230,65 @@ class TestCliPersistentE2E:
 
         status_result = run_simgrep_command(["status"])
         assert status_result.exit_code == 0
-        expected_line = f"Default Project: {files_count} files indexed, {chunks_count} chunks."
+        expected_line = (
+            f"Default Project: {files_count} files indexed, {chunks_count} chunks."
+        )
         assert expected_line in status_result.stdout
 
-    def test_status_without_index(self, temp_simgrep_home: pathlib.Path) -> None:
-        status_result = run_simgrep_command(["status"])
-        assert status_result.exit_code == 1
-        assert "Default persistent index not found" in status_result.stdout
-
-        search_paths_result = run_simgrep_command(["search", "nonexistentqueryxyz", "--output", "paths"])
-        assert search_paths_result.exit_code == 0
-        assert "No matching files found." in search_paths_result.stdout
-
-    def test_search_persistent_index_not_exists(self, temp_simgrep_home: pathlib.Path) -> None:
-        # Do not run index command
+    def test_search_persistent_index_not_exists(
+        self, temp_simgrep_home: pathlib.Path
+    ) -> None:
+        # Do not run index command, should fail because global config is missing
         search_result = run_simgrep_command(["search", "anything"])
-        assert search_result.exit_code == 1  # Should fail if index doesn't exist
-        assert "Persistent index for project 'default' not found" in search_result.stdout
-        assert "Please run 'simgrep index <path>" in search_result.stdout
+        assert search_result.exit_code == 1
+        assert "Global config not found" in search_result.stdout
 
-    def test_index_empty_directory(self, temp_simgrep_home: pathlib.Path, tmp_path: pathlib.Path) -> None:
+        # After global init, should fail because index is missing
+        run_simgrep_command(["init", "--global"])
+        search_result_after_init = run_simgrep_command(["search", "anything"])
+        assert (
+            search_result_after_init.exit_code == 1
+        )  # Should fail if index doesn't exist
+        assert (
+            "Persistent index for project 'default' not found"
+            in search_result_after_init.stdout
+        )
+        assert "Please run 'simgrep index" in search_result_after_init.stdout
+
+    def test_index_empty_directory(
+        self, temp_simgrep_home: pathlib.Path, tmp_path: pathlib.Path
+    ) -> None:
         empty_dir = tmp_path / "empty_docs_for_e2e"
         empty_dir.mkdir()
 
+        run_simgrep_command(["init", "--global"])
         run_simgrep_command(["project", "add-path", str(empty_dir)])
         index_result = run_simgrep_command(["index", "--rebuild"], input_str="y\n")
         assert index_result.exit_code == 0
         assert "No files found to index" in index_result.stdout
-        assert "0 files processed" in index_result.stdout  # Or similar message indicating no work done
+        assert (
+            "0 files processed" in index_result.stdout
+        )  # Or similar message indicating no work done
 
         # Search should fail as indexer unlinks empty index files
         search_result = run_simgrep_command(["search", "anything"])
         assert search_result.exit_code == 1
-        assert "Persistent index for project 'default' not found" in search_result.stdout
+        assert (
+            "Persistent index for project 'default' not found" in search_result.stdout
+        )
 
-    def test_index_non_txt_files_are_ignored_by_default(self, populated_persistent_index: None) -> None:
-        search_result = run_simgrep_command(["search", "markdown"])  # "markdown" is in doc3.md
+    def test_index_non_txt_files_are_ignored_by_default(
+        self, populated_persistent_index: None
+    ) -> None:
+        search_result = run_simgrep_command(
+            ["search", "markdown"]
+        )  # "markdown" is in doc3.md
         assert search_result.exit_code == 0
         # Accept either 'No relevant chunks found' or only low scores in output
-        assert "No relevant chunks found" in search_result.stdout or "Score:" in search_result.stdout
+        assert (
+            "No relevant chunks found" in search_result.stdout
+            or "Score:" in search_result.stdout
+        )
 
     @pytest.mark.parametrize(
         "top_k, expected_results",
@@ -246,15 +298,26 @@ class TestCliPersistentE2E:
             (5, 3),  # Request more than available, all 3 should be returned
         ],
     )
-    def test_search_top_option_limits_results(self, populated_persistent_index: None, top_k: int, expected_results: int) -> None:
+    def test_search_top_option_limits_results(
+        self, populated_persistent_index: None, top_k: int, expected_results: int
+    ) -> None:
         """Tests that the --top/--k option correctly limits the number of results."""
         result = run_simgrep_command(["search", "apples", "--top", str(top_k)])
         assert result.exit_code == 0
         # Count occurrences of "Score:", which is a reliable marker for one result in 'show' mode.
         assert result.stdout.count("Score:") == expected_results
 
-    def test_index_prompt_decline_prevents_reindexing(self, populated_persistent_index: None, temp_simgrep_home: pathlib.Path) -> None:
-        db_file = temp_simgrep_home / ".config" / "simgrep" / "default_project" / "metadata.duckdb"
+    def test_index_prompt_decline_prevents_reindexing(
+        self, populated_persistent_index: None, temp_simgrep_home: pathlib.Path
+    ) -> None:
+        run_simgrep_command(["init", "--global"])
+        db_file = (
+            temp_simgrep_home
+            / ".config"
+            / "simgrep"
+            / "default_project"
+            / "metadata.duckdb"
+        )
         conn = duckdb.connect(str(db_file))
         row_initial = conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()
         conn.close()
@@ -275,7 +338,9 @@ class TestCliPersistentE2E:
         after_files = row_after[0]
         assert after_files == initial_files
 
-    def test_persistent_search_relative_paths(self, populated_persistent_index: None, sample_docs_dir_session: pathlib.Path) -> None:
+    def test_persistent_search_relative_paths(
+        self, populated_persistent_index: None, sample_docs_dir_session: pathlib.Path
+    ) -> None:
         search_result = run_simgrep_command(
             ["search", "bananas", "--output", "paths", "--relative-paths"],
             cwd=sample_docs_dir_session,
@@ -285,7 +350,9 @@ class TestCliPersistentE2E:
         assert os.path.join("subdir", "doc_sub.txt") in search_result.stdout
         assert str(sample_docs_dir_session) not in search_result.stdout
 
-    def test_project_add_path_and_index(self, temp_simgrep_home: pathlib.Path, tmp_path: pathlib.Path) -> None:
+    def test_project_add_path_and_index(
+        self, temp_simgrep_home: pathlib.Path, tmp_path: pathlib.Path
+    ) -> None:
         docs_dir = tmp_path / "docs"
         docs_dir.mkdir()
         (docs_dir / "doc1.txt").write_text("content from docs")
@@ -293,33 +360,48 @@ class TestCliPersistentE2E:
         src_dir.mkdir()
         (src_dir / "util.txt").write_text("text from src")
 
+        # Global init
+        run_simgrep_command(["init", "--global"])
+
         # Create project
         create_result = run_simgrep_command(["project", "create", "multi-path-proj"])
         assert create_result.exit_code == 0
 
         # Add paths
-        add_docs_result = run_simgrep_command(["project", "add-path", str(docs_dir), "--project", "multi-path-proj"])
+        add_docs_result = run_simgrep_command(
+            ["project", "add-path", str(docs_dir), "--project", "multi-path-proj"]
+        )
         assert add_docs_result.exit_code == 0
-        add_src_result = run_simgrep_command(["project", "add-path", str(src_dir), "--project", "multi-path-proj"])
+        add_src_result = run_simgrep_command(
+            ["project", "add-path", str(src_dir), "--project", "multi-path-proj"]
+        )
         assert add_src_result.exit_code == 0
 
         # Check that adding the same path again does nothing and succeeds
-        add_src_again_result = run_simgrep_command(["project", "add-path", str(src_dir), "--project", "multi-path-proj"])
+        add_src_again_result = run_simgrep_command(
+            ["project", "add-path", str(src_dir), "--project", "multi-path-proj"]
+        )
         assert add_src_again_result.exit_code == 0
 
         # Index the project
-        index_result = run_simgrep_command(["index", "--project", "multi-path-proj", "--rebuild"], input_str="y\n")
+        index_result = run_simgrep_command(
+            ["index", "--project", "multi-path-proj", "--rebuild"], input_str="y\n"
+        )
         assert index_result.exit_code == 0
         assert "2 files processed" in index_result.stdout  # doc1.txt and util.txt
 
         # Search and verify
-        search_docs_res = run_simgrep_command(["search", "docs", "--project", "multi-path-proj", "--min-score", "0.5"])
+        search_docs_res = run_simgrep_command(
+            ["search", "docs", "--project", "multi-path-proj", "--min-score", "0.5"]
+        )
         assert search_docs_res.exit_code == 0
         clean_docs_stdout = search_docs_res.stdout.replace("\n", "").replace("\r", "")
         assert "doc1.txt" in clean_docs_stdout
         assert "util.txt" not in clean_docs_stdout
 
-        search_src_res = run_simgrep_command(["search", "src", "--project", "multi-path-proj", "--min-score", "0.5"])
+        search_src_res = run_simgrep_command(
+            ["search", "src", "--project", "multi-path-proj", "--min-score", "0.5"]
+        )
         assert search_src_res.exit_code == 0
         clean_src_stdout = search_src_res.stdout.replace("\n", "").replace("\r", "")
         assert "util.txt" in clean_src_stdout

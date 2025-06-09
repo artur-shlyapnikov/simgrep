@@ -1,5 +1,6 @@
 import sys  # For printing to stderr in case of config error
 import warnings
+from importlib.metadata import version
 from pathlib import Path
 from typing import (
     Any,
@@ -25,7 +26,8 @@ try:
     from .config import (
         DEFAULT_K_RESULTS,
         SimgrepConfigError,
-        load_or_create_global_config,
+        initialize_global_config,
+        load_global_config,
     )
     from .formatter import format_count, format_json, format_paths, format_show_basic
     from .indexer import Indexer, IndexerConfig, IndexerError
@@ -33,6 +35,7 @@ try:
         MetadataDBError,
         add_project_path,
         connect_global_db,
+        create_project_scaffolding,
         get_all_projects,
         get_index_counts,
         get_project_by_name,
@@ -55,7 +58,7 @@ try:
         load_tokenizer,
     )
     from .searcher import perform_persistent_search  # Added perform_persistent_search
-    from .utils import gather_files_to_process
+    from .utils import find_project_root, gather_files_to_process, get_project_name_from_local_config
     from .vector_store import (
         VectorStoreError,  # Added VectorStoreError
         create_inmemory_index,
@@ -72,13 +75,16 @@ except ImportError:
         from simgrep.config import (
             DEFAULT_K_RESULTS,
             SimgrepConfigError,
-            load_or_create_global_config,
+            initialize_global_config,
+            load_global_config,
         )
         from simgrep.formatter import format_count, format_json, format_paths, format_show_basic
         from simgrep.indexer import Indexer, IndexerConfig, IndexerError
         from simgrep.metadata_db import (
             MetadataDBError,
+            add_project_path,
             connect_global_db,
+            create_project_scaffolding,
             get_all_projects,
             get_index_counts,
             get_project_by_name,
@@ -101,7 +107,7 @@ except ImportError:
             load_tokenizer,
         )
         from simgrep.searcher import perform_persistent_search  # Added
-        from simgrep.utils import gather_files_to_process
+        from simgrep.utils import find_project_root, gather_files_to_process, get_project_name_from_local_config
         from simgrep.vector_store import (  # Added
             VectorStoreError,
             create_inmemory_index,
@@ -131,31 +137,112 @@ app.add_typer(project_app, name="project")
 console = Console()
 
 
+def get_active_project(project_option: Optional[str]) -> str:
+    """Determines the project name from CLI option, local config, or default."""
+    if project_option:
+        return project_option
+
+    project_root = find_project_root()
+    if project_root:
+        name = get_project_name_from_local_config(project_root)
+        if name:
+            console.print(f"[dim]Detected project '{name}' from local config.[/dim]")
+            return name
+
+    return "default"
+
+
 @app.callback(invoke_without_command=True)
 def main_callback(
     ctx: typer.Context,
-    version: Optional[bool] = typer.Option(None, "--version", "-v", help="Show simgrep version and exit.", is_eager=True),
+    version_flag: Optional[bool] = typer.Option(None, "--version", "-v", help="Show simgrep version and exit.", is_eager=True),
 ) -> None:
     """
     simgrep CLI application.
-    Initializes global configuration, ensuring necessary directories are created.
     """
-    if version:  # If --version is passed, version_callback handles exit.
-        return
+    if version_flag:
+        try:
+            ver = version("simgrep")
+            console.print(f"simgrep version {ver}")
+        except Exception:
+            console.print("simgrep version (could not be determined)")
+        raise typer.Exit()
 
-    try:
-        # Load configuration. This step ensures the default_project_data_dir is created.
-        # The '_config' variable itself is not used further by main_callback or
-        # the ephemeral search command in *this deliverable*.
-        # It will be crucial for persistent indexing commands later.
-        _config = load_or_create_global_config()
-    except SimgrepConfigError:
-        # Error already printed by load_or_create_global_config
-        # console.print(f"[bold red]Fatal Configuration Error:[/bold red]\n{e}") # Redundant if config prints
-        raise typer.Exit(code=1)
-    except Exception as e:  # Catch any other unexpected errors during config load
-        console.print(f"[bold red]An unexpected error occurred during Simgrep initialization:[/bold red]\n{e}")
-        raise typer.Exit(code=1)
+    # The main callback now only handles the version flag.
+    # Each command is responsible for loading its required configuration.
+    # This makes the CLI more explicit and robust.
+
+
+@app.command()
+def init(
+    global_init: bool = typer.Option(
+        False,
+        "--global",
+        help="Initialize the global simgrep configuration in the home directory.",
+    ),
+) -> None:
+    """
+    Initializes simgrep. Use --global for first-time setup.
+    Run in a directory to initialize it as a simgrep project.
+    """
+    if global_init:
+        config_for_path = SimgrepConfig()
+        if config_for_path.config_file.exists():
+            if not typer.confirm(f"Global config file already exists at {config_for_path.config_file}. Overwrite?", default=False):
+                console.print("Aborted.")
+                raise typer.Abort()
+
+        try:
+            initialize_global_config(overwrite=True)
+            console.print(f"[green]Global simgrep configuration initialized at {config_for_path.db_directory}[/green]")
+        except SimgrepConfigError as e:
+            console.print(f"[bold red]Error initializing global config: {e}[/bold red]")
+            raise typer.Exit(code=1)
+    else:
+        # Local project init
+        cwd = Path.cwd()
+        project_name = cwd.name.lower().replace(" ", "-")
+        simgrep_dir = cwd / ".simgrep"
+
+        if simgrep_dir.exists():
+            console.print(f"Project '{project_name}' seems to be already initialized at {cwd}.")
+            raise typer.Exit()
+
+        try:
+            global_cfg = load_global_config()
+        except SimgrepConfigError as e:
+            console.print(f"[bold red]Error:[/bold red] {e}")
+            raise typer.Exit(code=1)
+
+        global_db_path = global_cfg.db_directory / "global_metadata.duckdb"
+        conn = connect_global_db(global_db_path)
+        try:
+            if get_project_by_name(conn, project_name) is not None:
+                console.print(f"[bold red]Error: A project named '{project_name}' already exists globally.[/bold red]")
+                console.print("You can either rename your directory or manage projects manually.")
+                raise typer.Exit(code=1)
+
+            # Create project
+            proj_cfg = create_project_scaffolding(conn, global_cfg, project_name)
+
+            # Add current dir to project paths
+            project_info = get_project_by_name(conn, proj_cfg.name)
+            if not project_info:
+                console.print(f"[bold red]Internal Error: Failed to retrieve project '{proj_cfg.name}' after creation.[/bold red]")
+                raise typer.Exit(code=1)
+            project_id = project_info[0]
+            add_project_path(conn, project_id, str(cwd))
+
+            # Create local .simgrep dir and config
+            simgrep_dir.mkdir()
+            (simgrep_dir / "config.toml").write_text(f'project_name = "{project_name}"\n')
+
+            console.print(f"[green]Initialized simgrep project '{project_name}' in {cwd}[/green]")
+            console.print("Next steps:")
+            console.print("  1. Run 'simgrep index' to build the search index for this project.")
+
+        finally:
+            conn.close()
 
 
 @app.command()
@@ -168,7 +255,7 @@ def search(
         dir_okay=True,
         readable=True,
         resolve_path=True,
-        help="The path to a text file or directory for ephemeral search. If omitted, searches the default persistent index.",
+        help="The path to a text file or directory for ephemeral search. If omitted, searches the active persistent project.",
     ),
     patterns: Optional[List[str]] = typer.Option(
         None,
@@ -198,10 +285,10 @@ def search(
             "Only used with '--output paths'."
         ),
     ),
-    project: str = typer.Option(
-        "default",
+    project: Optional[str] = typer.Option(
+        None,
         "--project",
-        help="Project name to use for persistent search.",
+        help="Project name to use for persistent search. Autodetected if in a project directory.",
     ),
     file_filter: Optional[List[str]] = typer.Option(
         None,
@@ -227,23 +314,30 @@ def search(
     ``patterns`` (default ``['*.txt']``). If ``path_to_search`` is omitted the
     persistent index is searched instead.
     """
-    global_simgrep_config: SimgrepConfig = load_or_create_global_config()  # Load config early
     is_json_output = output == OutputMode.json
 
     if path_to_search is None:
         # --- Persistent Search ---
+        try:
+            global_simgrep_config = load_global_config()
+        except SimgrepConfigError as e:
+            console.print(f"[bold red]Error:[/bold red] {e}")
+            raise typer.Exit(code=1)
+
+        active_project = get_active_project(project)
+
         if not is_json_output:
-            console.print(f"Searching for: '[bold blue]{query_text}[/bold blue]' in project '[magenta]{project}[/magenta]'")
+            console.print(f"Searching for: '[bold blue]{query_text}[/bold blue]' in project '[magenta]{active_project}[/magenta]'")
 
         global_db_path = global_simgrep_config.db_directory / "global_metadata.duckdb"
         conn = connect_global_db(global_db_path)
         try:
-            project_cfg = get_project_config(conn, project)
+            project_cfg = get_project_config(conn, active_project)
         finally:
             conn.close()
 
         if project_cfg is None:
-            console.print(f"[bold red]Error: Project '{project}' not found.[/bold red]")
+            console.print(f"[bold red]Error: Project '{active_project}' not found.[/bold red]")
             raise typer.Exit(code=1)
 
         project_db_file = project_cfg.db_path
@@ -251,12 +345,11 @@ def search(
 
         if not project_db_file.exists() or not project_usearch_file.exists():
             console.print(
-                f"[bold yellow]Warning: Persistent index for project '{project}' not found at '{project_cfg.db_path.parent}'.[/bold yellow]\n"
-                f"Please run 'simgrep index <path> --project {project}' first to create an index."
+                f"[bold yellow]Warning: Persistent index for project '{active_project}' not found at '{project_cfg.db_path.parent}'.[/bold yellow]\n"
+                f"Please run 'simgrep index --project {active_project}' first to create an index."
             )
             if output == OutputMode.paths:
                 console.print("No matching files found.")
-                raise typer.Exit()
             raise typer.Exit(code=1)
 
         persistent_store: Optional[MetadataStore] = None
@@ -319,6 +412,7 @@ def search(
         return  # End of persistent search path
 
     # --- Ephemeral Search (path_to_search is provided) ---
+    global_simgrep_config = SimgrepConfig()  # Ephemeral search uses default config, no need to load from file
     if not is_json_output:
         console.print(f"Performing ephemeral search for: '[bold blue]{query_text}[/bold blue]' in path: '[green]{path_to_search}[/green]'")
     store: Optional[MetadataStore] = None
@@ -685,50 +779,55 @@ def index(
         "--rebuild",
         help="Wipe existing data and rebuild the project's index from scratch.",
     ),
-    project: str = typer.Option(
-        "default",
+    project: Optional[str] = typer.Option(
+        None,
         "--project",
-        help="Project name to index.",
+        help="Project name to index. Autodetected if in a project directory.",
     ),
 ) -> None:
     """
     Creates or updates a persistent index for all paths in a project.
     If --rebuild is provided, existing data for that project will be deleted before indexing.
     """
-    console.print(f"Starting indexing for project '[magenta]{project}[/magenta]'")
+    try:
+        global_simgrep_config = load_global_config()
+    except SimgrepConfigError as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+    active_project = get_active_project(project)
+    console.print(f"Starting indexing for project '[magenta]{active_project}[/magenta]'")
     if rebuild:
-        console.print(f"[bold yellow]Warning: This will wipe and rebuild the '{project}' project index.[/bold yellow]")
+        console.print(f"[bold yellow]Warning: This will wipe and rebuild the '{active_project}' project index.[/bold yellow]")
         if not typer.confirm(
-            f"Are you sure you want to wipe and rebuild the '{project}' project index?",
+            f"Are you sure you want to wipe and rebuild the '{active_project}' project index?",
             default=False,
         ):
             console.print("Aborted indexing.")
             raise typer.Abort()
 
     try:
-        global_simgrep_config: SimgrepConfig = load_or_create_global_config()
-
         global_db_path = global_simgrep_config.db_directory / "global_metadata.duckdb"
         conn = connect_global_db(global_db_path)
         try:
-            project_cfg = get_project_config(conn, project)
+            project_cfg = get_project_config(conn, active_project)
         finally:
             conn.close()
 
         if project_cfg is None:
-            console.print(f"[bold red]Error: Project '{project}' not found.[/bold red]")
+            console.print(f"[bold red]Error: Project '{active_project}' not found.[/bold red]")
             raise typer.Exit(code=1)
 
         if not project_cfg.indexed_paths:
-            console.print(f"[yellow]Warning: Project '{project}' has no paths to index.[/yellow]")
-            console.print(f"Use 'simgrep project add-path <path> --project {project}' to add paths.")
+            console.print(f"[yellow]Warning: Project '{active_project}' has no paths to index.[/yellow]")
+            console.print(f"Use 'simgrep project add-path <path> --project {active_project}' to add paths.")
             raise typer.Exit()
 
         project_db_file = project_cfg.db_path
         project_usearch_file = project_cfg.usearch_index_path
 
         indexer_config = IndexerConfig(
-            project_name=project,
+            project_name=active_project,
             db_path=project_db_file,
             usearch_index_path=project_usearch_file,
             embedding_model_name=project_cfg.embedding_model,
@@ -740,7 +839,7 @@ def index(
         indexer_instance = Indexer(config=indexer_config, console=console)
         indexer_instance.run_index(target_paths=project_cfg.indexed_paths, wipe_existing=rebuild)
 
-        console.print(f"[bold green]Successfully indexed project '{project}'.[/bold green]")
+        console.print(f"[bold green]Successfully indexed project '{active_project}'.[/bold green]")
 
     except SimgrepConfigError as e:
         console.print(f"[bold red]Configuration Error:[/bold red]\n  {e}")
@@ -759,8 +858,9 @@ def index(
 @app.command()
 def status() -> None:
     try:
-        cfg: SimgrepConfig = load_or_create_global_config()
-    except SimgrepConfigError:
+        cfg = load_global_config()
+    except SimgrepConfigError as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(code=1)
 
     db_file = cfg.default_project_data_dir / "metadata.duckdb"
@@ -788,8 +888,9 @@ def status() -> None:
 def project_create(name: str) -> None:
     """Create a new named project."""
     try:
-        cfg = load_or_create_global_config()
-    except SimgrepConfigError:
+        cfg = load_global_config()
+    except SimgrepConfigError as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(code=1)
 
     global_db_path = cfg.db_directory / "global_metadata.duckdb"
@@ -799,25 +900,7 @@ def project_create(name: str) -> None:
             console.print(f"[bold red]Project '{name}' already exists.[/bold red]")
             raise typer.Exit(code=1)
 
-        # Logic from add_project_to_config moved here
-        project_dir = cfg.db_directory / "projects" / name
-        project_dir.mkdir(parents=True, exist_ok=True)
-
-        proj_cfg = ProjectConfig(
-            name=name,
-            indexed_paths=[],
-            embedding_model=cfg.default_embedding_model_name,
-            db_path=project_dir / "metadata.duckdb",
-            usearch_index_path=project_dir / "index.usearch",
-        )
-
-        insert_project(
-            conn,
-            project_name=name,
-            db_path=str(proj_cfg.db_path),
-            usearch_index_path=str(proj_cfg.usearch_index_path),
-            embedding_model_name=proj_cfg.embedding_model,
-        )
+        create_project_scaffolding(conn, cfg, name)
         console.print(f"[green]Project '{name}' created.[/green]")
     except (MetadataDBError, SimgrepConfigError) as e:
         console.print(f"[bold red]Error creating project: {e}[/bold red]")
@@ -845,8 +928,9 @@ def project_add_path(
 ) -> None:
     """Adds a path to a project. Simgrep will scan this path during indexing."""
     try:
-        cfg = load_or_create_global_config()
-    except SimgrepConfigError:
+        cfg = load_global_config()
+    except SimgrepConfigError as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(code=1)
 
     global_db_path = cfg.db_directory / "global_metadata.duckdb"
@@ -872,8 +956,9 @@ def project_add_path(
 def project_list() -> None:
     """List all configured projects."""
     try:
-        cfg = load_or_create_global_config()
-    except SimgrepConfigError:
+        cfg = load_global_config()
+    except SimgrepConfigError as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(code=1)
 
     global_db_path = cfg.db_directory / "global_metadata.duckdb"

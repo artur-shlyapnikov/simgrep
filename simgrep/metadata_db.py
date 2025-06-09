@@ -8,12 +8,12 @@ import duckdb
 # assuming models.py is in the same directory or simgrep is installed
 try:
     from .exceptions import MetadataDBError
-    from .models import ChunkData, ProjectConfig
+    from .models import ChunkData, ProjectConfig, SimgrepConfig
 except ImportError:
     # this fallback might be needed if running scripts directly from the simgrep folder
     # or if the package structure is not fully resolved in some contexts.
     from simgrep.exceptions import MetadataDBError  # type: ignore
-    from simgrep.models import ChunkData, ProjectConfig  # type: ignore
+    from simgrep.models import ChunkData, ProjectConfig, SimgrepConfig  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -623,3 +623,33 @@ def get_project_config(conn: duckdb.DuckDBPyConnection, project_name: str) -> Op
         db_path=pathlib.Path(db_path_str),
         usearch_index_path=pathlib.Path(usearch_index_path_str),
     )
+
+
+def create_project_scaffolding(
+    global_conn: duckdb.DuckDBPyConnection,
+    global_config: SimgrepConfig,
+    project_name: str,
+) -> ProjectConfig:
+    """
+    Creates project data directories and inserts the project record into the global DB.
+    Returns the new ProjectConfig.
+    """
+    project_data_root = global_config.db_directory / "projects" / project_name
+    project_data_root.mkdir(parents=True, exist_ok=True)
+
+    proj_cfg = ProjectConfig(
+        name=project_name,
+        indexed_paths=[],
+        embedding_model=global_config.default_embedding_model_name,
+        db_path=project_data_root / "metadata.duckdb",
+        usearch_index_path=project_data_root / "index.usearch",
+    )
+
+    insert_project(
+        global_conn,
+        project_name=proj_cfg.name,
+        db_path=str(proj_cfg.db_path),
+        usearch_index_path=str(proj_cfg.usearch_index_path),
+        embedding_model_name=proj_cfg.embedding_model,
+    )
+    return proj_cfg

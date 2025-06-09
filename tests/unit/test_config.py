@@ -4,21 +4,17 @@ from unittest.mock import patch
 
 import pytest
 
-from simgrep.config import SimgrepConfigError, load_or_create_global_config
+from simgrep.config import SimgrepConfigError, initialize_global_config, load_global_config
 from simgrep.models import SimgrepConfig
 
 
 class TestSimgrepConfig:
-    def test_load_or_create_global_config_success(self, tmp_path: Path) -> None:
+    def test_initialize_and_load_global_config_success(self, tmp_path: Path) -> None:
         """
         Tests successful creation of SimgrepConfig and data directory using mocked home.
         """
         user_home_in_tmp = tmp_path / "userhome"
         user_home_in_tmp.mkdir()  # Ensure the mocked home directory exists
-
-        config_root = user_home_in_tmp / ".config" / "simgrep"
-        expected_data_dir = config_root / "default_project"
-        expected_config_file = config_root / "config.toml"
 
         # Mock os.path.expanduser to control tilde expansion
         def mock_os_expanduser(path_str: str) -> str:
@@ -27,7 +23,15 @@ class TestSimgrepConfig:
             return os.path.expanduser(path_str)  # Fallback for other paths if any
 
         with patch("os.path.expanduser", side_effect=mock_os_expanduser):
-            config = load_or_create_global_config()
+            # 1. Initialize the config
+            initialize_global_config()
+
+            # 2. Load the newly created config
+            config = load_global_config()
+
+            config_root = user_home_in_tmp / ".config" / "simgrep"
+            expected_data_dir = config_root / "default_project"
+            expected_config_file = config_root / "config.toml"
 
             assert isinstance(config, SimgrepConfig)
             assert config.default_project_data_dir == expected_data_dir
@@ -51,7 +55,7 @@ class TestSimgrepConfig:
             finally:
                 conn.close()
 
-    def test_load_or_create_global_config_dir_already_exists(self, tmp_path: Path) -> None:
+    def test_load_global_config_dir_already_exists(self, tmp_path: Path) -> None:
         """
         Tests that function works if the directory already exists.
         """
@@ -68,13 +72,14 @@ class TestSimgrepConfig:
             return os.path.expanduser(path_str)
 
         with patch("os.path.expanduser", side_effect=mock_os_expanduser):
-            config = load_or_create_global_config()
+            initialize_global_config()
+            config = load_global_config()
             assert config.default_project_data_dir == expected_data_dir
             assert config.config_file == expected_config_file
             assert expected_data_dir.exists()
             assert expected_config_file.exists()
 
-    def test_load_or_create_global_config_permission_error(self, tmp_path: Path) -> None:
+    def test_initialize_global_config_permission_error(self, tmp_path: Path) -> None:
         """
         Tests that SimgrepConfigError is raised if directory creation fails.
         """
@@ -89,20 +94,13 @@ class TestSimgrepConfig:
 
         # Patch os.path.expanduser to control the path resolution
         with patch("os.path.expanduser", side_effect=mock_os_expanduser):
-            # Mock the SimgrepConfig instance that will be created to ensure its
-            # default_project_data_dir is what we expect, then mock mkdir on that.
-            # This is a bit complex. A simpler way is to trust SimgrepConfig resolves the path
-            # correctly under the os.path.expanduser patch, and then directly patch Path.mkdir.
-
-            # The SimgrepConfig will instantiate with default_project_data_dir = resolved_path_under_tmp
-            # due to the mock_os_expanduser.
-            # So, we need to patch Path.mkdir globally for this test.
+            # Mock Path.mkdir to simulate a permission issue.
             with patch.object(Path, "mkdir", side_effect=OSError("Permission denied")):
                 with pytest.raises(
                     SimgrepConfigError,
                     match="Fatal: Could not create simgrep data directory",
                 ):
-                    load_or_create_global_config()
+                    initialize_global_config()
 
     def test_simgrep_config_defaults(self) -> None:
         """Test that SimgrepConfig model has correct default values."""
