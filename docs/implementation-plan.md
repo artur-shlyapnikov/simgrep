@@ -232,7 +232,7 @@
         3. Modify a file in `dir1`. Run `simgrep index ./dir1`. Observe it re-indexes only that file.
         4. Add a new file to `dir1`. Run `simgrep index ./dir1`. Observe it indexes the new file.
 
-* **Deliverable 4.3: `index --rebuild` Option**
+* **Deliverable 4.3: `index --rebuild` Option** ✅
   * **Goal:** Allow forcing a full re-index of the default project.
   * **Tasks:**
         1. Add `--rebuild` flag to `simgrep index` command.
@@ -241,7 +241,7 @@
   * **What to Test:**
     * `simgrep index ./dir1 --rebuild` clears and re-indexes everything for the default project.
 
-* **Deliverable 4.4: TOML Configuration File & Named Projects Foundation**
+* **Deliverable 4.4: TOML Configuration File & Named Projects Foundation** ✅
   * **Goal:** Introduce `config.toml` and schema for managing multiple projects.
   * **Tasks:**
         1. Modify `simgrep/config.py`:
@@ -257,7 +257,7 @@
     * `~/.config/simgrep/config.toml` is created/updated.
     * A global DuckDB file is created with `projects` table. "default" project exists.
 
-* **Deliverable 4.5: `simgrep project` Subcommands (create, list)**
+* **Deliverable 4.5: `simgrep project` Subcommands (create, list)** ✅
   * **Goal:** Allow users to create and list named projects.
   * **Tasks:**
         1. In `main.py`, define a new Typer command group `project`.
@@ -277,7 +277,7 @@
     * `simgrep project list` shows "default" and "my_research" (default flagged).
     * `config.toml` contains a `[projects.my_research]` section matching the created paths.
 
-* **Deliverable 4.6: `index` & `search` with `--project <name>`**
+* **Deliverable 4.6: `index` & `search` with `--project <name>`** ✅
   * **Goal:** Target indexing and searching to specific named projects.
   * **Tasks:**
         1. Add `--project <name>` option to `simgrep index` and `simgrep search`.
