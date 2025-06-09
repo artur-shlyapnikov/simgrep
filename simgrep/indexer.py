@@ -413,9 +413,18 @@ class Indexer:
 
             # finalization
             if self.usearch_index is not None and len(self.usearch_index) > 0:
-                self.console.print(f"Saving vector index with {len(self.usearch_index)} items...")
-                save_persistent_index(self.usearch_index, self.config.usearch_index_path)
-                self.console.print("Vector index saved.")
+                self.console.print(
+                    f"Saving vector index with {len(self.usearch_index)} items..."
+                )
+                saved = save_persistent_index(
+                    self.usearch_index, self.config.usearch_index_path
+                )
+                if saved:
+                    self.console.print("Vector index saved.")
+                else:
+                    self.console.print(
+                        f"[yellow]Failed to save vector index to {self.config.usearch_index_path}[/yellow]"
+                    )
             elif self.usearch_index is not None and len(self.usearch_index) == 0:
                 self.console.print("Vector index is empty. Not saving.")
                 # optionally delete an old index file if it exists and current one is empty after wipe

@@ -49,7 +49,8 @@ class TestPersistentVectorStore:
         assert not persistent_index_path.exists()
         assert not persistent_index_path.parent.exists()  # to check directory creation
 
-        save_persistent_index(sample_usearch_index, persistent_index_path)
+        saved = save_persistent_index(sample_usearch_index, persistent_index_path)
+        assert saved is True
 
         assert persistent_index_path.exists()
         assert persistent_index_path.is_file()
@@ -89,7 +90,8 @@ class TestPersistentVectorStore:
         persistent_index_path: pathlib.Path,
     ) -> None:
         """test saving an empty index."""
-        save_persistent_index(empty_usearch_index, persistent_index_path)
+        saved = save_persistent_index(empty_usearch_index, persistent_index_path)
+        assert saved is True
         assert persistent_index_path.exists()
 
         loaded_index = load_persistent_index(persistent_index_path)
@@ -119,9 +121,9 @@ class TestPersistentVectorStore:
         )  # e.g., .../persistent_indexes/
         path_that_should_be_dir.touch()  # create it as a file
 
-        error_match = f"Could not create directory for USearch index at {str(path_that_should_be_dir)}"
-        with pytest.raises(VectorStoreError, match=error_match):
-            save_persistent_index(sample_usearch_index, persistent_index_path)
+        saved = save_persistent_index(sample_usearch_index, persistent_index_path)
+        assert saved is False
+        assert not persistent_index_path.exists()
 
     def test_save_persistent_index_atomic_failure_on_replace(
         self,
@@ -143,11 +145,8 @@ class TestPersistentVectorStore:
 
         # the error message comes from the inner try-except block handling os.replace failure.
         # it should indicate failure to finalize the move to the persistent_index_path.
-        expected_error_message = (
-            f"Failed to finalize saving index to {str(persistent_index_path)}"
-        )
-        with pytest.raises(VectorStoreError, match=expected_error_message):
-            save_persistent_index(sample_usearch_index, persistent_index_path)
+        saved = save_persistent_index(sample_usearch_index, persistent_index_path)
+        assert saved is False
 
         # final state: original file should not exist, temp file should be cleaned up
         assert not persistent_index_path.exists()
