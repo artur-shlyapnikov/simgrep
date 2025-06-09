@@ -24,16 +24,14 @@ class TestCliEphemeralE2E:
         file2 = docs_dir / "two.txt"
         file2.write_text("bananas oranges")
 
-        env_vars = {"HOME": str(temp_simgrep_home)}
-
-        show_result = run_simgrep_command(["search", "bananas", str(docs_dir)], env=env_vars)
-        assert show_result.returncode == 0
+        show_result = run_simgrep_command(["search", "bananas", str(docs_dir)])
+        assert show_result.exit_code == 0
         assert "File:" in show_result.stdout
         assert "Processing:" in show_result.stdout
         assert "100%" in show_result.stdout
 
-        paths_result = run_simgrep_command(["search", "bananas", str(docs_dir), "--output", "paths"], env=env_vars)
-        assert paths_result.returncode == 0
+        paths_result = run_simgrep_command(["search", "bananas", str(docs_dir), "--output", "paths"])
+        assert paths_result.exit_code == 0
         assert ".txt" in paths_result.stdout
         assert "Processing:" in paths_result.stdout
         assert "100%" in paths_result.stdout
@@ -42,10 +40,8 @@ class TestCliEphemeralE2E:
         file_path = tmp_path / "single.txt"
         file_path.write_text("grapefruit and apples")
 
-        env_vars = {"HOME": str(temp_simgrep_home)}
-
-        result = run_simgrep_command(["search", "grapefruit", str(file_path), "--output", "paths"], env=env_vars)
-        assert result.returncode == 0
+        result = run_simgrep_command(["search", "grapefruit", str(file_path), "--output", "paths"])
+        assert result.exit_code == 0
         assert "single.txt" in result.stdout
         assert "Processing:" in result.stdout
         assert "100%" in result.stdout
@@ -58,8 +54,6 @@ class TestCliEphemeralE2E:
         subdir.mkdir()
         (subdir / "nested.txt").write_text("more apples")
 
-        env_vars = {"HOME": str(temp_simgrep_home)}
-
         result = run_simgrep_command(
             [
                 "search",
@@ -69,8 +63,7 @@ class TestCliEphemeralE2E:
                 "paths",
                 "--relative-paths",
             ],
-            env=env_vars,
         )
-        assert result.returncode == 0
+        assert result.exit_code == 0
         assert "root.txt" in result.stdout
         assert "subdir/nested.txt" in result.stdout
