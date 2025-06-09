@@ -2,7 +2,7 @@
 
 `simgrep` is a command-line tool for semantic search in local files. It finds text snippets based on meaning, not just exact keywords.
 
-It supports quick one-off searches and persistent indexing for a default project.
+It supports quick one-off searches and persistent indexing. A default project is created automatically, and you can manage additional projects.
 
 See the [Architecture Document](docs/architecture.md) for more details.
 
@@ -52,13 +52,16 @@ simgrep search "apples" docs --top 3
 ## Persistent Indexing
 
 *   **Indexing:**
-    *   `simgrep index <path>` builds or updates the default project's index for the given path.
+    *   `simgrep index <path> [--project NAME]` builds or updates a project's index. If `--project` is omitted, the default project is used.
     *   Embeddings are stored in a USearch index on disk and metadata in a DuckDB database.
 *   **Searching:**
-    *   `simgrep search "your query"` searches the default index when no path is provided.
+    *   `simgrep search "your query" [--project NAME]` searches the chosen project's index (default project if omitted).
+*   **Projects:**
+    *   `simgrep project create <name>` creates a new project directory and database.
+    *   `simgrep project list` shows all available projects.
 *   **Status:**
-    *   `simgrep status` shows how many files and chunks are indexed.
+    *   `simgrep status` shows how many files and chunks are indexed for the default project.
 *   **Incremental Updates:**
     *   Only new or changed files are processed on subsequent indexing runs.
 
-(Further phases include named projects, more output modes like RAG, and advanced configuration as outlined in the [Implementation Plan](docs/implementation-plan.md) and [Architecture Document](docs/architecture.md)).
+(Further phases include additional output modes like RAG and more configuration options. See the [Implementation Plan](docs/implementation-plan.md) and [Architecture Document](docs/architecture.md) for details.)
