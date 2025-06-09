@@ -1,18 +1,21 @@
 import pytest
-from hypothesis import given, settings, assume, HealthCheck
+from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 from transformers import PreTrainedTokenizerBase
+
+from simgrep.processor import chunk_text_by_tokens, load_tokenizer
 
 pytest.importorskip("transformers")
 pytest.importorskip("sentence_transformers")
 
-from simgrep.processor import load_tokenizer, chunk_text_by_tokens
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+
 
 @pytest.fixture(scope="module")
 def tokenizer() -> PreTrainedTokenizerBase:
     return load_tokenizer(MODEL_NAME)
+
 
 @settings(max_examples=50, suppress_health_check=[HealthCheck.filter_too_much])
 @given(

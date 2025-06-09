@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 
 from simgrep.config import SimgrepConfigError, load_or_create_global_config
-from simgrep.models import ProjectConfig, SimgrepConfig
+from simgrep.models import SimgrepConfig
 
 
 class TestSimgrepConfig:
@@ -42,9 +42,7 @@ class TestSimgrepConfig:
             assert expected_config_file.exists()
             assert "default" in config.projects
 
-    def test_load_or_create_global_config_dir_already_exists(
-        self, tmp_path: Path
-    ) -> None:
+    def test_load_or_create_global_config_dir_already_exists(self, tmp_path: Path) -> None:
         """
         Tests that function works if the directory already exists.
         """
@@ -67,9 +65,7 @@ class TestSimgrepConfig:
             assert expected_data_dir.exists()
             assert expected_config_file.exists()
 
-    def test_load_or_create_global_config_permission_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_load_or_create_global_config_permission_error(self, tmp_path: Path) -> None:
         """
         Tests that SimgrepConfigError is raised if directory creation fails.
         """

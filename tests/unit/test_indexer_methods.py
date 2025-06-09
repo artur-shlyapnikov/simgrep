@@ -1,4 +1,5 @@
 import pathlib
+
 import pytest
 from rich.console import Console
 
@@ -45,6 +46,7 @@ def test_generate_embeddings_for_chunks(indexer_instance: Indexer) -> None:
 
 def test_store_processed_chunks(tmp_path: pathlib.Path, indexer_instance: Indexer) -> None:
     indexer_instance._prepare_data_stores(wipe_existing=True)
+    assert indexer_instance.metadata_store is not None
     file_id = indexer_instance.metadata_store.insert_indexed_file_record(
         file_path=str(tmp_path / "dummy.txt"),
         content_hash="hash",
@@ -57,6 +59,8 @@ def test_store_processed_chunks(tmp_path: pathlib.Path, indexer_instance: Indexe
     embeddings = indexer_instance._generate_embeddings_for_chunks(chunks)
     indexer_instance._store_processed_chunks(file_id, chunks, embeddings)
 
+    assert indexer_instance.usearch_index is not None
     assert len(indexer_instance.usearch_index) == len(chunks)
+    assert indexer_instance.metadata_store is not None
     count_row = indexer_instance.metadata_store.conn.execute("SELECT COUNT(*) FROM text_chunks;").fetchone()
     assert count_row is not None and count_row[0] == len(chunks)

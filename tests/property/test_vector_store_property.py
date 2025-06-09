@@ -3,16 +3,17 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from hypothesis.extra import numpy as hynp
+from hypothesis.strategies import DrawFn
+
+from simgrep.vector_store import create_inmemory_index, search_inmemory_index
 
 pytest.importorskip("numpy")
 pytest.importorskip("usearch.index")
 
-from simgrep.vector_store import create_inmemory_index, search_inmemory_index
 
-
-def _embedding_label_strategy():
+def _embedding_label_strategy() -> st.SearchStrategy[tuple[np.ndarray, np.ndarray, np.ndarray]]:
     @st.composite
-    def _inner(draw):
+    def _inner(draw: DrawFn) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         n = draw(st.integers(min_value=1, max_value=5))
         d = draw(st.integers(min_value=1, max_value=16))
         embeddings = draw(

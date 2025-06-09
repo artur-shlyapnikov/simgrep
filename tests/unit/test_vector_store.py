@@ -2,11 +2,11 @@ import numpy as np
 import pytest
 import usearch.index
 
-pytest.importorskip("numpy")
-pytest.importorskip("usearch.index")
-
 from simgrep.models import SearchResult
 from simgrep.vector_store import create_inmemory_index, search_inmemory_index
+
+pytest.importorskip("numpy")
+pytest.importorskip("usearch.index")
 
 
 @pytest.fixture

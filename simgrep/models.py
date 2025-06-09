@@ -15,18 +15,12 @@ class OutputMode(str, Enum):
 class ChunkData(BaseModel):
     text: str  # the actual text content of the chunk
     source_file_path: Path  # absolute path to the original file
-    source_file_id: (
-        int  # ephemeral id for the source file within the current processing batch
-    )
+    source_file_id: int  # ephemeral id for the source file within the current processing batch
     # (e.g., index from enumerate(files_to_process))
     usearch_label: int  # unique label assigned to this chunk for usearch.
     # this will be the global index of the chunk's embedding.
-    start_char_offset: (
-        int  # character offset of the chunk's start in the original file content
-    )
-    end_char_offset: (
-        int  # character offset of the chunk's end in the original file content
-    )
+    start_char_offset: int  # character offset of the chunk's start in the original file content
+    end_char_offset: int  # character offset of the chunk's end in the original file content
     token_count: int  # number of tokens in this chunk (as per the specified tokenizer)
 
 
@@ -54,17 +48,11 @@ class SimgrepConfig(BaseModel):
     # core for deliverable 3.1: directory for the default project's database and vector index.
     # the path `~/.config/simgrep/default_project` will store data for the default project.
     # the parent `~/.config/simgrep/` will later hold the global config.toml and global metadata db.
-    default_project_data_dir: Path = Field(
-        default_factory=lambda: Path("~/.config/simgrep/default_project").expanduser()
-    )
+    default_project_data_dir: Path = Field(default_factory=lambda: Path("~/.config/simgrep/default_project").expanduser())
 
-    config_file: Path = Field(
-        default_factory=lambda: Path("~/.config/simgrep/config.toml").expanduser()
-    )
+    config_file: Path = Field(default_factory=lambda: Path("~/.config/simgrep/config.toml").expanduser())
 
-    db_directory: Path = Field(
-        default_factory=lambda: Path("~/.config/simgrep").expanduser()
-    )
+    db_directory: Path = Field(default_factory=lambda: Path("~/.config/simgrep").expanduser())
 
     projects: Dict[str, ProjectConfig] = Field(default_factory=dict)
 

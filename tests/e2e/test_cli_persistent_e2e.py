@@ -98,9 +98,7 @@ class TestCliPersistentE2E:
     These tests now run in-process for speed.
     """
 
-    def test_index_and_search_persistent_show_mode(
-        self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path
-    ) -> None:
+    def test_index_and_search_persistent_show_mode(self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path) -> None:
         """
         With CliRunner, env vars are passed directly. No need for a separate dict.
         The monkeypatch in temp_simgrep_home handles home dir isolation.
@@ -134,9 +132,7 @@ class TestCliPersistentE2E:
         assert "doc1.txt" in search_banana_result.stdout
         assert str(pathlib.Path("subdir") / "doc_sub.txt") in search_banana_result.stdout  # Check subpath
 
-    def test_index_and_search_persistent_paths_mode(
-        self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path
-    ) -> None:
+    def test_index_and_search_persistent_paths_mode(self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path) -> None:
         # 1. Index (assuming it's clean or wiped by indexer logic)
         run_simgrep_command(
             ["index", str(sample_docs_dir_session), "--rebuild"],
@@ -176,12 +172,8 @@ class TestCliPersistentE2E:
 
         db_file = temp_simgrep_home / ".config" / "simgrep" / "default_project" / "metadata.duckdb"
         conn = duckdb.connect(str(db_file))
-        files_count = conn.execute(
-            "SELECT COUNT(*) FROM indexed_files;"
-        ).fetchone()[0]  # type: ignore[index]
-        chunks_count = conn.execute(
-            "SELECT COUNT(*) FROM text_chunks;"
-        ).fetchone()[0]  # type: ignore[index]
+        files_count = conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()[0]  # type: ignore[index]
+        chunks_count = conn.execute("SELECT COUNT(*) FROM text_chunks;").fetchone()[0]  # type: ignore[index]
         conn.close()
 
         status_result = run_simgrep_command(["status"])
@@ -209,9 +201,7 @@ class TestCliPersistentE2E:
         empty_dir = tmp_path / "empty_docs_for_e2e"
         empty_dir.mkdir()
 
-        index_result = run_simgrep_command(
-            ["index", str(empty_dir), "--rebuild"], input_str="y\n"
-        )
+        index_result = run_simgrep_command(["index", str(empty_dir), "--rebuild"], input_str="y\n")
         assert index_result.exit_code == 0
         assert "No files found to index" in index_result.stdout
         assert "0 files processed" in index_result.stdout  # Or similar message indicating no work done
@@ -221,9 +211,7 @@ class TestCliPersistentE2E:
         assert search_result.exit_code == 1
         assert "Persistent index for project 'default' not found" in search_result.stdout
 
-    def test_index_non_txt_files_are_ignored_by_default(
-        self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path
-    ) -> None:
+    def test_index_non_txt_files_are_ignored_by_default(self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path) -> None:
         index_result = run_simgrep_command(
             ["index", str(sample_docs_dir_session), "--rebuild"],
             input_str="y\n",
@@ -237,9 +225,7 @@ class TestCliPersistentE2E:
         # Accept either 'No relevant chunks found' or only low scores in output
         assert "No relevant chunks found" in search_result.stdout or "Score:" in search_result.stdout
 
-    def test_search_top_option_limits_results(
-        self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path
-    ) -> None:
+    def test_search_top_option_limits_results(self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path) -> None:
         run_simgrep_command(
             ["index", str(sample_docs_dir_session), "--rebuild"],
             input_str="y\n",
@@ -253,9 +239,7 @@ class TestCliPersistentE2E:
         assert top2_result.exit_code == 0
         assert top2_result.stdout.count("File:") >= 2
 
-    def test_index_prompt_decline_prevents_reindexing(
-        self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path
-    ) -> None:
+    def test_index_prompt_decline_prevents_reindexing(self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path) -> None:
         run_simgrep_command(
             ["index", str(sample_docs_dir_session), "--rebuild"],
             input_str="y\n",
@@ -282,9 +266,7 @@ class TestCliPersistentE2E:
         after_files = row_after[0]
         assert after_files == initial_files
 
-    def test_persistent_search_relative_paths(
-        self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path
-    ) -> None:
+    def test_persistent_search_relative_paths(self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path) -> None:
         run_simgrep_command(
             ["index", str(sample_docs_dir_session), "--rebuild"],
             input_str="y\n",

@@ -24,4 +24,3 @@ def test_default_project_exists_in_global_db(tmp_path: Path) -> None:
             assert project is not None
         finally:
             conn.close()
-

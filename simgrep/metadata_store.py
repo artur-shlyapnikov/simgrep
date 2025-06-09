@@ -1,5 +1,6 @@
 import pathlib
 from typing import Any, Dict, List, Optional, Tuple
+
 from .metadata_db import (
     batch_insert_chunks,
     batch_insert_files,
@@ -42,15 +43,11 @@ class MetadataStore:
     def batch_insert_chunks(self, chunk_data_list: List[ChunkData]) -> None:
         batch_insert_chunks(self.conn, chunk_data_list)
 
-    def retrieve_chunk_for_display(
-        self, chunk_id: int
-    ) -> Optional[Tuple[str, pathlib.Path, int, int]]:
+    def retrieve_chunk_for_display(self, chunk_id: int) -> Optional[Tuple[str, pathlib.Path, int, int]]:
         return retrieve_chunk_for_display(self.conn, chunk_id)
 
     # --- persistent table helpers ---
-    def retrieve_chunk_details_persistent(
-        self, usearch_label: int
-    ) -> Optional[Tuple[str, pathlib.Path, int, int]]:
+    def retrieve_chunk_details_persistent(self, usearch_label: int) -> Optional[Tuple[str, pathlib.Path, int, int]]:
         return retrieve_chunk_details_persistent(self.conn, usearch_label)
 
     def clear_persistent_project_data(self) -> None:

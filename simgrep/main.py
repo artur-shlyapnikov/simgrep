@@ -212,9 +212,7 @@ def search(
 
     if path_to_search is None:
         # --- Persistent Search ---
-        console.print(
-            f"Searching for: '[bold blue]{query_text}[/bold blue]' in project '[magenta]{project}[/magenta]'"
-        )
+        console.print(f"Searching for: '[bold blue]{query_text}[/bold blue]' in project '[magenta]{project}[/magenta]'")
         project_db_file = project_cfg.db_path
         project_usearch_file = project_cfg.usearch_index_path
 

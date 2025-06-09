@@ -9,14 +9,12 @@ try:
     from sentence_transformers import SentenceTransformer
     from transformers import AutoTokenizer
 except ImportError:
-    logger.error(
-        "Failed to import sentence_transformers or transformers. "
-        "Ensure they are installed in the environment."
-    )
+    logger.error("Failed to import sentence_transformers or transformers. " "Ensure they are installed in the environment.")
     raise
 
 # Use the canonical model name
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+
 
 def cache_model_and_tokenizer():
     """Downloads and caches the specified model and its tokenizer."""
@@ -37,6 +35,7 @@ def cache_model_and_tokenizer():
         logger.error(f"Error caching SentenceTransformer model {MODEL_NAME}: {e}")
         # Optionally, re-raise or exit
         # raise
+
 
 if __name__ == "__main__":
     logger.info("Starting Hugging Face model caching process...")

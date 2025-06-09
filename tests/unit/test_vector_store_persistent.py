@@ -5,14 +5,14 @@ import numpy as np
 import pytest
 import usearch.index
 
-pytest.importorskip("numpy")
-pytest.importorskip("usearch.index")
-
 from simgrep.vector_store import (
     VectorStoreError,
     load_persistent_index,
     save_persistent_index,
 )
+
+pytest.importorskip("numpy")
+pytest.importorskip("usearch.index")
 
 
 @pytest.fixture
@@ -39,7 +39,6 @@ def empty_usearch_index() -> usearch.index.Index:
 
 
 class TestPersistentVectorStore:
-
     def test_save_and_load_persistent_index(
         self,
         sample_usearch_index: usearch.index.Index,
@@ -57,9 +56,7 @@ class TestPersistentVectorStore:
         assert persistent_index_path.parent.exists()  # directory was created
 
         # check that the temporary file is gone
-        temp_file_path = persistent_index_path.with_suffix(
-            persistent_index_path.suffix + ".tmp"
-        )
+        temp_file_path = persistent_index_path.with_suffix(persistent_index_path.suffix + ".tmp")
         assert not temp_file_path.exists()
 
         loaded_index = load_persistent_index(persistent_index_path)
@@ -67,20 +64,14 @@ class TestPersistentVectorStore:
         assert isinstance(loaded_index, usearch.index.Index)
         assert len(loaded_index) == len(sample_usearch_index)
         assert loaded_index.ndim == sample_usearch_index.ndim
-        assert (
-            str(loaded_index.metric).lower() == str(sample_usearch_index.metric).lower()
-        )  # noqa E501
-        assert (
-            str(loaded_index.dtype).lower() == str(sample_usearch_index.dtype).lower()
-        )
+        assert str(loaded_index.metric).lower() == str(sample_usearch_index.metric).lower()  # noqa E501
+        assert str(loaded_index.dtype).lower() == str(sample_usearch_index.dtype).lower()
 
         # verify keys are present (optional, but good for confidence)
         # note: usearch `index.keys()` might not be available or might be slow.
         # `index.get_key(internal_id)` or iterating `index` can get keys.
         # for simplicity, length check is often sufficient for basic save/load test.
-        original_keys = np.sort(
-            sample_usearch_index.keys
-        )  # get keys from original if api allows
+        original_keys = np.sort(sample_usearch_index.keys)  # get keys from original if api allows
         loaded_keys = np.sort(loaded_index.keys)
         assert np.array_equal(original_keys, loaded_keys)
 
@@ -99,9 +90,7 @@ class TestPersistentVectorStore:
         assert len(loaded_index) == 0
         assert loaded_index.ndim == empty_usearch_index.ndim
 
-    def test_load_persistent_index_non_existent_file(
-        self, persistent_index_path: pathlib.Path
-    ) -> None:
+    def test_load_persistent_index_non_existent_file(self, persistent_index_path: pathlib.Path) -> None:
         """test loading a non-existent index file returns none."""
         assert not persistent_index_path.exists()
         loaded_index = load_persistent_index(persistent_index_path)
@@ -116,9 +105,7 @@ class TestPersistentVectorStore:
         parent_dir_of_index_parent = persistent_index_path.parent.parent
         parent_dir_of_index_parent.mkdir(parents=True, exist_ok=True)
 
-        path_that_should_be_dir = (
-            persistent_index_path.parent
-        )  # e.g., .../persistent_indexes/
+        path_that_should_be_dir = persistent_index_path.parent  # e.g., .../persistent_indexes/
         path_that_should_be_dir.touch()  # create it as a file
 
         saved = save_persistent_index(sample_usearch_index, persistent_index_path)
@@ -132,9 +119,7 @@ class TestPersistentVectorStore:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """test that if os.replace fails, the temp file is cleaned up."""
-        temp_file_path = persistent_index_path.with_suffix(
-            persistent_index_path.suffix + ".tmp"
-        )
+        temp_file_path = persistent_index_path.with_suffix(persistent_index_path.suffix + ".tmp")
 
         def mock_os_replace(src: str, dst: str) -> None:
             # simulate that temp file was created before os.replace is called
@@ -152,15 +137,11 @@ class TestPersistentVectorStore:
         assert not persistent_index_path.exists()
         assert not temp_file_path.exists()
 
-    def test_load_corrupted_index_file(
-        self, persistent_index_path: pathlib.Path
-    ) -> None:
+    def test_load_corrupted_index_file(self, persistent_index_path: pathlib.Path) -> None:
         """test loading a corrupted/invalid index file raises VectorStoreError."""
         persistent_index_path.parent.mkdir(parents=True, exist_ok=True)
         with open(persistent_index_path, "wb") as f:
             f.write(b"this is not a valid usearch index file content")
 
-        with pytest.raises(
-            VectorStoreError, match=f"Failed to load index from {persistent_index_path}"
-        ):
+        with pytest.raises(VectorStoreError, match=f"Failed to load index from {persistent_index_path}"):
             load_persistent_index(persistent_index_path)

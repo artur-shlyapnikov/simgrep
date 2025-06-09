@@ -40,9 +40,7 @@ def perform_persistent_search(
 
     console.print(f"  Searching persistent index for top {k_results} similar chunks...")
     try:
-        search_matches: List[SearchResult] = search_inmemory_index(
-            index=vector_index, query_embedding=query_embedding, k=k_results
-        )
+        search_matches: List[SearchResult] = search_inmemory_index(index=vector_index, query_embedding=query_embedding, k=k_results)
     except (VectorStoreError, ValueError) as e:
         console.print(f"[bold red]Error during vector search:[/bold red]\n  {e}")
         raise  # re-raise
@@ -74,9 +72,7 @@ def perform_persistent_search(
             try:
                 retrieved_details = metadata_store.retrieve_chunk_details_persistent(matched_usearch_label)
             except MetadataDBError as e:
-                console.print(
-                    f"[yellow]Warning: Database error retrieving details for chunk label {matched_usearch_label}: {e}[/yellow]"
-                )
+                console.print(f"[yellow]Warning: Database error retrieving details for chunk label {matched_usearch_label}: {e}[/yellow]")
                 continue  # skip this result
 
             if retrieved_details:
@@ -89,9 +85,7 @@ def perform_persistent_search(
                 console.print("---")
                 console.print(output_string)
             else:
-                console.print(
-                    f"[yellow]Warning: Could not retrieve details for chunk label {matched_usearch_label} from DB.[/yellow]"
-                )
+                console.print(f"[yellow]Warning: Could not retrieve details for chunk label {matched_usearch_label} from DB.[/yellow]")
     elif output_mode == OutputMode.paths:
         paths_from_matches: List[pathlib.Path] = []
         unique_paths_seen = set()  # to ensure uniqueness before format_paths
@@ -100,9 +94,7 @@ def perform_persistent_search(
             try:
                 retrieved_details = metadata_store.retrieve_chunk_details_persistent(matched_usearch_label)
             except MetadataDBError as e:
-                console.print(
-                    f"[yellow]Warning: Database error retrieving path for chunk label {matched_usearch_label}: {e}[/yellow]"
-                )
+                console.print(f"[yellow]Warning: Database error retrieving path for chunk label {matched_usearch_label}: {e}[/yellow]")
                 continue
 
             if retrieved_details:

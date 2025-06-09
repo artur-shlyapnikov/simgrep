@@ -1,16 +1,17 @@
 import os
 from pathlib import Path
+from typing import Callable
 from unittest.mock import patch
 
 from typer.testing import CliRunner
 
-from simgrep.main import app
 from simgrep.config import load_or_create_global_config
+from simgrep.main import app
 
 runner = CliRunner()
 
 
-def _mock_expand(base: Path):
+def _mock_expand(base: Path) -> Callable[[str], str]:
     def _inner(path: str) -> str:
         if path == "~" or path.startswith("~/"):
             return path.replace("~", str(base), 1)
@@ -45,4 +46,3 @@ def test_project_index_and_search(tmp_path: Path) -> None:
         result = runner.invoke(app, ["search", "searchterm", "--project", "projA"])
         assert result.exit_code == 0
         assert "Score:" in result.stdout
-

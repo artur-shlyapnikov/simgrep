@@ -1,13 +1,15 @@
+import json
 import sys  # for printing to stderr
 import tomllib
 from pathlib import Path
-
-import json
+from typing import Any, Dict
 
 try:
+    from .metadata_db import connect_global_db, get_project_by_name, insert_project
     from .models import ProjectConfig, SimgrepConfig
 except ImportError:
-    from simgrep.models import ProjectConfig, SimgrepConfig
+    from simgrep.metadata_db import connect_global_db, get_project_by_name, insert_project  # type: ignore
+    from simgrep.models import ProjectConfig, SimgrepConfig  # type: ignore
 
 
 # default number of top results to fetch for searches
@@ -48,17 +50,14 @@ def load_or_create_global_config() -> SimgrepConfig:
         with open(config.config_file, "rb") as f:
             data = tomllib.load(f)
         config = SimgrepConfig(**data)
-        default_proj = config.projects.get("default")
-        if default_proj is None:
-            default_proj = _create_default_project(config)
-            config.projects["default"] = default_proj
+        if "default" not in config.projects:
+            config.projects["default"] = _create_default_project(config)
             _write_config(config)
     else:
-        default_proj = _create_default_project(config)
-        config.projects = {"default": default_proj}
+        config.projects["default"] = _create_default_project(config)
         _write_config(config)
 
-    from .metadata_db import connect_global_db, get_project_by_name, insert_project
+    default_proj = config.projects["default"]
 
     global_db_path = config.db_directory / "global_metadata.duckdb"
     conn = connect_global_db(global_db_path)
@@ -77,7 +76,7 @@ def load_or_create_global_config() -> SimgrepConfig:
     return config
 
 
-def _serialize_paths(obj):
+def _serialize_paths(obj: Any) -> Any:
     if isinstance(obj, Path):
         return str(obj)
     if isinstance(obj, dict):
@@ -87,7 +86,7 @@ def _serialize_paths(obj):
     return obj
 
 
-def _dumps_toml(data: dict) -> str:
+def _dumps_toml(data: Dict[str, Any]) -> str:
     base = dict(data)
     projects = base.pop("projects", {})
     lines = []
@@ -105,7 +104,7 @@ def _write_config(config: SimgrepConfig) -> None:
     config.config_file.write_text(_dumps_toml(data), encoding="utf-8")
 
 
-def _create_default_project(config: SimgrepConfig):
+def _create_default_project(config: SimgrepConfig) -> ProjectConfig:
     return ProjectConfig(
         name="default",
         indexed_paths=[],

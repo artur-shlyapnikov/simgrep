@@ -1,10 +1,10 @@
 import hashlib
+from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional, TypedDict, cast
 
 import numpy as np
 import unstructured.partition.auto as auto_partition
-from functools import lru_cache
 from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
 from unstructured.documents.elements import Element
@@ -55,9 +55,7 @@ def load_embedding_model(model_name: str) -> SentenceTransformer:
     try:
         return SentenceTransformer(model_name)
     except Exception as e:
-        raise RuntimeError(
-            f"Failed to load embedding model '{model_name}'. Original error: {e}"
-        ) from e
+        raise RuntimeError(f"Failed to load embedding model '{model_name}'. Original error: {e}") from e
 
 
 def chunk_text_by_tokens(
@@ -163,11 +161,7 @@ def generate_embeddings(
         error_model_name = (
             model_name
             if model is None
-            else (
-                model.model_card_data.base_model
-                if hasattr(model, "model_card_data") and hasattr(model.model_card_data, "base_model")
-                else "provided_model"
-            )
+            else (model.model_card_data.base_model if hasattr(model, "model_card_data") and hasattr(model.model_card_data, "base_model") else "provided_model")
         )
 
         error_message = (

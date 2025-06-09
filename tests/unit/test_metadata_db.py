@@ -108,23 +108,17 @@ class TestMetadataDB:
 
         file_id_to_check = sample_files_metadata[0][0]
         expected_path = str(sample_files_metadata[0][1].resolve())
-        result = store.conn.execute(
-            "SELECT file_path FROM temp_files WHERE file_id = ?;", [file_id_to_check]
-        ).fetchone()
+        result = store.conn.execute("SELECT file_path FROM temp_files WHERE file_id = ?;", [file_id_to_check]).fetchone()
         assert result is not None
         assert result[0] == expected_path
 
-    def test_batch_insert_files_empty_list(
-        self, store: MetadataStore
-    ) -> None:
+    def test_batch_insert_files_empty_list(self, store: MetadataStore) -> None:
         store.batch_insert_files([])
         count_result = store.conn.execute("SELECT COUNT(*) FROM temp_files;").fetchone()
         assert count_result is not None
         assert count_result[0] == 0
 
-    def test_batch_insert_files_unique_constraint_path(
-        self, store: MetadataStore, tmp_path: pathlib.Path
-    ) -> None:
+    def test_batch_insert_files_unique_constraint_path(self, store: MetadataStore, tmp_path: pathlib.Path) -> None:
         file_path = tmp_path / "unique_test.txt"
         file_path.touch()
         metadata1 = [(0, file_path)]
@@ -132,14 +126,12 @@ class TestMetadataDB:
 
         # attempt to insert the same file path with a different id (should also fail due to unique path)
         # or, more directly for testing unique on file_path:
-        metadata2 = [(1, file_path)] # different id, same path
+        metadata2 = [(1, file_path)]  # different id, same path
         # temp_files.file_path has a unique constraint
         with pytest.raises(MetadataDBError, match="Failed during batch file insert"):
             store.batch_insert_files(metadata2)
 
-    def test_batch_insert_files_duplicate_file_id(
-        self, store: MetadataStore, tmp_path: pathlib.Path
-    ) -> None:
+    def test_batch_insert_files_duplicate_file_id(self, store: MetadataStore, tmp_path: pathlib.Path) -> None:
         file_path1 = tmp_path / "file_A.txt"
         file_path1.touch()
         file_path2 = tmp_path / "file_B.txt"
@@ -176,9 +168,7 @@ class TestMetadataDB:
         assert result[1] == chunk_to_check.source_file_id
         assert result[2] == chunk_to_check.start_char_offset
 
-    def test_batch_insert_chunks_empty_list(
-        self, store: MetadataStore
-    ) -> None:
+    def test_batch_insert_chunks_empty_list(self, store: MetadataStore) -> None:
         store.batch_insert_chunks([])
         count_result = store.conn.execute("SELECT COUNT(*) FROM temp_chunks;").fetchone()
         assert count_result is not None
@@ -235,9 +225,7 @@ class TestMetadataDB:
         assert start_offset == chunk_to_retrieve.start_char_offset
         assert end_offset == chunk_to_retrieve.end_char_offset
 
-    def test_retrieve_chunk_for_display_invalid_id(
-        self, store: MetadataStore
-    ) -> None:
+    def test_retrieve_chunk_for_display_invalid_id(self, store: MetadataStore) -> None:
         retrieved = store.retrieve_chunk_for_display(99999)
         assert retrieved is None
 
@@ -278,6 +266,4 @@ class TestMetadataDB:
         retrieved = store.retrieve_chunk_for_display(chunk_to_retrieve_label)
 
         # the join should fail to find a match in temp_files (and temp_chunks), so result should be none
-        assert (
-            retrieved is None
-        ), "Should not retrieve chunk if its corresponding file_id is missing from temp_files or chunk itself is deleted"
+        assert retrieved is None, "Should not retrieve chunk if its corresponding file_id is missing from temp_files or chunk itself is deleted"

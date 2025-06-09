@@ -50,9 +50,7 @@ def create_inmemory_index(
         # usearch index can be initialized without data.
         logger.info("Embeddings array is empty. Creating an empty USearch index.")
     elif embeddings.shape[0] != labels_for_usearch.shape[0]:
-        raise ValueError(
-            f"Number of embeddings ({embeddings.shape[0]}) must match number of labels ({labels_for_usearch.shape[0]})."
-        )
+        raise ValueError(f"Number of embeddings ({embeddings.shape[0]}) must match number of labels ({labels_for_usearch.shape[0]}).")
 
     # ensure labels are np.int64 as usearch expects this for keys
     processed_labels = labels_for_usearch
@@ -67,9 +65,7 @@ def create_inmemory_index(
         # second dimension of the array and create an empty index.
         num_dimensions = embeddings.shape[1]
 
-    logger.info(
-        f"Creating USearch index with ndim={num_dimensions}, metric='{metric}', dtype='{dtype}'."
-    )
+    logger.info(f"Creating USearch index with ndim={num_dimensions}, metric='{metric}', dtype='{dtype}'.")
     try:
         index = usearch.index.Index(
             ndim=num_dimensions,
@@ -80,9 +76,7 @@ def create_inmemory_index(
             index.add(keys=processed_labels, vectors=embeddings)
             logger.info(f"Added {embeddings.shape[0]} embeddings to the USearch index.")
         else:
-            logger.info(
-                "USearch index created empty as no embeddings were provided to add."
-            )
+            logger.info("USearch index created empty as no embeddings were provided to add.")
 
     except Exception as e:  # catch broad usearch errors
         logger.error(f"Failed to create or populate USearch index: {e}")
@@ -91,9 +85,7 @@ def create_inmemory_index(
     return index
 
 
-def search_inmemory_index(
-    index: usearch.index.Index, query_embedding: np.ndarray, k: int = 5
-) -> List[SearchResult]:
+def search_inmemory_index(index: usearch.index.Index, query_embedding: np.ndarray, k: int = 5) -> List[SearchResult]:
     """
     Searches an in-memory USearch index for the top-k most similar vectors.
 
@@ -129,20 +121,13 @@ def search_inmemory_index(
         processed_query_embedding = np.expand_dims(processed_query_embedding, axis=0)
 
     if processed_query_embedding.shape[0] != 1:
-        raise ValueError(
-            f"Expected a single query embedding, but got batch of {processed_query_embedding.shape[0]}."
-        )
+        raise ValueError(f"Expected a single query embedding, but got batch of {processed_query_embedding.shape[0]}.")
     if processed_query_embedding.shape[1] != index.ndim:
-        raise ValueError(
-            f"Query embedding dimension ({processed_query_embedding.shape[1]}) "
-            f"does not match index dimension ({index.ndim})."
-        )
+        raise ValueError(f"Query embedding dimension ({processed_query_embedding.shape[1]}) " f"does not match index dimension ({index.ndim}).")
 
     logger.info(f"Searching USearch index for top {k} results.")
     try:
-        search_result: Union[usearch.index.Matches, usearch.index.BatchMatches] = (
-            index.search(vectors=processed_query_embedding, count=k)
-        )
+        search_result: Union[usearch.index.Matches, usearch.index.BatchMatches] = index.search(vectors=processed_query_embedding, count=k)
     except Exception as e:
         logger.error(f"USearch search operation failed: {e}")
         raise VectorStoreError("USearch search operation failed") from e
@@ -161,22 +146,17 @@ def search_inmemory_index(
     elif isinstance(search_result, usearch.index.Matches):  # single query result
         # .count attribute is not available on usearch.index.matches in recent versions.
         # use len(search_result.keys) instead.
-        if hasattr(search_result, 'keys') and search_result.keys is not None:
+        if hasattr(search_result, "keys") and search_result.keys is not None:
             num_found_for_query = len(search_result.keys)
             if num_found_for_query > 0:
                 actual_keys = search_result.keys
                 actual_distances = search_result.distances
-        else: # should not happen if keys is a mandatory attribute of matches
+        else:  # should not happen if keys is a mandatory attribute of matches
             num_found_for_query = 0
             actual_keys = None
             actual_distances = None
 
-
-    if (
-        num_found_for_query > 0
-        and actual_keys is not None
-        and actual_distances is not None
-    ):
+    if num_found_for_query > 0 and actual_keys is not None and actual_distances is not None:
         logger.debug(f"Found {num_found_for_query} matches in USearch.")
         for i in range(num_found_for_query):
             key: int = int(actual_keys[i])
@@ -186,16 +166,12 @@ def search_inmemory_index(
 
             if "cos" in metric_str:
                 similarity = 1.0 - distance
-            elif (
-                "ip" in metric_str
-            ):  # inner product; higher is better. usearch returns negative ip for similarity.
+            elif "ip" in metric_str:  # inner product; higher is better. usearch returns negative ip for similarity.
                 similarity = -distance  # so, negate to get positive similarity.
             elif "l2" in metric_str:  # l2 squared distance; lower is better.
                 similarity = 1.0 / (1.0 + distance)  # simple inverse, can be refined.
             else:
-                logger.warning(
-                    f"Unknown metric '{index.metric}' for similarity conversion. Returning raw negative distance."
-                )
+                logger.warning(f"Unknown metric '{index.metric}' for similarity conversion. Returning raw negative distance.")
                 similarity = -distance  # default to negative distance if metric unknown
             results.append(SearchResult(label=key, score=similarity))
     else:
@@ -225,9 +201,7 @@ def load_persistent_index(index_path: Path) -> Optional[usearch.index.Index]:
             # the index constructor defaults to ndim=0, which is fine for this.
             index = usearch.index.Index()
             index.load(str(index_path))
-            logger.info(
-                f"Successfully loaded USearch index from {index_path} with {len(index)} items."
-            )
+            logger.info(f"Successfully loaded USearch index from {index_path} with {len(index)} items.")
             return index
         except Exception as e:
             logger.error(f"Failed to load USearch index from {index_path}: {e}")
@@ -235,7 +209,6 @@ def load_persistent_index(index_path: Path) -> Optional[usearch.index.Index]:
     else:
         logger.info(f"USearch index file not found at {index_path}. No index loaded.")
         return None
-
 
 
 def save_persistent_index(index: usearch.index.Index, index_path: Path) -> bool:
@@ -250,31 +223,21 @@ def save_persistent_index(index: usearch.index.Index, index_path: Path) -> bool:
         exception was caught. Errors are logged and suppressed.
     """
 
-    logger.info(
-        f"Attempting to save USearch index with {len(index)} items to {index_path}"
-    )
+    logger.info(f"Attempting to save USearch index with {len(index)} items to {index_path}")
 
     temp_index_path = index_path.with_suffix(index_path.suffix + ".tmp")
 
     try:
         index_path.parent.mkdir(parents=True, exist_ok=True)
-        logger.debug(
-            f"Ensured directory exists for USearch index: {index_path.parent}"
-        )
+        logger.debug(f"Ensured directory exists for USearch index: {index_path.parent}")
 
         logger.info(f"Saving USearch index to temporary file {temp_index_path}")
         index.save(str(temp_index_path))
-        logger.info(
-            f"Successfully saved USearch index to temporary file {temp_index_path}"
-        )
+        logger.info(f"Successfully saved USearch index to temporary file {temp_index_path}")
 
-        logger.info(
-            f"Attempting to atomically move temporary index from {temp_index_path} to {index_path}"
-        )
+        logger.info(f"Attempting to atomically move temporary index from {temp_index_path} to {index_path}")
         os.replace(temp_index_path, index_path)
-        logger.info(
-            f"Atomically moved temporary index from {temp_index_path} to {index_path}"
-        )
+        logger.info(f"Atomically moved temporary index from {temp_index_path} to {index_path}")
         return True
 
     except Exception as e:
@@ -282,11 +245,7 @@ def save_persistent_index(index: usearch.index.Index, index_path: Path) -> bool:
         try:
             if temp_index_path.exists():
                 temp_index_path.unlink()
-                logger.debug(
-                    f"Cleaned up temporary index file {temp_index_path} after failure."
-                )
+                logger.debug(f"Cleaned up temporary index file {temp_index_path} after failure.")
         except OSError as cleanup_err:
-            logger.error(
-                f"Failed to clean up temporary index file {temp_index_path}: {cleanup_err}"
-            )
+            logger.error(f"Failed to clean up temporary index file {temp_index_path}: {cleanup_err}")
         return False

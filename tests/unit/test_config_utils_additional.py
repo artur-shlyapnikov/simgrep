@@ -36,7 +36,7 @@ def test_serialize_paths_nested(tmp_path: Path) -> None:
 def test_dumps_toml_basic() -> None:
     data = {"foo": "bar", "num": 1}
     toml_str = _dumps_toml(data)
-    assert "foo = \"bar\"" in toml_str
+    assert 'foo = "bar"' in toml_str
     assert "num = 1" in toml_str
 
 
