@@ -26,6 +26,8 @@ def perform_persistent_search(
     display_relative_paths: bool = False,
     base_path_for_relativity: Optional[pathlib.Path] = None,
     min_score: float = 0.1,
+    file_filter: Optional[List[str]] = None,
+    keyword_filter: Optional[str] = None,
 ) -> None:
     """
     Orchestrates the search process against a pre-existing, loaded persistent index.
@@ -64,8 +66,11 @@ def perform_persistent_search(
     usearch_labels = list(label_to_score.keys())
 
     try:
-        # For now, filters are not exposed in CLI for persistent search, so pass None.
-        filtered_db_results = metadata_store.retrieve_filtered_chunk_details(usearch_labels=usearch_labels)
+        filtered_db_results = metadata_store.retrieve_filtered_chunk_details(
+            usearch_labels=usearch_labels,
+            file_filter=file_filter,
+            keyword_filter=keyword_filter,
+        )
     except MetadataDBError as e:
         console.print(f"[yellow]Warning: Database error retrieving chunk details: {e}[/yellow]")
         if output_mode == OutputMode.paths:

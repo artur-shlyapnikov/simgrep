@@ -40,7 +40,16 @@ class TestSimgrepConfig:
             assert expected_data_dir.exists()
             assert expected_data_dir.is_dir()
             assert expected_config_file.exists()
-            assert "default" in config.projects
+
+            # Check that the default project was created in the global DB
+            from simgrep.metadata_db import connect_global_db, get_project_by_name
+
+            global_db_path = config.db_directory / "global_metadata.duckdb"
+            conn = connect_global_db(global_db_path)
+            try:
+                assert get_project_by_name(conn, "default") is not None
+            finally:
+                conn.close()
 
     def test_load_or_create_global_config_dir_already_exists(self, tmp_path: Path) -> None:
         """

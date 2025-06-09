@@ -5,11 +5,9 @@ import pytest
 from simgrep.config import (
     DEFAULT_K_RESULTS,
     SimgrepConfig,
-    SimgrepConfigError,
     _create_default_project,
     _dumps_toml,
     _serialize_paths,
-    add_project_to_config,
     save_config,
 )
 from simgrep.models import OutputMode, ProjectConfig
@@ -40,38 +38,11 @@ def test_dumps_toml_basic() -> None:
     assert "num = 1" in toml_str
 
 
-def test_dumps_toml_with_project(tmp_path: Path) -> None:
-    project = {
-        "projects": {
-            "p": {
-                "db_path": str(tmp_path / "db.duckdb"),
-                "usearch_index_path": str(tmp_path / "index.usearch"),
-            }
-        }
-    }
-    toml_str = _dumps_toml(project)
-    assert "[projects.p]" in toml_str
-
-
 def test_create_default_project_paths(tmp_path: Path) -> None:
     cfg = SimgrepConfig(default_project_data_dir=tmp_path)
     proj = _create_default_project(cfg)
     assert proj.db_path == tmp_path / "metadata.duckdb"
     assert proj.usearch_index_path == tmp_path / "index.usearch"
-
-
-def test_add_project_to_config(tmp_path: Path) -> None:
-    cfg = SimgrepConfig(db_directory=tmp_path, config_file=tmp_path / "cfg.toml")
-    added = add_project_to_config(cfg, "newproj")
-    assert "newproj" in cfg.projects
-    assert added.name == "newproj"
-
-
-def test_add_project_to_config_duplicate(tmp_path: Path) -> None:
-    cfg = SimgrepConfig(db_directory=tmp_path, config_file=tmp_path / "cfg.toml")
-    add_project_to_config(cfg, "dup")
-    with pytest.raises(SimgrepConfigError):
-        add_project_to_config(cfg, "dup")
 
 
 def test_save_config_writes_file(tmp_path: Path) -> None:

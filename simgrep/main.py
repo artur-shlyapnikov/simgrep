@@ -24,7 +24,6 @@ try:
     from .config import (
         DEFAULT_K_RESULTS,
         SimgrepConfigError,
-        add_project_to_config,
         load_or_create_global_config,
     )
     from .formatter import format_paths, format_show_basic
@@ -35,10 +34,11 @@ try:
         get_all_projects,
         get_index_counts,
         get_project_by_name,
+        get_project_config,
         insert_project,
     )
     from .metadata_store import MetadataStore
-    from .models import ChunkData, OutputMode, SearchResult, SimgrepConfig  # OutputMode moved here
+    from .models import ChunkData, OutputMode, ProjectConfig, SearchResult, SimgrepConfig
     from .processor import (
         ProcessedChunkInfo,
         chunk_text_by_tokens,
@@ -64,7 +64,6 @@ except ImportError:
         from simgrep.config import (
             DEFAULT_K_RESULTS,
             SimgrepConfigError,
-            add_project_to_config,
             load_or_create_global_config,
         )
         from simgrep.formatter import format_paths, format_show_basic
@@ -75,10 +74,11 @@ except ImportError:
             get_all_projects,
             get_index_counts,
             get_project_by_name,
+            get_project_config,
             insert_project,
         )
         from simgrep.metadata_store import MetadataStore
-        from simgrep.models import ChunkData, OutputMode, SearchResult, SimgrepConfig
+        from simgrep.models import ChunkData, OutputMode, ProjectConfig, SearchResult, SimgrepConfig
         from simgrep.processor import (
             ProcessedChunkInfo,
             chunk_text_by_tokens,
@@ -97,12 +97,6 @@ except ImportError:
     else:
         raise
 
-# --- Constants for Ephemeral Search (Deliverable 1 & 2 focus) ---
-# EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2" # Now from SimgrepConfig
-# CHUNK_SIZE_TOKENS = 128 # Now from SimgrepConfig
-# OVERLAP_TOKENS = 20     # Now from SimgrepConfig
-# DEFAULT_K_RESULTS = 5  # Moved to config.py
-
 # Suppress specific warnings from sentence_transformers if needed, or handle them appropriately
 warnings.filterwarnings(
     "ignore",
@@ -110,8 +104,6 @@ warnings.filterwarnings(
     module="sentence_transformers.SentenceTransformer",
 )
 
-
-# OutputMode moved to models.py
 
 # Initialize Typer app and Rich console
 app = typer.Typer(
@@ -197,6 +189,10 @@ def search(
         "--project",
         help="Project name to use for persistent search.",
     ),
+    file_filter: Optional[List[str]] = typer.Option(
+        None, "--file-filter", help="Filter results to files matching glob pattern(s) (e.g., '*.py'). Applied after semantic search."
+    ),
+    keyword: Optional[str] = typer.Option(None, "--keyword", help="Additionally filter result chunks by a case-insensitive keyword."),
 ) -> None:
     """Searches for a query within files.
 
@@ -205,14 +201,22 @@ def search(
     persistent index is searched instead.
     """
     global_simgrep_config: SimgrepConfig = load_or_create_global_config()  # Load config early
-    project_cfg = global_simgrep_config.projects.get(project)
-    if project_cfg is None:
-        console.print(f"[bold red]Error: Project '{project}' not found.[/bold red]")
-        raise typer.Exit(code=1)
 
     if path_to_search is None:
         # --- Persistent Search ---
         console.print(f"Searching for: '[bold blue]{query_text}[/bold blue]' in project '[magenta]{project}[/magenta]'")
+
+        global_db_path = global_simgrep_config.db_directory / "global_metadata.duckdb"
+        conn = connect_global_db(global_db_path)
+        try:
+            project_cfg = get_project_config(conn, project)
+        finally:
+            conn.close()
+
+        if project_cfg is None:
+            console.print(f"[bold red]Error: Project '{project}' not found.[/bold red]")
+            raise typer.Exit(code=1)
+
         project_db_file = project_cfg.db_path
         project_usearch_file = project_cfg.usearch_index_path
 
@@ -268,6 +272,8 @@ def search(
                 # For persistent search, base_path_for_relativity might need to be CWD or a configured project root.
                 # For now, persistent search will show absolute paths if relative_paths is true but no base_path.
                 base_path_for_relativity=Path.cwd() if relative_paths else None,
+                file_filter=file_filter,
+                keyword_filter=keyword,
             )
         except (MetadataDBError, VectorStoreError, RuntimeError, ValueError) as e:
             console.print(f"[bold red]Error during persistent search: {e}[/bold red]")
@@ -608,7 +614,14 @@ def index(
 
     try:
         global_simgrep_config: SimgrepConfig = load_or_create_global_config()
-        project_cfg = global_simgrep_config.projects.get(project)
+
+        global_db_path = global_simgrep_config.db_directory / "global_metadata.duckdb"
+        conn = connect_global_db(global_db_path)
+        try:
+            project_cfg = get_project_config(conn, project)
+        finally:
+            conn.close()
+
         if project_cfg is None:
             console.print(f"[bold red]Error: Project '{project}' not found.[/bold red]")
             raise typer.Exit(code=1)
@@ -689,7 +702,18 @@ def project_create(name: str) -> None:
             console.print(f"[bold red]Project '{name}' already exists.[/bold red]")
             raise typer.Exit(code=1)
 
-        proj_cfg = add_project_to_config(cfg, name)
+        # Logic from add_project_to_config moved here
+        project_dir = cfg.db_directory / "projects" / name
+        project_dir.mkdir(parents=True, exist_ok=True)
+
+        proj_cfg = ProjectConfig(
+            name=name,
+            indexed_paths=[],
+            embedding_model=cfg.default_embedding_model_name,
+            db_path=project_dir / "metadata.duckdb",
+            usearch_index_path=project_dir / "index.usearch",
+        )
+
         insert_project(
             conn,
             project_name=name,

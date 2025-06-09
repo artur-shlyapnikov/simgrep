@@ -30,7 +30,6 @@ def test_project_create_and_list(tmp_path: Path) -> None:
         assert result.exit_code == 0
 
         cfg = load_or_create_global_config()
-        assert "myproj" in cfg.projects
         project_dir = cfg.db_directory / "projects" / "myproj"
         assert project_dir.exists()
 

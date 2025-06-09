@@ -54,8 +54,6 @@ class SimgrepConfig(BaseModel):
 
     db_directory: Path = Field(default_factory=lambda: Path("~/.config/simgrep").expanduser())
 
-    projects: Dict[str, ProjectConfig] = Field(default_factory=dict)
-
     # centralizing other global defaults from main.py constants / architecture doc:
     # these will be used by persistent indexing logic in later deliverables (e.g., 3.3, 3.4).
     # ephemeral search in main.py might still use its local constants for now.

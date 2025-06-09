@@ -24,10 +24,9 @@ class SimgrepConfigError(Exception):
 
 def load_or_create_global_config() -> SimgrepConfig:
     """
-    Instantiates a SimgrepConfig object with default values and ensures
-    the default project's data directory exists.
-
-    for deliverable 3.1, no toml file reading/writing is performed.
+    Loads simgrep config from TOML file, or creates a default one.
+    Ensures data directories and the global database with a 'default' project exist.
+    The SimgrepConfig object returned contains global defaults, not project-specific data.
 
     Returns:
         An instance of SimgrepConfig.
@@ -35,6 +34,7 @@ def load_or_create_global_config() -> SimgrepConfig:
     Raises:
         SimgrepConfigError: If the data directory cannot be created.
     """
+    # Start with a default config object.
     config = SimgrepConfig()
 
     # ensure directories exist
@@ -42,33 +42,34 @@ def load_or_create_global_config() -> SimgrepConfig:
         config.db_directory.mkdir(parents=True, exist_ok=True)
         config.default_project_data_dir.mkdir(parents=True, exist_ok=True)
     except OSError as e:
-        error_message = f"Fatal: Could not create simgrep data directory at '{config.default_project_data_dir}'. " f"Please check permissions. Error: {e}"
+        error_message = f"Fatal: Could not create simgrep data directory at '{config.db_directory}'. " f"Please check permissions. Error: {e}"
         print(error_message, file=sys.stderr)
         raise SimgrepConfigError(error_message) from e
 
+    # Load from TOML file if it exists, otherwise write the default.
     if config.config_file.exists():
         with open(config.config_file, "rb") as f:
             data = tomllib.load(f)
+        # Load data into our config object, overriding defaults.
         config = SimgrepConfig(**data)
-        if "default" not in config.projects:
-            config.projects["default"] = _create_default_project(config)
-            _write_config(config)
     else:
-        config.projects["default"] = _create_default_project(config)
+        # Write the default config to a new TOML file.
         _write_config(config)
 
-    default_proj = config.projects["default"]
-
+    # Ensure global DB and default project entry exist.
     global_db_path = config.db_directory / "global_metadata.duckdb"
     conn = connect_global_db(global_db_path)
     try:
         if get_project_by_name(conn, "default") is None:
+            # 'default' project does not exist in the DB, so create it.
+            # This happens on the very first run.
+            default_proj_config = _create_default_project(config)
             insert_project(
                 conn,
                 project_name="default",
-                db_path=str(default_proj.db_path),
-                usearch_index_path=str(default_proj.usearch_index_path),
-                embedding_model_name=default_proj.embedding_model,
+                db_path=str(default_proj_config.db_path),
+                usearch_index_path=str(default_proj_config.usearch_index_path),
+                embedding_model_name=default_proj_config.embedding_model,
             )
     finally:
         conn.close()
@@ -87,15 +88,9 @@ def _serialize_paths(obj: Any) -> Any:
 
 
 def _dumps_toml(data: Dict[str, Any]) -> str:
-    base = dict(data)
-    projects = base.pop("projects", {})
     lines = []
-    for key, value in base.items():
+    for key, value in data.items():
         lines.append(f"{key} = {json.dumps(value)}")
-    for name, proj in projects.items():
-        lines.append(f"\n[projects.{name}]")
-        for k, v in proj.items():
-            lines.append(f"{k} = {json.dumps(v)}")
     return "\n".join(lines) + "\n"
 
 
@@ -112,41 +107,6 @@ def _create_default_project(config: SimgrepConfig) -> ProjectConfig:
         db_path=config.default_project_data_dir / "metadata.duckdb",
         usearch_index_path=config.default_project_data_dir / "index.usearch",
     )
-
-
-def add_project_to_config(config: SimgrepConfig, project_name: str) -> ProjectConfig:
-    """Create a new project entry in the config and write the file.
-
-    Parameters
-    ----------
-    config:
-        Existing loaded configuration which will be mutated.
-    project_name:
-        Name of the project to create.
-
-    Returns
-    -------
-    ProjectConfig
-        The newly created project configuration.
-    """
-
-    if project_name in config.projects:
-        raise SimgrepConfigError(f"Project '{project_name}' already exists in configuration")
-
-    project_dir = config.db_directory / "projects" / project_name
-    project_dir.mkdir(parents=True, exist_ok=True)
-
-    project_cfg = ProjectConfig(
-        name=project_name,
-        indexed_paths=[],
-        embedding_model=config.default_embedding_model_name,
-        db_path=project_dir / "metadata.duckdb",
-        usearch_index_path=project_dir / "index.usearch",
-    )
-
-    config.projects[project_name] = project_cfg
-    _write_config(config)
-    return project_cfg
 
 
 def save_config(config: SimgrepConfig) -> None:

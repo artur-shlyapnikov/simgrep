@@ -7,6 +7,7 @@ from typer.testing import CliRunner
 
 from simgrep.config import load_or_create_global_config
 from simgrep.main import app
+from simgrep.metadata_db import connect_global_db, get_project_config
 
 runner = CliRunner()
 
@@ -39,9 +40,15 @@ def test_project_index_and_search(tmp_path: Path) -> None:
         assert result.exit_code == 0
 
         cfg = load_or_create_global_config()
-        proj_cfg = cfg.projects["projA"]
-        assert proj_cfg.db_path.exists()
-        assert proj_cfg.usearch_index_path.exists()
+        global_db_path = cfg.db_directory / "global_metadata.duckdb"
+        conn = connect_global_db(global_db_path)
+        try:
+            proj_cfg = get_project_config(conn, "projA")
+            assert proj_cfg is not None
+            assert proj_cfg.db_path.exists()
+            assert proj_cfg.usearch_index_path.exists()
+        finally:
+            conn.close()
 
         result = runner.invoke(app, ["search", "searchterm", "--project", "projA"])
         assert result.exit_code == 0

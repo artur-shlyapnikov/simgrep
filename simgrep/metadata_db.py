@@ -8,12 +8,12 @@ import duckdb
 # assuming models.py is in the same directory or simgrep is installed
 try:
     from .exceptions import MetadataDBError
-    from .models import ChunkData
+    from .models import ChunkData, ProjectConfig
 except ImportError:
     # this fallback might be needed if running scripts directly from the simgrep folder
     # or if the package structure is not fully resolved in some contexts.
     from simgrep.exceptions import MetadataDBError  # type: ignore
-    from simgrep.models import ChunkData  # type: ignore
+    from simgrep.models import ChunkData, ProjectConfig  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -582,3 +582,27 @@ def get_all_projects(conn: duckdb.DuckDBPyConnection) -> List[str]:
         return [str(row[0]) for row in rows]
     except duckdb.Error as e:
         raise MetadataDBError("Failed to fetch projects") from e
+
+
+def get_project_config(conn: duckdb.DuckDBPyConnection, project_name: str) -> Optional[ProjectConfig]:
+    """Retrieve a full ProjectConfig from the database."""
+    project_row = get_project_by_name(conn, project_name)
+    if not project_row:
+        return None
+
+    project_id, name, db_path_str, usearch_index_path_str, embedding_model_name = project_row
+
+    path_rows = conn.execute(
+        "SELECT path FROM project_indexed_paths WHERE project_id = ?;",
+        [project_id],
+    ).fetchall()
+
+    indexed_paths = [pathlib.Path(row[0]) for row in path_rows]
+
+    return ProjectConfig(
+        name=name,
+        indexed_paths=indexed_paths,
+        embedding_model=embedding_model_name,
+        db_path=pathlib.Path(db_path_str),
+        usearch_index_path=pathlib.Path(usearch_index_path_str),
+    )
