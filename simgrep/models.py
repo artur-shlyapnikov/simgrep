@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List
@@ -27,6 +28,12 @@ class ChunkData(BaseModel):
         int  # character offset of the chunk's end in the original file content
     )
     token_count: int  # number of tokens in this chunk (as per the specified tokenizer)
+
+
+@dataclass
+class SearchResult:
+    label: int
+    score: float
 
 
 class ProjectConfig(BaseModel):

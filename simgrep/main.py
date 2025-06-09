@@ -38,7 +38,7 @@ try:
         insert_project,
     )
     from .metadata_store import MetadataStore
-    from .models import ChunkData, OutputMode, SimgrepConfig  # OutputMode moved here
+    from .models import ChunkData, OutputMode, SearchResult, SimgrepConfig  # OutputMode moved here
     from .processor import (
         ProcessedChunkInfo,
         chunk_text_by_tokens,
@@ -78,7 +78,7 @@ except ImportError:
             insert_project,
         )
         from simgrep.metadata_store import MetadataStore
-        from simgrep.models import ChunkData, OutputMode, SimgrepConfig
+        from simgrep.models import ChunkData, OutputMode, SearchResult, SimgrepConfig
         from simgrep.processor import (
             ProcessedChunkInfo,
             chunk_text_by_tokens,
@@ -466,7 +466,7 @@ def search(
 
         # --- In-Memory Vector Search ---
         console.print("\n[bold]Step 4: Performing In-Memory Vector Search[/bold]")
-        search_matches: List[Tuple[int, float]] = []
+        search_matches: List[SearchResult] = []
 
         if chunk_embeddings.size == 0 or chunk_embeddings.shape[0] == 0:
             console.print("  No chunk embeddings available. Skipping vector search.")
@@ -517,7 +517,8 @@ def search(
         else:
             if output == OutputMode.paths:
                 paths_from_matches: List[Path] = []
-                for matched_chunk_id, _similarity_score in search_matches:
+                for result in search_matches:
+                    matched_chunk_id = result.label
                     assert store is not None
                     retrieved_details = store.retrieve_chunk_for_display(matched_chunk_id)
                     if retrieved_details:
@@ -546,7 +547,9 @@ def search(
 
             elif output == OutputMode.show:
                 console.print(f"\n[bold cyan]Search Results (Top {len(search_matches)}):[/bold cyan]")
-                for matched_chunk_id, similarity_score in search_matches:
+                for result in search_matches:
+                    matched_chunk_id = result.label
+                    similarity_score = result.score
                     assert store is not None
                     retrieved_details = store.retrieve_chunk_for_display(matched_chunk_id)
 
