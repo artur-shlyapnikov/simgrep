@@ -153,7 +153,8 @@ class TestSearcherPersistentIntegration:
         )
         captured = capsys.readouterr()
 
-        assert "Embedding query" in captured.out, "Initial 'Embedding query' print message missing."
+        if output_mode == OutputMode.show:
+            assert "Embedding query" in captured.out, "Initial 'Embedding query' print message missing."
 
         # To make assertion robust against line wrapping by rich console
         output_str = captured.out.replace("\n", "")
@@ -199,7 +200,8 @@ class TestSearcherPersistentIntegration:
             min_score=0.95,
         )
         captured = capsys.readouterr()
-        assert "Embedding query" in captured.out
+        if output_mode == OutputMode.show:
+            assert "Embedding query" in captured.out
         assert expected_message in captured.out
 
     @pytest.mark.parametrize("k, expected_separators", [(1, 1), (2, 2)])

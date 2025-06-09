@@ -73,11 +73,14 @@ def test_perform_persistent_search_no_results(
     monkeypatch.setattr(searcher, "generate_embeddings", fake_generate_embeddings)
     monkeypatch.setattr(searcher, "search_inmemory_index", search_fn)
 
+    vector_index = usearch.index.Index(ndim=3)
+    # Add a dummy vector to avoid the `len(vector_index) == 0` check
+    vector_index.add(np.array([0], dtype=np.int64), np.zeros((1, 3), dtype=np.float32))
     searcher.perform_persistent_search(
         query_text="irrelevant",
         console=console,
         metadata_store=store,  # type: ignore[arg-type]
-        vector_index=usearch.index.Index(ndim=3),
+        vector_index=vector_index,
         global_config=SimgrepConfig(),
         output_mode=OutputMode.show,
         min_score=min_score,

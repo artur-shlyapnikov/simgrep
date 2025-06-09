@@ -1,3 +1,4 @@
+import os
 import pathlib  # use pathlib consistently
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -326,12 +327,13 @@ class Indexer:
                     self.console.print(f"[yellow]Warning: Path '{target_path}' does not exist. Skipping.[/yellow]")
                     continue
                 if target_path.is_file():
-                    all_found_files_set.add(target_path.resolve())
+                    all_found_files_set.add(target_path)
                 elif target_path.is_dir():
-                    for pattern in self.config.file_scan_patterns:
-                        for file_p in target_path.rglob(pattern):
-                            if file_p.is_file():
-                                all_found_files_set.add(file_p.resolve())
+                    for root, _, files in os.walk(target_path, followlinks=True):
+                        for file_name in files:
+                            file_p = pathlib.Path(root) / file_name
+                            if any(file_p.match(p) for p in self.config.file_scan_patterns):
+                                all_found_files_set.add(file_p)
             files_to_process = sorted(list(all_found_files_set))
 
             if not files_to_process:
@@ -407,17 +409,13 @@ class Indexer:
                     # progress.update advances automatically in _process_and_index_file
 
             # finalization
-            if self.usearch_index is not None and len(self.usearch_index) > 0:
+            if self.usearch_index is not None:
                 self.console.print(f"Saving vector index with {len(self.usearch_index)} items...")
                 saved = save_persistent_index(self.usearch_index, self.config.usearch_index_path)
                 if saved:
                     self.console.print("Vector index saved.")
                 else:
                     self.console.print(f"[yellow]Failed to save vector index to {self.config.usearch_index_path}[/yellow]")
-            elif self.usearch_index is not None and len(self.usearch_index) == 0:
-                self.console.print("Vector index is empty. Not saving.")
-                # optionally delete an old index file if it exists and current one is empty after wipe
-                self.config.usearch_index_path.unlink(missing_ok=True)
 
             self.console.print(f"\n[bold green]Indexing complete for project '{self.config.project_name}'.[/bold green]")
             self.console.print(f"  Summary: {total_files_processed} files processed, {total_chunks_indexed} chunks indexed, {total_errors} errors encountered.")

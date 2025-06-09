@@ -304,6 +304,49 @@ class TestChunkTextByTokens:
         chunks = chunk_text_by_tokens(text, tokenizer, 10, 2)
         assert chunks == []  # because full_text.strip() will be empty
 
+    def test_chunking_with_excessive_whitespace(self, tokenizer: PreTrainedTokenizerBase) -> None:
+        from simgrep.processor import chunk_text_by_tokens
+
+        text = "word1 \n\n word2\t word3  \nword4"
+        # Tokenization of this text with all-MiniLM-L6-v2 results in 8 tokens:
+        # ['word', '##1', 'word', '##2', 'word', '##3', 'word', '##4']
+        # The offset mapping preserves original positions:
+        # [(0, 4), (4, 5), (9, 13), (13, 14), (16, 20), (20, 21), (24, 28), (28, 29)]
+        chunks = chunk_text_by_tokens(text, tokenizer, chunk_size_tokens=4, overlap_tokens=1)
+
+        assert len(chunks) == 3
+
+        # --- Check Chunk 1 ---
+        # Expected tokens: ['word', '##1', 'word', '##2'] (indices 0-3)
+        # Expected text: "word1 word2"
+        # Expected offsets from original text: tokens span from char 0 to char 14
+        chunk1 = chunks[0]
+        assert chunk1["text"] == "word1 word2"
+        assert chunk1["start_char_offset"] == 0
+        assert chunk1["end_char_offset"] == 14
+        assert chunk1["token_count"] == 4
+
+        # --- Check Chunk 2 ---
+        # Step is chunk_size - overlap = 3. Next chunk starts at token index 3.
+        # Expected tokens: ['##2', 'word', '##3', 'word'] (indices 3-6)
+        # Expected text: "##2 word3 word"
+        # Expected offsets from original text: tokens span from char 13 to char 28
+        chunk2 = chunks[1]
+        assert chunk2["text"] == "##2 word3 word"
+        assert chunk2["start_char_offset"] == 13
+        assert chunk2["end_char_offset"] == 28
+        assert chunk2["token_count"] == 4
+
+        # --- Check Chunk 3 ---
+        # Step is 3. Next chunk starts at token index 6.
+        # Expected tokens: ['word', '##4'] (indices 6-7)
+        # Expected text: "word4"
+        chunk3 = chunks[2]
+        assert chunk3["text"] == "word4"
+        assert chunk3["start_char_offset"] == 24
+        assert chunk3["end_char_offset"] == 29
+        assert chunk3["token_count"] == 2
+
 
 # tests for generate_embeddings
 class TestGenerateEmbeddings:
@@ -326,7 +369,11 @@ class TestGenerateEmbeddings:
         texts = ["Hello world", "Simgrep is amazing"]
         try:
             # Use the pre-loaded model
-            embeddings = generate_embeddings(texts, model_name=self.VALID_MODEL_NAME, model=sentence_transformer_model)
+            embeddings = generate_embeddings(
+                texts,
+                model_name=self.VALID_MODEL_NAME,
+                model=sentence_transformer_model,
+            )
             assert isinstance(embeddings, np.ndarray)
             assert embeddings.shape[0] == len(texts)
             assert embeddings.shape[1] > 0  # embedding dimension
@@ -341,7 +388,11 @@ class TestGenerateEmbeddings:
         texts: List[str] = []
         try:
             # Use the pre-loaded model
-            embeddings = generate_embeddings(texts, model_name=self.VALID_MODEL_NAME, model=sentence_transformer_model)
+            embeddings = generate_embeddings(
+                texts,
+                model_name=self.VALID_MODEL_NAME,
+                model=sentence_transformer_model,
+            )
             assert isinstance(embeddings, np.ndarray)
             assert embeddings.shape[0] == 0
             if embeddings.ndim == 1:

@@ -314,6 +314,7 @@ def search(
     ``patterns`` (default ``['*.txt']``). If ``path_to_search`` is omitted the
     persistent index is searched instead.
     """
+    is_machine_readable_output = output in (OutputMode.json, OutputMode.paths)
     is_json_output = output == OutputMode.json
 
     if path_to_search is None:
@@ -326,7 +327,7 @@ def search(
 
         active_project = get_active_project(project)
 
-        if not is_json_output:
+        if not is_machine_readable_output:
             console.print(f"Searching for: '[bold blue]{query_text}[/bold blue]' in project '[magenta]{active_project}[/magenta]'")
 
         global_db_path = global_simgrep_config.db_directory / "global_metadata.duckdb"
@@ -355,10 +356,10 @@ def search(
         persistent_store: Optional[MetadataStore] = None
         persistent_vector_index: Optional[usearch.index.Index] = None
         try:
-            if not is_json_output:
+            if not is_machine_readable_output:
                 console.print("  Loading persistent database...")
             persistent_store = MetadataStore(persistent=True, db_path=project_db_file)
-            if not is_json_output:
+            if not is_machine_readable_output:
                 console.print("  Loading persistent vector index...")
             persistent_vector_index = load_persistent_index(project_usearch_file)
 
@@ -368,22 +369,6 @@ def search(
                     "Index might be corrupted or empty after a failed write.[/bold red]"
                 )
                 raise typer.Exit(code=1)
-            if len(persistent_vector_index) == 0:
-                console.print("[yellow]Warning: The persistent vector index is empty. No search can be performed.[/yellow]")
-                # Output "no results" based on mode
-                if output == OutputMode.paths:
-                    console.print(
-                        format_paths(
-                            file_paths=[],
-                            use_relative=False,
-                            base_path=None,
-                            console=console,
-                        )
-                    )
-                else:  # show
-                    if not is_json_output:
-                        console.print("  No relevant chunks found in the persistent index.")
-                raise typer.Exit()
 
             perform_persistent_search(
                 query_text=query_text,
@@ -407,30 +392,30 @@ def search(
         finally:
             if persistent_store:
                 persistent_store.close()
-                if not is_json_output:
+                if not is_machine_readable_output:
                     console.print("  Persistent database connection closed.")
         return  # End of persistent search path
 
     # --- Ephemeral Search (path_to_search is provided) ---
     global_simgrep_config = SimgrepConfig()  # Ephemeral search uses default config, no need to load from file
-    if not is_json_output:
+    if not is_machine_readable_output:
         console.print(f"Performing ephemeral search for: '[bold blue]{query_text}[/bold blue]' in path: '[green]{path_to_search}[/green]'")
     store: Optional[MetadataStore] = None
     try:
         # --- Initialize In-Memory Database ---
-        if not is_json_output:
+        if not is_machine_readable_output:
             console.print("\n[bold]Setup: Initializing In-Memory Database[/bold]")
         store = MetadataStore()
-        if not is_json_output:
+        if not is_machine_readable_output:
             console.print("  In-memory database and tables created.")
 
         # --- Load Tokenizer ---
-        if not is_json_output:
+        if not is_machine_readable_output:
             console.print("\n[bold]Setup: Loading Tokenizer[/bold]")
             console.print(f"  Loading tokenizer for model: '{global_simgrep_config.default_embedding_model_name}'...")
         try:
             tokenizer = load_tokenizer(global_simgrep_config.default_embedding_model_name)
-            if not is_json_output:
+            if not is_machine_readable_output:
                 console.print(f"    Tokenizer loaded successfully: {tokenizer.__class__.__name__}")
         except RuntimeError as e:
             console.print(f"[bold red]Fatal Error: Could not load tokenizer.[/bold red]\n  Details: {e}")
@@ -443,7 +428,7 @@ def search(
         search_patterns = list(patterns) if patterns else ["*.txt"]
         files_to_process = gather_files_to_process(path_to_search, search_patterns)
 
-        if not is_json_output:
+        if not is_machine_readable_output:
             if path_to_search.is_file():
                 console.print(f"Processing single file: [green]{path_to_search}[/green]")
             else:
@@ -454,7 +439,7 @@ def search(
                     console.print(f"Found {len(files_to_process)} file(s) to process.")
 
         if not files_to_process:
-            if not is_json_output:
+            if not is_machine_readable_output:
                 console.print("No files selected for processing. Exiting.")
             raise typer.Exit()
 
@@ -462,7 +447,7 @@ def search(
         all_chunkdata_objects: List[ChunkData] = []
         global_usearch_label_counter: int = 0
 
-        if not is_json_output:
+        if not is_machine_readable_output:
             console.print("\n[bold]Step 1 & 2: Processing files, extracting and chunking text (token-based)[/bold]")
         progress_columns = [
             SpinnerColumn(),
@@ -470,14 +455,14 @@ def search(
             BarColumn(),
             TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
         ]
-        with Progress(*progress_columns, console=console, transient=False, disable=is_json_output) as progress:
+        with Progress(*progress_columns, console=console, transient=False, disable=is_machine_readable_output) as progress:
             processing_task = progress.add_task("Processing files...", total=len(files_to_process))
             for file_idx, file_path_item in enumerate(files_to_process):
                 progress.update(processing_task, description=f"Processing: {file_path_item.name}")
                 try:
                     extracted_content = extract_text_from_file(file_path_item)
                     if not extracted_content.strip():
-                        if not is_json_output:
+                        if not is_machine_readable_output:
                             console.print(f"    [yellow]Skipped: File '{file_path_item}' is empty or contains only whitespace.[/yellow]")
                         files_skipped.append((file_path_item, "Empty or whitespace-only"))
                         progress.advance(processing_task)
@@ -503,10 +488,10 @@ def search(
                             )
                             all_chunkdata_objects.append(chunk_data_item)
                             global_usearch_label_counter += 1
-                        if not is_json_output:
+                        if not is_machine_readable_output:
                             console.print(f"    Extracted {len(intermediate_chunks_info)} token-based chunk(s).")
                     else:
-                        if not is_json_output:
+                        if not is_machine_readable_output:
                             console.print(
                                 f"    [yellow]No token-based chunks generated for '{file_path_item}' "
                                 f"(text might be too short or empty for current parameters).[/yellow]"
@@ -514,36 +499,36 @@ def search(
                         files_skipped.append((file_path_item, "No token-based chunks generated"))
 
                 except FileNotFoundError:
-                    if not is_json_output:
+                    if not is_machine_readable_output:
                         console.print(f"    [bold red]Error: File not found during processing loop: {file_path_item}. Skipping.[/bold red]")
                     files_skipped.append((file_path_item, "File not found during processing"))
                 except RuntimeError as e:
-                    if not is_json_output:
+                    if not is_machine_readable_output:
                         console.print(f"    [bold red]Error processing or chunking file '{file_path_item}': {e}. Skipping.[/bold red]")
                     files_skipped.append((file_path_item, str(e)))
                 except ValueError as ve:
-                    if not is_json_output:
+                    if not is_machine_readable_output:
                         console.print(f"    [bold red]Error with chunking parameters for file '{file_path_item}': {ve}. Skipping.[/bold red]")
                     files_skipped.append((file_path_item, str(ve)))
                 except Exception as e:
-                    if not is_json_output:
+                    if not is_machine_readable_output:
                         console.print(f"    [bold red]Unexpected error processing file '{file_path_item}': {e}. Skipping.[/bold red]")
                     files_skipped.append((file_path_item, f"Unexpected: {str(e)}"))
                 finally:
                     progress.advance(processing_task)
 
-        if files_skipped and not is_json_output:
+        if files_skipped and not is_machine_readable_output:
             console.print("\n[bold yellow]Summary of skipped files:[/bold yellow]")
             for f_path, reason in files_skipped:
                 console.print(f"  - {f_path}: {reason}")
 
         if not all_chunkdata_objects:
-            if not is_json_output:
+            if not is_machine_readable_output:
                 console.print("\n[yellow]No text chunks extracted from any files. Cannot perform search.[/yellow]")
             raise typer.Exit()
 
         # --- Populate In-Memory Database ---
-        if not is_json_output:
+        if not is_machine_readable_output:
             console.print("\n[bold]Setup: Populating In-Memory Database[/bold]")
         unique_files_metadata_dict: Dict[int, Path] = {}
         for cd_item in all_chunkdata_objects:
@@ -555,19 +540,19 @@ def search(
         if processed_files_metadata_for_db:
             assert store is not None
             store.batch_insert_files(processed_files_metadata_for_db)
-            if not is_json_output:
+            if not is_machine_readable_output:
                 console.print(f"  Inserted metadata for {len(processed_files_metadata_for_db)} file(s) into DB.")
 
         assert store is not None
         store.batch_insert_chunks(all_chunkdata_objects)
-        if not is_json_output:
+        if not is_machine_readable_output:
             console.print(f"  Inserted {len(all_chunkdata_objects)} chunk(s) into DB.")
 
         # --- Embedding Generation ---
         query_embedding: np.ndarray
         chunk_embeddings: np.ndarray
 
-        if not is_json_output:
+        if not is_machine_readable_output:
             console.print(f"\n[bold]Step 3: Generating Embeddings for {len(all_chunkdata_objects)} total chunk(s)[/bold]")
             console.print("  (This may take a moment on first run if the embedding model needs to be downloaded...)")
 
@@ -579,16 +564,16 @@ def search(
 
             embedding_model_instance: Optional[SentenceTransformer] = None
             try:
-                if not is_json_output:
+                if not is_machine_readable_output:
                     console.print(f"  Loading embedding model '{global_simgrep_config.default_embedding_model_name}'...")
                 embedding_model_instance = load_embedding_model(global_simgrep_config.default_embedding_model_name)
-                if not is_json_output:
+                if not is_machine_readable_output:
                     console.print("    Embedding model loaded.")
             except Exception as e_model_load:
                 console.print(f"[bold red]Fatal Error: Could not load embedding model.[/bold red]\n  Details: {e_model_load}")
                 raise typer.Exit(code=1)
 
-            if not is_json_output:
+            if not is_machine_readable_output:
                 console.print(f"  Embedding query: '[italic blue]{query_text}[/italic blue]'...")
             query_embedding = generate_embeddings(
                 texts=[query_text],
@@ -596,11 +581,11 @@ def search(
                 model=embedding_model_instance,  # Pass pre-loaded model
                 is_query=True,
             )
-            if not is_json_output:
+            if not is_machine_readable_output:
                 console.print(f"    Query embedding shape: {query_embedding.shape}")
 
             chunk_texts_for_embedding: List[str] = [cd.text for cd in all_chunkdata_objects]
-            if not is_json_output:
+            if not is_machine_readable_output:
                 console.print(f"  Embedding {len(chunk_texts_for_embedding)} text chunk(s)...")
             chunk_embeddings = generate_embeddings(
                 texts=chunk_texts_for_embedding,
@@ -608,7 +593,7 @@ def search(
                 model=embedding_model_instance,  # Pass pre-loaded model
                 is_query=False,
             )
-            if not is_json_output:
+            if not is_machine_readable_output:
                 console.print(f"    Chunk embeddings shape: {chunk_embeddings.shape}")
 
             if chunk_embeddings.size > 0 and query_embedding.shape[1] != chunk_embeddings.shape[1]:
@@ -627,23 +612,23 @@ def search(
             raise typer.Exit(code=1)
 
         # --- In-Memory Vector Search ---
-        if not is_json_output:
+        if not is_machine_readable_output:
             console.print("\n[bold]Step 4: Performing In-Memory Vector Search[/bold]")
         search_matches: List[SearchResult] = []
 
         if chunk_embeddings.size == 0 or chunk_embeddings.shape[0] == 0:
-            if not is_json_output:
+            if not is_machine_readable_output:
                 console.print("  No chunk embeddings available. Skipping vector search.")
         else:
             try:
-                if not is_json_output:
+                if not is_machine_readable_output:
                     console.print(f"  Creating in-memory index for {chunk_embeddings.shape[0]} chunk embedding(s)...")
                 usearch_labels_np = np.array([cd.usearch_label for cd in all_chunkdata_objects], dtype=np.int64)
                 vector_index: usearch.index.Index = create_inmemory_index(embeddings=chunk_embeddings, labels_for_usearch=usearch_labels_np)
-                if not is_json_output:
+                if not is_machine_readable_output:
                     console.print(f"    Index created with {len(vector_index)} item(s). " f"Metric: {vector_index.metric}, DType: {str(vector_index.dtype)}")
 
-                if not is_json_output:
+                if not is_machine_readable_output:
                     console.print(f"  Searching index for top {top} similar chunk(s)...")
                 search_matches = search_inmemory_index(
                     index=vector_index,
@@ -651,7 +636,7 @@ def search(
                     k=top,
                 )
 
-                if not search_matches and not is_json_output:
+                if not search_matches and not is_machine_readable_output:
                     console.print("  No matches found in the vector index for the query.")
 
             except ValueError as ve:
@@ -661,10 +646,10 @@ def search(
                 console.print(f"[bold red]An unexpected error occurred during vector search: {e}[/bold red]")
                 raise typer.Exit(code=1)
 
-        if not is_json_output:
+        if not is_machine_readable_output:
             console.print("\n[bold]Step 5: Displaying Results[/bold]")
 
-        if relative_paths and output != OutputMode.paths and not is_json_output:
+        if relative_paths and output != OutputMode.paths and not is_machine_readable_output:
             console.print(
                 "[yellow]Warning: --relative-paths is only effective with --output paths. "
                 "Paths will be displayed according to the selected output mode.[/yellow]"
@@ -685,7 +670,8 @@ def search(
             elif output == OutputMode.count_results:
                 console.print(format_count([]))
             else:  # OutputMode.show or other future modes that might show "no results"
-                console.print("  No relevant chunks found for your query in the processed file(s).")
+                if not is_machine_readable_output:
+                    console.print("  No relevant chunks found for your query in the processed file(s).")
         else:
             # First, gather all result details from the database, filtering by score
             ephemeral_results: List[Dict[str, Any]] = []
@@ -709,7 +695,8 @@ def search(
                         }
                     )
                 else:
-                    console.print(f"[yellow]Warning: Could not retrieve details for chunk_id {matched_chunk_id} from DB.[/yellow]")
+                    if not is_machine_readable_output:
+                        console.print(f"[yellow]Warning: Could not retrieve details for chunk_id {matched_chunk_id} from DB.[/yellow]")
 
             # Sort by score descending, as filtering might have disrupted order
             ephemeral_results.sort(key=lambda r: r["score"], reverse=True)
@@ -722,7 +709,8 @@ def search(
                 elif output == OutputMode.count_results:
                     console.print(format_count([]))
                 else:  # show
-                    console.print("  No relevant chunks found for your query in the processed file(s) (after filtering).")
+                    if not is_machine_readable_output:
+                        console.print("  No relevant chunks found for your query in the processed file(s) (after filtering).")
             else:
                 # Now, format based on output mode
                 if output == OutputMode.paths:
@@ -742,8 +730,8 @@ def search(
                         base_path=current_base_path_for_relativity,
                         console=console,
                     )
-                    if output_string:
-                        console.print(output_string)
+                    # Direct print for machine readable output
+                    print(output_string)
 
                 elif output == OutputMode.show:
                     console.print(f"\n[bold cyan]Search Results (Top {len(ephemeral_results)}):[/bold cyan]")
@@ -762,13 +750,12 @@ def search(
 
                 elif output == OutputMode.count_results:
                     console.print(format_count(ephemeral_results))
-
     finally:
         if store:
-            if not is_json_output:
+            if not is_machine_readable_output:
                 console.print("\n[bold]Cleanup: Closing In-Memory Database[/bold]")
             store.close()
-            if not is_json_output:
+            if not is_machine_readable_output:
                 console.print("  Database connection closed.")
 
 
@@ -783,6 +770,12 @@ def index(
         None,
         "--project",
         help="Project name to index. Autodetected if in a project directory.",
+    ),
+    patterns: Optional[List[str]] = typer.Option(
+        None,
+        "--pattern",
+        "-p",
+        help="Glob pattern(s) for files to index. Can be used multiple times. Defaults to project settings or '*.txt'.",
     ),
 ) -> None:
     """
@@ -826,6 +819,8 @@ def index(
         project_db_file = project_cfg.db_path
         project_usearch_file = project_cfg.usearch_index_path
 
+        scan_patterns = patterns if patterns else ["*.txt"]
+
         indexer_config = IndexerConfig(
             project_name=active_project,
             db_path=project_db_file,
@@ -833,7 +828,7 @@ def index(
             embedding_model_name=project_cfg.embedding_model,
             chunk_size_tokens=global_simgrep_config.default_chunk_size_tokens,
             chunk_overlap_tokens=global_simgrep_config.default_chunk_overlap_tokens,
-            file_scan_patterns=["*.txt"],
+            file_scan_patterns=scan_patterns,
         )
 
         indexer_instance = Indexer(config=indexer_config, console=console)
@@ -865,11 +860,8 @@ def status() -> None:
 
     db_file = cfg.default_project_data_dir / "metadata.duckdb"
     if not db_file.exists():
-        console.print(
-            f"[bold yellow]Warning: Default persistent index not found at '{cfg.default_project_data_dir}'.[/bold yellow]\n"
-            "Please run 'simgrep index <path>' first to create an index."
-        )
-        raise typer.Exit(code=1)
+        console.print("Default Project: 0 files indexed, 0 chunks.")
+        raise typer.Exit()
 
     store: Optional[MetadataStore] = None
     try:
@@ -920,10 +912,10 @@ def project_add_path(
         resolve_path=True,
         help="The file or directory path to add to the project for indexing.",
     ),
-    project: str = typer.Option(
-        "default",
+    project: Optional[str] = typer.Option(
+        None,
         "--project",
-        help="The name of the project to add the path to.",
+        help="The name of the project to add the path to. Autodetected if in a project directory.",
     ),
 ) -> None:
     """Adds a path to a project. Simgrep will scan this path during indexing."""
@@ -933,17 +925,19 @@ def project_add_path(
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(code=1)
 
+    active_project = get_active_project(project)
+
     global_db_path = cfg.db_directory / "global_metadata.duckdb"
     conn = connect_global_db(global_db_path)
     try:
-        project_info = get_project_by_name(conn, project)
+        project_info = get_project_by_name(conn, active_project)
         if project_info is None:
-            console.print(f"[bold red]Error: Project '{project}' not found.[/bold red]")
+            console.print(f"[bold red]Error: Project '{active_project}' not found.[/bold red]")
             raise typer.Exit(code=1)
 
         project_id = project_info[0]
         add_project_path(conn, project_id, str(path_to_add))
-        console.print(f"Added path '[green]{path_to_add}[/green]' to project '[magenta]{project}[/magenta]'.")
+        console.print(f"Added path '[green]{path_to_add}[/green]' to project '[magenta]{active_project}[/magenta]'.")
 
     except (MetadataDBError, SimgrepConfigError) as e:
         console.print(f"[bold red]Error adding path to project: {e}[/bold red]")

@@ -32,8 +32,25 @@ def perform_persistent_search(
     """
     Orchestrates the search process against a pre-existing, loaded persistent index.
     """
+    is_machine_readable_output = output_mode in (OutputMode.json, OutputMode.paths)
+
+    if len(vector_index) == 0:
+        if not is_machine_readable_output:
+            console.print("[yellow]Warning: The persistent vector index is empty. No search can be performed.[/yellow]")
+        # Output "no results" based on mode
+        if output_mode == OutputMode.paths:
+            console.print(format_paths(file_paths=[], use_relative=False, base_path=None, console=console))
+        elif output_mode == OutputMode.json:
+            print("[]")
+        elif output_mode == OutputMode.count_results:
+            console.print(format_count([]))
+        else:  # show
+            if not is_machine_readable_output:
+                console.print("  No relevant chunks found in the persistent index.")
+        return
+
     embedding_model_name = global_config.default_embedding_model_name
-    if output_mode != OutputMode.json:
+    if not is_machine_readable_output:
         console.print(f"  Embedding query: '[italic blue]{query_text}[/italic blue]' using model '{embedding_model_name}'...")
     try:
         query_embedding = generate_embeddings(texts=[query_text], model_name=embedding_model_name, is_query=True)
@@ -41,7 +58,7 @@ def perform_persistent_search(
         console.print(f"[bold red]Failed to generate query embedding:[/bold red]\n  {e}")
         raise  # re-raise for main.py to catch and exit
 
-    if output_mode != OutputMode.json:
+    if not is_machine_readable_output:
         console.print(f"  Searching persistent index for top {k_results} similar chunks...")
     try:
         search_matches: List[SearchResult] = search_inmemory_index(index=vector_index, query_embedding=query_embedding, k=k_results)
@@ -61,11 +78,12 @@ def perform_persistent_search(
                 )
             )
         elif output_mode == OutputMode.json:
-            console.print("[]")
+            print("[]")
         elif output_mode == OutputMode.count_results:
             console.print(format_count([]))
         else:  # outputmode.show
-            console.print("  No relevant chunks found in the persistent index.")
+            if not is_machine_readable_output:
+                console.print("  No relevant chunks found in the persistent index.")
         return
 
     label_to_score: Dict[int, float] = {m.label: m.score for m in search_matches}
@@ -107,11 +125,12 @@ def perform_persistent_search(
                 )
             )
         elif output_mode == OutputMode.json:
-            console.print("[]")
-        elif output_mode == OutputMode.count:
+            print("[]")
+        elif output_mode == OutputMode.count_results:
             console.print(format_count([]))
         else:  # outputmode.show
-            console.print("  No relevant chunks found in the persistent index (after filtering).")
+            if not is_machine_readable_output:
+                console.print("  No relevant chunks found in the persistent index (after filtering).")
         return
 
     # process and format results
@@ -140,7 +159,8 @@ def perform_persistent_search(
             base_path=base_path_for_relativity,
             console=console,
         )
-        console.print(output_string)
+        # Use a direct print for paths to avoid Rich's wrapping
+        print(output_string)
     elif output_mode == OutputMode.json:
         # Use a direct print for JSON to avoid Rich's wrapping
         print(format_json(final_results))

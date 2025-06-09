@@ -13,6 +13,13 @@ class TestFormatShowBasic:
         expected = f"File: {str(file_path)}\nScore: 0.1235\nChunk: snippet"
         assert result == expected
 
+    def test_multiline_snippet(self, tmp_path: Path) -> None:
+        file_path = tmp_path / "file.txt"
+        snippet = "line one\nline two"
+        result = format_show_basic(file_path, snippet, 0.5)
+        expected = f"File: {str(file_path)}\nScore: 0.5000\nChunk: line one\nline two"
+        assert result == expected
+
 
 class TestFormatPaths:
     def test_unique_sorted_absolute_paths(self, tmp_path: Path) -> None:
@@ -114,3 +121,11 @@ class TestFormatCount:
         ]
         output = format_count(results)
         assert output == "1 matching chunk in 1 file."
+
+    def test_format_count_plural_chunks_singular_file(self) -> None:
+        results = [
+            {"file_path": Path("/a/b.txt")},
+            {"file_path": Path("/a/b.txt")},
+        ]
+        output = format_count(results)
+        assert output == "2 matching chunks in 1 file."

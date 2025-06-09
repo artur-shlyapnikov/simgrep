@@ -17,12 +17,12 @@ def gather_files_to_process(path: Path, patterns: List[str]) -> List[Path]:
     return sorted(found)
 
 
-def find_project_root(path: Path = Path.cwd()) -> Optional[Path]:
+def find_project_root(path: Optional[Path] = None) -> Optional[Path]:
     """
     Finds the project root by searching for a '.simgrep' directory
     upwards from the given path.
     """
-    current = path.resolve()
+    current = (path or Path.cwd()).resolve()
     while True:
         if (current / ".simgrep").is_dir():
             return current
