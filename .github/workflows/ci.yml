@@ -4,11 +4,11 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      - 'docs/**'
+      - "docs/**"
   pull_request:
     branches: [main]
     paths-ignore:
-      - 'docs/**'
+      - "docs/**"
 
 jobs:
   build:
@@ -38,18 +38,6 @@ jobs:
 
       - name: Pre-cache Hugging Face model for tests
         run: make download-models
-
-      - name: Lint code
-        run: make lint
-        continue-on-error: true
-
-      - name: Check formatting
-        run: make format-check
-        continue-on-error: true
-
-      - name: Type check code
-        run: make typecheck
-        continue-on-error: true
 
       - name: Run tests
         run: make test
