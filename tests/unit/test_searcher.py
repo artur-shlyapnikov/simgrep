@@ -4,6 +4,7 @@ from rich.console import Console
 
 from simgrep import searcher
 from simgrep.models import OutputMode, SearchResult, SimgrepConfig
+from simgrep.searcher import SearchEngine
 
 
 class MinimalStore:
@@ -24,9 +25,9 @@ def test_perform_persistent_search_no_results(monkeypatch: pytest.MonkeyPatch, c
     monkeypatch.setattr(searcher, "generate_embeddings", fake_generate_embeddings)
     monkeypatch.setattr(searcher, "search_inmemory_index", fake_search_inmemory_index)
 
-    searcher.perform_persistent_search(
+    engine = SearchEngine(console)
+    engine.search_persistent(
         query_text="irrelevant",
-        console=console,
         metadata_store=store,
         vector_index=object(),
         global_config=SimgrepConfig(),

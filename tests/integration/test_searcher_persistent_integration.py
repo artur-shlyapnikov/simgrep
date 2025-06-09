@@ -11,7 +11,7 @@ pytest.importorskip("sentence_transformers")
 pytest.importorskip("usearch.index")
 
 from simgrep.models import OutputMode, SimgrepConfig
-from simgrep.searcher import perform_persistent_search
+from simgrep.searcher import SearchEngine
 from simgrep.metadata_store import MetadataStore
 
 
@@ -20,6 +20,11 @@ from simgrep.metadata_store import MetadataStore
 def test_console() -> Console:
     """Provides a Rich Console instance that writes to stdout, compatible with capsys."""
     return Console(width=120)
+
+
+@pytest.fixture
+def search_engine(test_console: Console) -> SearchEngine:
+    return SearchEngine(console=test_console)
 
 
 @pytest.fixture(scope="session")
@@ -123,15 +128,15 @@ class TestSearcherPersistentIntegration:
             MetadataStore, usearch.index.Index, SimgrepConfig
         ],
         test_console: Console,
+        search_engine: SearchEngine,
         capsys: pytest.CaptureFixture,
         persistent_search_test_data_path: Path,
     ) -> None:
         store, vector_index_val, global_cfg = populated_persistent_index_for_searcher
         query = "simgrep information retrieval"  # Should match content in file1.txt
 
-        perform_persistent_search(
+        search_engine.search_persistent(
             query_text=query,
-            console=test_console,
             metadata_store=store,
             vector_index=vector_index_val,
             global_config=global_cfg,
@@ -171,9 +176,8 @@ class TestSearcherPersistentIntegration:
         store, vector_index_val, global_cfg = populated_persistent_index_for_searcher
         query = "semantic search"  # Should match content in file2.txt
 
-        perform_persistent_search(
+        search_engine.search_persistent(
             query_text=query,
-            console=test_console,
             metadata_store=store,
             vector_index=vector_index_val,
             global_config=global_cfg,
@@ -204,9 +208,8 @@ class TestSearcherPersistentIntegration:
         store, vector_index_val, global_cfg = populated_persistent_index_for_searcher
         query = "zzxxyy_non_existent_term_qwerty_12345"  # Highly unlikely to match
 
-        perform_persistent_search(
+        search_engine.search_persistent(
             query_text=query,
-            console=test_console,
             metadata_store=store,
             vector_index=vector_index_val,
             global_config=global_cfg,
@@ -233,9 +236,8 @@ class TestSearcherPersistentIntegration:
         store, vector_index_val, global_cfg = populated_persistent_index_for_searcher
         query = "zzxxyy_non_existent_term_qwerty_12345"  # Highly unlikely to match
 
-        perform_persistent_search(
+        search_engine.search_persistent(
             query_text=query,
-            console=test_console,
             metadata_store=store,
             vector_index=vector_index_val,
             global_config=global_cfg,
@@ -264,9 +266,8 @@ class TestSearcherPersistentIntegration:
         store, vector_index_val, global_cfg = populated_persistent_index_for_searcher
         query = "simgrep"
 
-        perform_persistent_search(
+        search_engine.search_persistent(
             query_text=query,
-            console=test_console,
             metadata_store=store,
             vector_index=vector_index_val,
             global_config=global_cfg,
@@ -277,9 +278,8 @@ class TestSearcherPersistentIntegration:
         out_one = capsys.readouterr().out
         assert out_one.count("---") == 1
 
-        perform_persistent_search(
+        search_engine.search_persistent(
             query_text=query,
-            console=test_console,
             metadata_store=store,
             vector_index=vector_index_val,
             global_config=global_cfg,
@@ -304,9 +304,8 @@ class TestSearcherPersistentIntegration:
         store, vector_index_val, global_cfg = populated_persistent_index_for_searcher
         query = "semantic search"  # matches file2.txt
 
-        perform_persistent_search(
+        search_engine.search_persistent(
             query_text=query,
-            console=test_console,
             metadata_store=store,
             vector_index=vector_index_val,
             global_config=global_cfg,

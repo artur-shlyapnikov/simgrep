@@ -46,7 +46,7 @@ try:
         generate_embeddings,
         load_tokenizer,
     )
-    from .searcher import perform_persistent_search  # Added perform_persistent_search
+    from .searcher import SearchEngine
     from .utils import gather_files_to_process
     from .vector_store import (
         VectorStoreError,  # Added VectorStoreError
@@ -86,7 +86,7 @@ except ImportError:
             generate_embeddings,
             load_tokenizer,
         )
-        from simgrep.searcher import perform_persistent_search  # Added
+        from simgrep.searcher import SearchEngine
         from simgrep.utils import gather_files_to_process
         from simgrep.vector_store import (  # Added
             VectorStoreError,
@@ -205,6 +205,7 @@ def search(
     persistent index is searched instead.
     """
     global_simgrep_config: SimgrepConfig = load_or_create_global_config()  # Load config early
+    search_engine = SearchEngine(console)
     project_cfg = global_simgrep_config.projects.get(project)
     if project_cfg is None:
         console.print(f"[bold red]Error: Project '{project}' not found.[/bold red]")
@@ -258,17 +259,467 @@ def search(
                     console.print("  No relevant chunks found in the persistent index.")
                 raise typer.Exit()
 
-            perform_persistent_search(
+            search_engine.search_persistent(
                 query_text=query_text,
-                console=console,
                 metadata_store=persistent_store,
                 vector_index=persistent_vector_index,
                 global_config=global_simgrep_config,
                 output_mode=output,
                 k_results=top,
                 display_relative_paths=relative_paths,
-                # For persistent search, base_path_for_relativity might need to be CWD or a configured project root.
-                # For now, persistent search will show absolute paths if relative_paths is true but no base_path.
+                base_path_for_relativity=Path.cwd() if relative_paths else None,
+            )
+        except (MetadataDBError, VectorStoreError, RuntimeError, ValueError) as e:
+            console.print(f"[bold red]Error during persistent search: {e}[/bold red]")
+            raise typer.Exit(code=1)
+        finally:
+            if persistent_store:
+                persistent_store.close()
+                console.print("  Persistent database connection closed.")
+        return  # End of persistent search path
+
+    # --- Ephemeral Search (path_to_search is provided) ---
+    search_engine.search_ephemeral(
+        query_text=query_text,
+        path_to_search=path_to_search,
+        global_config=global_simgrep_config,
+        patterns=patterns,
+        output_mode=output,
+        k_results=top,
+        relative_paths=relative_paths,
+    )
+
+
+
+@app.command()
+def index(
+    path_to_index: Path = typer.Argument(
+        ...,
+        exists=True,
+        file_okay=True,
+        dir_okay=True,
+        readable=True,
+        resolve_path=True,  # Ensures path is absolute and symlinks resolved
+        help="The path to the file or directory to index.",
+    ),
+    rebuild: bool = typer.Option(
+        False,
+        "--rebuild",
+        help="Wipe existing data and rebuild the project's index from scratch.",
+    ),
+    project: str = typer.Option(
+        "default",
+        "--project",
+        help="Project name to index.",
+    ),
+) -> None:
+    """
+    Creates or updates a persistent index for the specified path within a project.
+    If --rebuild is provided, existing data for that project will be deleted before indexing.
+    """
+    console.print(f"Starting indexing for path: [green]{path_to_index}[/green] into project '[magenta]{project}[/magenta]'")
+    if rebuild:
+        console.print(f"[bold yellow]Warning: This will wipe and rebuild the '{project}' project index.[/bold yellow]")
+        if not typer.confirm(
+            f"Are you sure you want to wipe and rebuild the '{project}' project index?",
+            default=False,
+        ):
+            console.print("Aborted indexing.")
+            raise typer.Abort()
+
+    try:
+        global_simgrep_config: SimgrepConfig = load_or_create_global_config()
+        project_cfg = global_simgrep_config.projects.get(project)
+        if project_cfg is None:
+            console.print(f"[bold red]Error: Project '{project}' not found.[/bold red]")
+            raise typer.Exit(code=1)
+
+        project_db_file = project_cfg.db_path
+        project_usearch_file = project_cfg.usearch_index_path
+
+        # Prepare configuration for the Indexer
+        indexer_config = IndexerConfig(
+            project_name=project,
+            db_path=project_db_file,
+            usearch_index_path=project_usearch_file,
+            embedding_model_name=global_simgrep_config.default_embedding_model_name,
+            chunk_size_tokens=global_simgrep_config.default_chunk_size_tokens,
+            chunk_overlap_tokens=global_simgrep_config.default_chunk_overlap_tokens,
+            file_scan_patterns=["*.txt"],  # Initially hardcode to .txt, make configurable later
+        )
+
+        indexer_instance = Indexer(config=indexer_config, console=console)
+        indexer_instance.index_path(target_path=path_to_index, wipe_existing=rebuild)
+
+        console.print(f"[bold green]Successfully indexed '{path_to_index}' into project '{project}'.[/bold green]")
+
+    except SimgrepConfigError as e:
+        console.print(f"[bold red]Configuration Error:[/bold red]\n  {e}")
+        raise typer.Exit(code=1)
+    except IndexerError as e:  # Custom error from Indexer
+        console.print(f"[bold red]Indexing Error:[/bold red]\n  {e}")
+        raise typer.Exit(code=1)
+    except Exception as e:
+        console.print(f"[bold red]An unexpected error occurred during indexing:[/bold red]\n  {e}")
+        # For detailed debugging, consider logging the full traceback
+        # import traceback
+        # console.print(f"[dim]{traceback.format_exc()}[/dim]")
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def status() -> None:
+    try:
+        cfg: SimgrepConfig = load_or_create_global_config()
+    except SimgrepConfigError:
+        raise typer.Exit(code=1)
+
+    db_file = cfg.default_project_data_dir / "metadata.duckdb"
+    if not db_file.exists():
+        console.print(
+            f"[bold yellow]Warning: Default persistent index not found at '{cfg.default_project_data_dir}'.[/bold yellow]\n"
+            "Please run 'simgrep index <path>' first to create an index."
+        )
+        raise typer.Exit(code=1)
+
+    store: Optional[MetadataStore] = None
+    try:
+        store = MetadataStore(persistent=True, db_path=db_file)
+        files_count, chunks_count = get_index_counts(store.conn)
+        console.print(f"Default Project: {files_count} files indexed, {chunks_count} chunks.")
+    except MetadataDBError as e:
+        console.print(f"[bold red]Error retrieving status: {e}[/bold red]")
+        raise typer.Exit(code=1)
+    finally:
+        if store:
+            store.close()
+
+
+@project_app.command("create")
+def project_create(name: str) -> None:
+    """Create a new named project."""
+    try:
+        cfg = load_or_create_global_config()
+    except SimgrepConfigError:
+        raise typer.Exit(code=1)
+
+    global_db_path = cfg.db_directory / "global_metadata.duckdb"
+    conn = connect_global_db(global_db_path)
+    try:
+        if get_project_by_name(conn, name) is not None:
+            console.print(f"[bold red]Project '{name}' already exists.[/bold red]")
+            raise typer.Exit(code=1)
+
+        proj_cfg = add_project_to_config(cfg, name)
+        insert_project(
+            conn,
+            project_name=name,
+            db_path=str(proj_cfg.db_path),
+            usearch_index_path=str(proj_cfg.usearch_index_path),
+            embedding_model_name=proj_cfg.embedding_model,
+        )
+        console.print(f"[green]Project '{name}' created.[/green]")
+    except (MetadataDBError, SimgrepConfigError) as e:
+        console.print(f"[bold red]Error creating project: {e}[/bold red]")
+        raise typer.Exit(code=1)
+    finally:
+        conn.close()
+
+
+@project_app.command("list")
+def project_list() -> None:
+    """List all configured projects."""
+    try:
+        cfg = load_or_create_global_config()
+    except SimgrepConfigError:
+        raise typer.Exit(code=1)
+
+    global_db_path = cfg.db_directory / "global_metadata.duckdb"
+    conn = connect_global_db(global_db_path)
+    try:
+        projects = get_all_projects(conn)
+    except MetadataDBError as e:
+        console.print(f"[bold red]Error listing projects: {e}[/bold red]")
+        raise typer.Exit(code=1)
+    finally:
+        conn.close()
+
+    for proj in projects:
+        label = " (default)" if proj == "default" else ""
+        console.print(f"{proj}{label}")
+
+
+if __name__ == "__main__":
+    app()
+import sys  # For printing to stderr in case of config error
+import warnings
+from pathlib import Path
+from typing import (
+    Dict,
+    List,
+    Optional,
+    Tuple,
+)
+
+import numpy as np
+import typer
+import usearch.index
+from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+)
+
+# Assuming simgrep is installed or path is correctly set for sibling imports
+try:
+    from .config import (
+        DEFAULT_K_RESULTS,
+        SimgrepConfigError,
+        add_project_to_config,
+        load_or_create_global_config,
+    )
+    from .formatter import format_paths, format_show_basic
+    from .indexer import Indexer, IndexerConfig, IndexerError
+    from .metadata_db import (
+        MetadataDBError,
+        connect_global_db,
+        get_all_projects,
+        get_index_counts,
+        get_project_by_name,
+        insert_project,
+    )
+    from .metadata_store import MetadataStore
+    from .models import ChunkData, OutputMode, SearchResult, SimgrepConfig  # OutputMode moved here
+    from .processor import (
+        ProcessedChunkInfo,
+        chunk_text_by_tokens,
+        extract_text_from_file,
+        generate_embeddings,
+        load_tokenizer,
+    )
+    from .searcher import SearchEngine
+    from .utils import gather_files_to_process
+    from .vector_store import (
+        VectorStoreError,  # Added VectorStoreError
+        create_inmemory_index,
+        load_persistent_index,
+        search_inmemory_index,
+    )
+except ImportError:
+    # Fallback for running main.py directly during development
+    if __name__ == "__main__":
+        import os
+        import sys
+
+        sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+        from simgrep.config import (
+            DEFAULT_K_RESULTS,
+            SimgrepConfigError,
+            add_project_to_config,
+            load_or_create_global_config,
+        )
+        from simgrep.formatter import format_paths, format_show_basic
+        from simgrep.indexer import Indexer, IndexerConfig, IndexerError
+        from simgrep.metadata_db import (
+            MetadataDBError,
+            connect_global_db,
+            get_all_projects,
+            get_index_counts,
+            get_project_by_name,
+            insert_project,
+        )
+        from simgrep.metadata_store import MetadataStore
+        from simgrep.models import ChunkData, OutputMode, SearchResult, SimgrepConfig
+        from simgrep.processor import (
+            ProcessedChunkInfo,
+            chunk_text_by_tokens,
+            extract_text_from_file,
+            generate_embeddings,
+            load_tokenizer,
+        )
+        from simgrep.searcher import SearchEngine
+        from simgrep.utils import gather_files_to_process
+        from simgrep.vector_store import (  # Added
+            VectorStoreError,
+            create_inmemory_index,
+            load_persistent_index,
+            search_inmemory_index,
+        )
+    else:
+        raise
+
+# --- Constants for Ephemeral Search (Deliverable 1 & 2 focus) ---
+# EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2" # Now from SimgrepConfig
+# CHUNK_SIZE_TOKENS = 128 # Now from SimgrepConfig
+# OVERLAP_TOKENS = 20     # Now from SimgrepConfig
+# DEFAULT_K_RESULTS = 5  # Moved to config.py
+
+# Suppress specific warnings from sentence_transformers if needed, or handle them appropriately
+warnings.filterwarnings(
+    "ignore",
+    category=FutureWarning,
+    module="sentence_transformers.SentenceTransformer",
+)
+
+
+# OutputMode moved to models.py
+
+# Initialize Typer app and Rich console
+app = typer.Typer(
+    name="simgrep",
+    help="A command-line tool for semantic search in local files.",
+    add_completion=False,
+    no_args_is_help=True,
+)
+project_app = typer.Typer(help="Manage simgrep projects.")
+app.add_typer(project_app, name="project")
+console = Console()
+
+
+@app.callback(invoke_without_command=True)
+def main_callback(
+    ctx: typer.Context,
+    version: Optional[bool] = typer.Option(None, "--version", "-v", help="Show simgrep version and exit.", is_eager=True),
+) -> None:
+    """
+    simgrep CLI application.
+    Initializes global configuration, ensuring necessary directories are created.
+    """
+    if version:  # If --version is passed, version_callback handles exit.
+        return
+
+    try:
+        # Load configuration. This step ensures the default_project_data_dir is created.
+        # The '_config' variable itself is not used further by main_callback or
+        # the ephemeral search command in *this deliverable*.
+        # It will be crucial for persistent indexing commands later.
+        _config = load_or_create_global_config()
+    except SimgrepConfigError:
+        # Error already printed by load_or_create_global_config
+        # console.print(f"[bold red]Fatal Configuration Error:[/bold red]\n{e}") # Redundant if config prints
+        raise typer.Exit(code=1)
+    except Exception as e:  # Catch any other unexpected errors during config load
+        console.print(f"[bold red]An unexpected error occurred during Simgrep initialization:[/bold red]\n{e}")
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def search(
+    query_text: str = typer.Argument(..., help="The text or concept to search for."),
+    path_to_search: Optional[Path] = typer.Argument(
+        None,  # Default to None, making it optional
+        exists=True,  # This will only be checked if path_to_search is not None
+        file_okay=True,
+        dir_okay=True,
+        readable=True,
+        resolve_path=True,
+        help="The path to a text file or directory for ephemeral search. If omitted, searches the default persistent index.",
+    ),
+    patterns: Optional[List[str]] = typer.Option(
+        None,
+        "--pattern",
+        "-p",
+        help="Glob pattern(s) for files when searching directories. Can be used multiple times. Defaults to '*.txt'.",
+    ),
+    output: OutputMode = typer.Option(
+        OutputMode.show,  # Default output mode
+        "--output",
+        "-o",
+        help="Output mode. 'paths' mode lists unique, sorted file paths containing matches.",
+        case_sensitive=False,
+    ),
+    top: int = typer.Option(
+        DEFAULT_K_RESULTS,
+        "--top",
+        "--k",
+        help="Number of top results to return from the vector search.",
+    ),
+    relative_paths: bool = typer.Option(
+        False,
+        "--relative-paths/--absolute-paths",  # Provides --no-relative-paths as well
+        help=(
+            "Display relative file paths. "
+            "Paths are relative to the initial search target directory, or its parent if the target is a file. "
+            "Only used with '--output paths'."
+        ),
+    ),
+    project: str = typer.Option(
+        "default",
+        "--project",
+        help="Project name to use for persistent search.",
+    ),
+) -> None:
+    """Searches for a query within files.
+
+    If ``path_to_search`` is a directory, files are discovered using the given
+    ``patterns`` (default ``['*.txt']``). If ``path_to_search`` is omitted the
+    persistent index is searched instead.
+    """
+    global_simgrep_config: SimgrepConfig = load_or_create_global_config()  # Load config early
+    search_engine = SearchEngine(console)
+    project_cfg = global_simgrep_config.projects.get(project)
+    if project_cfg is None:
+        console.print(f"[bold red]Error: Project '{project}' not found.[/bold red]")
+        raise typer.Exit(code=1)
+
+    if path_to_search is None:
+        # --- Persistent Search ---
+        console.print(
+            f"Searching for: '[bold blue]{query_text}[/bold blue]' in project '[magenta]{project}[/magenta]'"
+        )
+        project_db_file = project_cfg.db_path
+        project_usearch_file = project_cfg.usearch_index_path
+
+        if not project_db_file.exists() or not project_usearch_file.exists():
+            console.print(
+                f"[bold yellow]Warning: Persistent index for project '{project}' not found at '{project_cfg.db_path.parent}'.[/bold yellow]\n"
+                f"Please run 'simgrep index <path> --project {project}' first to create an index."
+            )
+            if output == OutputMode.paths:
+                console.print("No matching files found.")
+                raise typer.Exit()
+            raise typer.Exit(code=1)
+
+        persistent_store: Optional[MetadataStore] = None
+        persistent_vector_index: Optional[usearch.index.Index] = None
+        try:
+            console.print("  Loading persistent database...")
+            persistent_store = MetadataStore(persistent=True, db_path=project_db_file)
+            console.print("  Loading persistent vector index...")
+            persistent_vector_index = load_persistent_index(project_usearch_file)
+
+            if persistent_vector_index is None:
+                console.print(
+                    f"[bold red]Error: Vector index file loaded as None from {project_usearch_file}. "
+                    "Index might be corrupted or empty after a failed write.[/bold red]"
+                )
+                raise typer.Exit(code=1)
+            if len(persistent_vector_index) == 0:
+                console.print("[yellow]Warning: The persistent vector index is empty. No search can be performed.[/yellow]")
+                # Output "no results" based on mode
+                if output == OutputMode.paths:
+                    console.print(
+                        format_paths(
+                            file_paths=[],
+                            use_relative=False,
+                            base_path=None,
+                            console=console,
+                        )
+                    )
+                else:  # show
+                    console.print("  No relevant chunks found in the persistent index.")
+                raise typer.Exit()
+
+            search_engine.search_persistent(
+                query_text=query_text,
+                metadata_store=persistent_store,
+                vector_index=persistent_vector_index,
+                global_config=global_simgrep_config,
+                output_mode=output,
+                k_results=top,
+                display_relative_paths=relative_paths,
                 base_path_for_relativity=Path.cwd() if relative_paths else None,
             )
         except (MetadataDBError, VectorStoreError, RuntimeError, ValueError) as e:
