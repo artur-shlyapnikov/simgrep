@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 import pytest
@@ -42,12 +42,36 @@ def fake_search_inmemory_index_no_results(index: object, query_embedding: np.nda
     return []
 
 
-def test_perform_persistent_search_no_results_after_score_filter(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+@pytest.mark.parametrize(
+    "search_fn, min_score, expected_message",
+    [
+        pytest.param(
+            fake_search_inmemory_index_low_score,
+            0.9,
+            "No relevant chunks found in the persistent index (after filtering).",
+            id="no_results_after_score_filter",
+        ),
+        pytest.param(
+            fake_search_inmemory_index_no_results,
+            0.1,
+            "No relevant chunks found in the persistent index.",
+            id="no_initial_results",
+        ),
+    ],
+)
+def test_perform_persistent_search_no_results(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    search_fn: Callable[..., List[SearchResult]],
+    min_score: float,
+    expected_message: str,
+) -> None:
+    """Tests that no results are shown, either from an empty search or filtering."""
     console = Console()
     store = MinimalStore()
 
     monkeypatch.setattr(searcher, "generate_embeddings", fake_generate_embeddings)
-    monkeypatch.setattr(searcher, "search_inmemory_index", fake_search_inmemory_index_low_score)
+    monkeypatch.setattr(searcher, "search_inmemory_index", search_fn)
 
     searcher.perform_persistent_search(
         query_text="irrelevant",
@@ -56,29 +80,8 @@ def test_perform_persistent_search_no_results_after_score_filter(monkeypatch: py
         vector_index=usearch.index.Index(ndim=3),
         global_config=SimgrepConfig(),
         output_mode=OutputMode.show,
-        min_score=0.9,
+        min_score=min_score,
     )
 
     out = capsys.readouterr().out
-    assert "No relevant chunks found in the persistent index (after filtering)." in out
-
-
-def test_perform_persistent_search_no_initial_results(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
-    console = Console()
-    store = MinimalStore()
-
-    monkeypatch.setattr(searcher, "generate_embeddings", fake_generate_embeddings)
-    monkeypatch.setattr(searcher, "search_inmemory_index", fake_search_inmemory_index_no_results)
-
-    searcher.perform_persistent_search(
-        query_text="irrelevant",
-        console=console,
-        metadata_store=store,  # type: ignore[arg-type]
-        vector_index=usearch.index.Index(ndim=3),
-        global_config=SimgrepConfig(),
-        output_mode=OutputMode.show,
-        min_score=0.1,
-    )
-
-    out = capsys.readouterr().out
-    assert "No relevant chunks found in the persistent index." in out
+    assert expected_message in out

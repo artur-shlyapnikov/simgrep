@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any, Dict, List
 
 from rich.console import Console
 
@@ -103,7 +104,7 @@ class TestFormatCount:
         assert output == "3 matching chunks in 2 files."
 
     def test_format_count_no_results(self) -> None:
-        results = []
+        results: List[Dict[str, Any]] = []
         output = format_count(results)
         assert output == "0 matching chunks in 0 files."
 
@@ -112,4 +113,4 @@ class TestFormatCount:
             {"file_path": Path("/a/b.txt")},
         ]
         output = format_count(results)
-        assert output == "1 matching chunks in 1 files."
+        assert output == "1 matching chunk in 1 file."

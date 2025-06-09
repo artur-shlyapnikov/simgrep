@@ -122,6 +122,9 @@ def format_count(results: List[Dict[str, Any]]) -> str:
     # Assumes 'file_path' is a key in each result dictionary.
     # The searcher logic ensures this.
     unique_files = {res["file_path"] for res in results if "file_path" in res}
-
     num_files = len(unique_files)
-    return f"{num_chunks} matching chunks in {num_files} files."
+
+    chunk_str = "chunk" if num_chunks == 1 else "chunks"
+    file_str = "file" if num_files == 1 else "files"
+
+    return f"{num_chunks} matching {chunk_str} in {num_files} {file_str}."

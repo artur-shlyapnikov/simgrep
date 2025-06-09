@@ -588,7 +588,7 @@ def search(
                 )  # Handles "No matching files found."
             elif output == OutputMode.json:
                 console.print("[]")
-            elif output == OutputMode.count:
+            elif output == OutputMode.count_results:
                 console.print(format_count([]))
             else:  # OutputMode.show or other future modes that might show "no results"
                 console.print("  No relevant chunks found for your query in the processed file(s).")
@@ -625,7 +625,7 @@ def search(
                     console.print(format_paths(file_paths=[], use_relative=False, base_path=None, console=console))
                 elif output == OutputMode.json:
                     console.print("[]")
-                elif output == OutputMode.count:
+                elif output == OutputMode.count_results:
                     console.print(format_count([]))
                 else:  # show
                     console.print("  No relevant chunks found for your query in the processed file(s) (after filtering).")
@@ -666,7 +666,7 @@ def search(
                     # Use a direct print to avoid Rich's wrapping logic for JSON output
                     print(format_json(ephemeral_results))
 
-                elif output == OutputMode.count:
+                elif output == OutputMode.count_results:
                     console.print(format_count(ephemeral_results))
 
     finally:

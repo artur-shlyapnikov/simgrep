@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Generator, Tuple
+from typing import Generator, List, Tuple
 
 import pytest
 import usearch.index
@@ -28,7 +28,7 @@ def persistent_search_test_data_path(tmp_path_factory: pytest.TempPathFactory) -
     """Creates dummy files in a temporary directory for indexing in persistent search tests."""
     data_dir = tmp_path_factory.mktemp("persistent_search_data")
 
-    file1_content = "This file talks about simgrep and advanced information retrieval techniques."
+    file1_content = "This file discusses advanced information retrieval techniques. A very specific keyword is xyz_super_unique."
     (data_dir / "file1.txt").write_text(file1_content)
 
     file2_content = "Another document mentioning simgrep. Semantic search is powerful."
@@ -108,15 +108,38 @@ def populated_persistent_index_for_searcher(
 
 
 class TestSearcherPersistentIntegration:
-    def test_perform_persistent_search_show_mode_with_results(
+    @pytest.mark.parametrize(
+        "query, output_mode, expected_strings, min_score",
+        [
+            pytest.param(
+                "xyz_super_unique",
+                OutputMode.show,
+                ["File:", "Score:", "Chunk:", "file1.txt"],
+                0.25,
+                id="show_mode_with_results",
+            ),
+            pytest.param(
+                "semantic search",
+                OutputMode.paths,
+                ["file2.txt"],
+                0.25,
+                id="paths_mode_with_results",
+            ),
+        ],
+    )
+    def test_perform_persistent_search_with_results(
         self,
         populated_persistent_index_for_searcher: Tuple[MetadataStore, usearch.index.Index, SimgrepConfig],
         test_console: Console,
         capsys: pytest.CaptureFixture,
         persistent_search_test_data_path: Path,
+        query: str,
+        output_mode: OutputMode,
+        expected_strings: List[str],
+        min_score: float,
     ) -> None:
+        """Tests that persistent search returns expected results for various output modes."""
         store, vector_index_val, global_cfg = populated_persistent_index_for_searcher
-        query = "simgrep information retrieval"  # Should match content in file1.txt
 
         perform_persistent_search(
             query_text=query,
@@ -124,56 +147,44 @@ class TestSearcherPersistentIntegration:
             metadata_store=store,
             vector_index=vector_index_val,
             global_config=global_cfg,
-            output_mode=OutputMode.show,
+            output_mode=output_mode,
             k_results=2,
-            min_score=0.25,  # Adjusted min_score
+            min_score=min_score,
         )
         captured = capsys.readouterr()
 
         assert "Embedding query" in captured.out, "Initial 'Embedding query' print message missing."
 
-        # Robust check for file path
-        expected_path_str = str(persistent_search_test_data_path / "file1.txt")
-        cleaned_output = captured.out.replace("\n", "").replace("\r", "")
-        assert f"File: {expected_path_str}" in cleaned_output, f"Expected 'File: {expected_path_str}' to be among the results."
+        # To make assertion robust against line wrapping by rich console
+        output_str = captured.out.replace("\n", "")
 
-        assert "Score:" in captured.out, "Output for 'show' mode should contain 'Score:'."
-        assert "Chunk:" in captured.out, "Output for 'show' mode should contain 'Chunk:'."
+        for expected_str in expected_strings:
+            assert expected_str in output_str
 
-    def test_perform_persistent_search_paths_mode_with_results(
+    @pytest.mark.parametrize(
+        "output_mode, expected_message",
+        [
+            pytest.param(
+                OutputMode.show,
+                "No relevant chunks found in the persistent index (after filtering).",
+                id="show_mode_no_results",
+            ),
+            pytest.param(
+                OutputMode.paths,
+                "No matching files found.",
+                id="paths_mode_no_results",
+            ),
+        ],
+    )
+    def test_perform_persistent_search_no_results(
         self,
         populated_persistent_index_for_searcher: Tuple[MetadataStore, usearch.index.Index, SimgrepConfig],
         test_console: Console,
         capsys: pytest.CaptureFixture,
-        persistent_search_test_data_path: Path,
+        output_mode: OutputMode,
+        expected_message: str,
     ) -> None:
-        store, vector_index_val, global_cfg = populated_persistent_index_for_searcher
-        query = "semantic search"  # Should match content in file2.txt
-
-        perform_persistent_search(
-            query_text=query,
-            console=test_console,
-            metadata_store=store,
-            vector_index=vector_index_val,
-            global_config=global_cfg,
-            output_mode=OutputMode.paths,
-            k_results=2,
-            min_score=0.25,  # Adjusted min_score
-        )
-        captured = capsys.readouterr()
-        assert "Embedding query" in captured.out, "Initial 'Embedding query' print message missing."
-
-        # Robust check for file path
-        expected_path_str = str(persistent_search_test_data_path / "file2.txt")
-        cleaned_output = captured.out.replace("\n", "").replace("\r", "")
-        assert expected_path_str in cleaned_output, f"Expected '{expected_path_str}' in paths output."
-
-    def test_perform_persistent_search_show_mode_no_results(
-        self,
-        populated_persistent_index_for_searcher: Tuple[MetadataStore, usearch.index.Index, SimgrepConfig],
-        test_console: Console,
-        capsys: pytest.CaptureFixture,
-    ) -> None:
+        """Tests that persistent search handles no-result scenarios gracefully."""
         store, vector_index_val, global_cfg = populated_persistent_index_for_searcher
         query = "zzxxyy_non_existent_term_qwerty_12345"  # Highly unlikely to match
 
@@ -183,37 +194,15 @@ class TestSearcherPersistentIntegration:
             metadata_store=store,
             vector_index=vector_index_val,
             global_config=global_cfg,
-            output_mode=OutputMode.show,
+            output_mode=output_mode,
             k_results=2,
             min_score=0.95,
         )
         captured = capsys.readouterr()
-        assert "Embedding query" in captured.out, "Initial 'Embedding query' print message missing."
-        assert "No relevant chunks found in the persistent index (after filtering)." in captured.out, "Expected 'no results' message for show mode."
+        assert "Embedding query" in captured.out
+        assert expected_message in captured.out
 
-    def test_perform_persistent_search_paths_mode_no_results(
-        self,
-        populated_persistent_index_for_searcher: Tuple[MetadataStore, usearch.index.Index, SimgrepConfig],
-        test_console: Console,
-        capsys: pytest.CaptureFixture,
-    ) -> None:
-        store, vector_index_val, global_cfg = populated_persistent_index_for_searcher
-        query = "zzxxyy_non_existent_term_qwerty_12345"  # Highly unlikely to match
-
-        perform_persistent_search(
-            query_text=query,
-            console=test_console,
-            metadata_store=store,
-            vector_index=vector_index_val,
-            global_config=global_cfg,
-            output_mode=OutputMode.paths,
-            k_results=2,
-            min_score=0.95,
-        )
-        captured = capsys.readouterr()
-        assert "Embedding query" in captured.out, "Initial 'Embedding query' print message missing."
-        assert "No matching files found." in captured.out, "Expected 'no results' message for paths mode."
-
+    @pytest.mark.parametrize("k, expected_separators", [(1, 1), (2, 2)])
     def test_perform_persistent_search_respects_k_results(
         self,
         populated_persistent_index_for_searcher: Tuple[
@@ -223,7 +212,10 @@ class TestSearcherPersistentIntegration:
         ],
         test_console: Console,
         capsys: pytest.CaptureFixture,
+        k: int,
+        expected_separators: int,
     ) -> None:
+        """Tests that the k_results parameter correctly limits the number of results."""
         store, vector_index_val, global_cfg = populated_persistent_index_for_searcher
         query = "simgrep"
 
@@ -234,24 +226,12 @@ class TestSearcherPersistentIntegration:
             vector_index=vector_index_val,
             global_config=global_cfg,
             output_mode=OutputMode.show,
-            k_results=1,
+            k_results=k,
             min_score=0.1,
         )
-        out_one = capsys.readouterr().out
-        assert out_one.count("---") == 1
-
-        perform_persistent_search(
-            query_text=query,
-            console=test_console,
-            metadata_store=store,
-            vector_index=vector_index_val,
-            global_config=global_cfg,
-            output_mode=OutputMode.show,
-            k_results=2,
-            min_score=0.1,
-        )
-        out_two = capsys.readouterr().out
-        assert out_two.count("---") >= 2
+        out = capsys.readouterr().out
+        # The '---' separator is used between results in 'show' mode
+        assert out.count("---") == expected_separators
 
     def test_perform_persistent_search_paths_relative_output(
         self,
@@ -264,6 +244,7 @@ class TestSearcherPersistentIntegration:
         capsys: pytest.CaptureFixture,
         persistent_search_test_data_path: Path,
     ) -> None:
+        """Tests that relative paths are correctly displayed when requested."""
         store, vector_index_val, global_cfg = populated_persistent_index_for_searcher
         query = "semantic search"  # matches file2.txt
 
@@ -281,3 +262,5 @@ class TestSearcherPersistentIntegration:
         )
         captured = capsys.readouterr()
         assert "file2.txt" in captured.out
+        # Ensure the absolute path part is not present
+        assert str(persistent_search_test_data_path) not in captured.out

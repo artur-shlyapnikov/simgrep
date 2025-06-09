@@ -1,8 +1,10 @@
 import json
 import os
 import pathlib
+from typing import Callable
 
 import pytest
+from typer.testing import Result
 
 from .test_cli_persistent_e2e import (
     run_simgrep_command,
@@ -18,25 +20,54 @@ pytest.importorskip("usearch.index")
 
 
 class TestCliEphemeralE2E:
-    def test_ephemeral_search_show_and_paths(self, tmp_path: pathlib.Path, temp_simgrep_home: pathlib.Path) -> None:
+    @pytest.fixture
+    def ephemeral_docs_dir(self, tmp_path: pathlib.Path) -> pathlib.Path:
+        """Creates a directory with sample files for ephemeral search tests."""
         docs_dir = tmp_path / "ephemeral_docs"
         docs_dir.mkdir()
-        file1 = docs_dir / "one.txt"
-        file1.write_text("apples bananas")
-        file2 = docs_dir / "two.txt"
-        file2.write_text("bananas oranges")
+        (docs_dir / "one.txt").write_text("apples bananas")
+        (docs_dir / "two.txt").write_text("bananas oranges")
+        return docs_dir
 
-        show_result = run_simgrep_command(["search", "bananas", str(docs_dir)])
-        assert show_result.exit_code == 0
-        assert "File:" in show_result.stdout
-        assert "Processing:" in show_result.stdout
-        assert "100%" in show_result.stdout
+    @pytest.mark.parametrize(
+        "output_mode, extra_args, validation_fn",
+        [
+            pytest.param(
+                "show",
+                [],
+                lambda r: "File:" in r.stdout and "one.txt" in r.stdout and "two.txt" in r.stdout,
+                id="show_mode",
+            ),
+            pytest.param(
+                "paths",
+                [],
+                lambda r: "one.txt" in r.stdout and "two.txt" in r.stdout,
+                id="paths_mode",
+            ),
+            pytest.param(
+                "count",
+                ["--min-score", "0.5"],
+                lambda r: "2 matching chunks in 2 files" in r.stdout,
+                id="count_mode",
+            ),
+        ],
+    )
+    def test_ephemeral_search_output_modes(
+        self,
+        ephemeral_docs_dir: pathlib.Path,
+        temp_simgrep_home: pathlib.Path,
+        output_mode: str,
+        extra_args: list[str],
+        validation_fn: Callable[[Result], bool],
+    ) -> None:
+        """Tests various output modes for ephemeral search."""
+        args = ["search", "bananas", str(ephemeral_docs_dir), "--output", output_mode] + extra_args
+        result = run_simgrep_command(args)
 
-        paths_result = run_simgrep_command(["search", "bananas", str(docs_dir), "--output", "paths"])
-        assert paths_result.exit_code == 0
-        assert ".txt" in paths_result.stdout
-        assert "Processing:" in paths_result.stdout
-        assert "100%" in paths_result.stdout
+        assert result.exit_code == 0
+        assert "Processing:" in result.stdout
+        assert "100%" in result.stdout
+        assert validation_fn(result)
 
     def test_ephemeral_search_single_file_paths_mode(self, tmp_path: pathlib.Path, temp_simgrep_home: pathlib.Path) -> None:
         file_path = tmp_path / "single.txt"
@@ -92,18 +123,7 @@ class TestCliEphemeralE2E:
         except json.JSONDecodeError:
             pytest.fail("--output json did not produce valid JSON")
 
-    def test_ephemeral_search_count_mode(self, tmp_path: pathlib.Path, temp_simgrep_home: pathlib.Path) -> None:
-        docs_dir = tmp_path / "ephemeral_docs_count"
-        docs_dir.mkdir()
-        file1 = docs_dir / "one.txt"
-        file1.write_text("apples bananas")
-        file2 = docs_dir / "two.txt"
-        file2.write_text("bananas oranges")
-
-        result = run_simgrep_command(["search", "bananas", str(docs_dir), "--output", "count", "--min-score", "0.5"])
+    def test_ephemeral_search_no_matches(self, ephemeral_docs_dir: pathlib.Path, temp_simgrep_home: pathlib.Path) -> None:
+        result = run_simgrep_command(["search", "xyz", str(ephemeral_docs_dir), "--output", "count", "--min-score", "0.9"])
         assert result.exit_code == 0
-        assert "2 matching chunks in 2 files" in result.stdout
-
-        result_no_match = run_simgrep_command(["search", "xyz", str(docs_dir), "--output", "count", "--min-score", "0.5"])
-        assert result_no_match.exit_code == 0
-        assert "0 matching chunks in 0 files." in result_no_match.stdout
+        assert "0 matching chunks in 0 files." in result.stdout

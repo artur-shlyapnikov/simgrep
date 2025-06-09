@@ -320,7 +320,7 @@
   * **Goal:** Show counts of matching chunks and files.
   * **Tasks:**
         1. In `formatter.py`, implement `format_count(results: List[ChunkData]) -> str`.
-        2. Add "count" to `--output` Enum.
+        2. Add "count_results" (with value "count") to `--output` Enum.
   * **Key Modules:** `simgrep/formatter.py`, `simgrep/main.py`
   * **What to Test (E2E):** `simgrep search "test" --output count` shows "X matching chunks in Y files."
 

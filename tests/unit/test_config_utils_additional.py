@@ -69,6 +69,7 @@ def test_project_config_defaults() -> None:
 def test_output_mode_members() -> None:
     assert OutputMode.show.value == "show"
     assert OutputMode.paths.value == "paths"
+    assert OutputMode.count_results.value == "count"
 
 
 def test_output_mode_is_str() -> None:

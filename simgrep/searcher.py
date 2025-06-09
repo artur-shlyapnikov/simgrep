@@ -62,7 +62,7 @@ def perform_persistent_search(
             )
         elif output_mode == OutputMode.json:
             console.print("[]")
-        elif output_mode == OutputMode.count:
+        elif output_mode == OutputMode.count_results:
             console.print(format_count([]))
         else:  # outputmode.show
             console.print("  No relevant chunks found in the persistent index.")
@@ -144,5 +144,5 @@ def perform_persistent_search(
     elif output_mode == OutputMode.json:
         # Use a direct print for JSON to avoid Rich's wrapping
         print(format_json(final_results))
-    elif output_mode == OutputMode.count:
+    elif output_mode == OutputMode.count_results:
         console.print(format_count(final_results))

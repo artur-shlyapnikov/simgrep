@@ -10,7 +10,7 @@ class OutputMode(str, Enum):
     show = "show"
     paths = "paths"
     json = "json"
-    count = "count"
+    count_results = "count"
     # future: rag, copy-chunks, copy-files
 
 
