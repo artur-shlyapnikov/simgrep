@@ -39,11 +39,13 @@ class TestCreateInmemoryIndex:
         with pytest.raises(ValueError, match=r"Number of embeddings \(3\) must match number of labels \(2\)"):
             create_inmemory_index(embeddings, labels)
 
-    def test_empty_embeddings_raise(self) -> None:
+    def test_empty_embeddings_allowed(self) -> None:
         embeddings = np.empty((0, 5), dtype=np.float32)
         labels = np.empty((0,), dtype=np.int64)
-        with pytest.raises(ValueError, match="Embeddings array cannot be empty"):
-            create_inmemory_index(embeddings, labels)
+        index = create_inmemory_index(embeddings, labels)
+        assert isinstance(index, usearch.index.Index)
+        assert len(index) == 0
+        assert index.ndim == 5
 
 
 class TestSearchInmemoryIndex:

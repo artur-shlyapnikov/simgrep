@@ -61,21 +61,8 @@ def create_inmemory_index(
     if embeddings.shape[0] > 0:
         num_dimensions = embeddings.shape[1]
     else:
-        # cannot infer dimensions from empty embeddings.
-        # this case should be handled by the caller providing ndim if creating an empty index
-        # or by usearch having a default. for now, let's raise if empty and no explicit ndim.
-        # however, the function signature doesn't take ndim.
-        # let's assume if embeddings are empty, we create an index that can be added to later.
-        # usearch requires ndim at initialization.
-        # this function is for *populating* an index. if embeddings are empty,
-        # the caller should perhaps create an empty index differently.
-        # for now, if `embeddings` is empty, we'll assume the caller knows `ndim` isn't derived.
-        # this function is primarily for when embeddings *exist*.
-        # let's stick to the original logic: if embeddings are empty, raise valueerror.
-        if embeddings.shape[0] == 0:
-            raise ValueError(
-                "Embeddings array cannot be empty when creating an index that infers ndim."
-            )
+        # embeddings are empty but we can still infer the dimensionality from the
+        # second dimension of the array and create an empty index.
         num_dimensions = embeddings.shape[1]
 
     logger.info(
