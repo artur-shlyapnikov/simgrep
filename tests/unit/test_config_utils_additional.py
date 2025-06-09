@@ -61,14 +61,14 @@ def test_create_default_project_paths(tmp_path: Path) -> None:
 
 
 def test_add_project_to_config(tmp_path: Path) -> None:
-    cfg = SimgrepConfig(db_directory=tmp_path)
+    cfg = SimgrepConfig(db_directory=tmp_path, config_file=tmp_path / "cfg.toml")
     added = add_project_to_config(cfg, "newproj")
     assert "newproj" in cfg.projects
     assert added.name == "newproj"
 
 
 def test_add_project_to_config_duplicate(tmp_path: Path) -> None:
-    cfg = SimgrepConfig(db_directory=tmp_path)
+    cfg = SimgrepConfig(db_directory=tmp_path, config_file=tmp_path / "cfg.toml")
     add_project_to_config(cfg, "dup")
     with pytest.raises(SimgrepConfigError):
         add_project_to_config(cfg, "dup")
