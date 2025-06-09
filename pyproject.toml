@@ -13,7 +13,6 @@ dependencies = [
     "usearch>=2.9.0",
     "numpy>=1.23.0",
     "duckdb>=0.10.0",
-    "tomli_w>=1.0.0",
 ]
 
 [project.scripts]
