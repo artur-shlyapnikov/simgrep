@@ -2,7 +2,7 @@ import sys  # for printing to stderr
 import tomllib
 from pathlib import Path
 
-import tomli_w
+import json
 
 try:
     from .models import ProjectConfig, SimgrepConfig
@@ -87,10 +87,22 @@ def _serialize_paths(obj):
     return obj
 
 
+def _dumps_toml(data: dict) -> str:
+    base = dict(data)
+    projects = base.pop("projects", {})
+    lines = []
+    for key, value in base.items():
+        lines.append(f"{key} = {json.dumps(value)}")
+    for name, proj in projects.items():
+        lines.append(f"\n[projects.{name}]")
+        for k, v in proj.items():
+            lines.append(f"{k} = {json.dumps(v)}")
+    return "\n".join(lines) + "\n"
+
+
 def _write_config(config: SimgrepConfig) -> None:
     data = _serialize_paths(config.model_dump())
-    with open(config.config_file, "wb") as f:
-        tomli_w.dump(data, f)
+    config.config_file.write_text(_dumps_toml(data), encoding="utf-8")
 
 
 def _create_default_project(config: SimgrepConfig):
