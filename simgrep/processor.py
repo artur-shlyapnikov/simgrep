@@ -5,6 +5,9 @@ from typing import Any, Dict, List, Optional, TypedDict, cast
 
 import numpy as np
 import unstructured.partition.auto as auto_partition
+from huggingface_hub import snapshot_download
+from huggingface_hub.utils import LocalEntryNotFoundError
+from rich.console import Console
 from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
 from unstructured.documents.elements import Element
@@ -35,27 +38,69 @@ def extract_text_from_file(file_path: Path) -> str:
         raise RuntimeError(f"Failed to extract text from {file_path}") from e
 
 
+def _is_model_cached(model_name: str) -> bool:
+    """Checks if a model snapshot is fully cached locally."""
+    try:
+        # The return value is the path to the folder, which we don't need here.
+        # We just need to know if it succeeds without an exception.
+        snapshot_download(model_name, local_files_only=True)
+        return True
+    except (FileNotFoundError, LocalEntryNotFoundError):
+        # FileNotFoundError can be raised if the repo exists but a specific file is missing.
+        # LocalEntryNotFoundError is the more specific exception for "not in cache".
+        return False
+
+
 @lru_cache(maxsize=None)
 def load_tokenizer(model_name: str) -> PreTrainedTokenizerBase:
-    """Load and cache a Hugging Face tokenizer."""
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        return cast(PreTrainedTokenizerBase, tokenizer)
-    except OSError as e:
-        raise RuntimeError(
-            f"Failed to load tokenizer for model '{model_name}'. "
-            "Ensure the model name is correct and an internet connection "
-            f"is available for the first download. Original error: {e}"
-        ) from e
+    """Load and cache a Hugging Face tokenizer, showing progress on first download."""
+
+    def _load() -> PreTrainedTokenizerBase:
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(model_name)
+            return cast(PreTrainedTokenizerBase, tokenizer)
+        except OSError as e:
+            raise RuntimeError(
+                f"Failed to load tokenizer for model '{model_name}'. "
+                "Ensure the model name is correct and an internet connection "
+                f"is available for the first download. Original error: {e}"
+            ) from e
+
+    if not _is_model_cached(model_name):
+        console = Console()
+        with console.status(
+            f"[bold yellow]First-time setup: downloading tokenizer for model '{model_name}'...[/bold yellow]",
+            spinner="dots",
+        ) as status:
+            model = _load()
+            status.update(f"[bold green]Tokenizer for '{model_name}' downloaded.[/bold green]")
+            return model
+    else:
+        return _load()
 
 
 @lru_cache(maxsize=None)
 def load_embedding_model(model_name: str) -> SentenceTransformer:
-    """Load and cache a sentence-transformer model."""
-    try:
-        return SentenceTransformer(model_name)
-    except Exception as e:
-        raise RuntimeError(f"Failed to load embedding model '{model_name}'. Original error: {e}") from e
+    """Load and cache a sentence-transformer model, showing progress on first download."""
+
+    def _load() -> SentenceTransformer:
+        try:
+            return SentenceTransformer(model_name)
+        except Exception as e:
+            raise RuntimeError(f"Failed to load embedding model '{model_name}'. Original error: {e}") from e
+
+    if not _is_model_cached(model_name):
+        console = Console()
+        with console.status(
+            f"[bold yellow]First-time setup: downloading embedding model '{model_name}'...[/bold yellow]\n"
+            "[dim]This may take a few minutes and will only happen once.[/dim]",
+            spinner="dots",
+        ) as status:
+            model = _load()
+            status.update(f"[bold green]Embedding model '{model_name}' downloaded.[/bold green]")
+            return model
+    else:
+        return _load()
 
 
 def chunk_text_by_tokens(

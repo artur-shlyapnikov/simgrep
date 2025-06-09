@@ -4,10 +4,13 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 try:
-    from sentence_transformers import SentenceTransformer
-    from transformers import AutoTokenizer
+    # Import our loading functions to leverage the new download-progress UI
+    from simgrep.processor import load_embedding_model, load_tokenizer
 except ImportError:
-    logger.error("Failed to import sentence_transformers or transformers. " "Ensure they are installed in the environment.")
+    logger.error(
+        "Failed to import from simgrep.processor. "
+        "Ensure simgrep is installed in editable mode (`make install` or `uv pip install -e .`)."
+    )
     raise
 
 MODEL_NAME = "Qwen/Qwen3-Embedding-0.6B"
@@ -15,17 +18,17 @@ MODEL_NAME = "Qwen/Qwen3-Embedding-0.6B"
 
 def cache_model_and_tokenizer():
     """Downloads and caches the specified model and its tokenizer."""
-    logger.info(f"Attempting to download and cache tokenizer for: {MODEL_NAME}")
+    logger.info(f"Ensuring tokenizer is cached for: {MODEL_NAME}")
     try:
-        AutoTokenizer.from_pretrained(MODEL_NAME)
-        logger.info(f"Tokenizer for {MODEL_NAME} processed successfully (cached or downloaded).")
+        load_tokenizer(MODEL_NAME)
+        logger.info(f"Tokenizer for {MODEL_NAME} is ready.")
     except Exception as e:
         logger.error(f"Error caching tokenizer for {MODEL_NAME}: {e}")
 
-    logger.info(f"Attempting to download and cache sentence transformer model: {MODEL_NAME}")
+    logger.info(f"Ensuring sentence transformer model is cached for: {MODEL_NAME}")
     try:
-        SentenceTransformer(MODEL_NAME)
-        logger.info(f"SentenceTransformer model {MODEL_NAME} processed successfully (cached or downloaded).")
+        load_embedding_model(MODEL_NAME)
+        logger.info(f"SentenceTransformer model {MODEL_NAME} is ready.")
     except Exception as e:
         logger.error(f"Error caching SentenceTransformer model {MODEL_NAME}: {e}")
 

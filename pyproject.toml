@@ -11,6 +11,7 @@ dependencies = [
     "unstructured[md]>=0.13.0",
     "sentence-transformers>=2.7.0",
     "transformers>=4.51.0",
+    "huggingface-hub>=0.20.0",
     "usearch>=2.9.0",
     "numpy>=1.23.0",
     "duckdb>=0.10.0",
