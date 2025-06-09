@@ -5,14 +5,14 @@ import duckdb
 import pytest
 
 from simgrep.metadata_db import MetadataDBError
-from simgrep.metadata_store import MetadataStore
+from simgrep.metadata_store import EphemeralMetadataStore
 from simgrep.models import ChunkData
 
 
 @pytest.fixture
-def store() -> Iterator[MetadataStore]:
+def store() -> Iterator[EphemeralMetadataStore]:
     """Provides a MetadataStore with in-memory DB and ephemeral tables."""
-    s = MetadataStore()
+    s = EphemeralMetadataStore()
     yield s
     s.close()
 
@@ -68,7 +68,7 @@ def sample_chunk_data_list(
 
 class TestMetadataDB:
     def test_create_inmemory_db_connection(self) -> None:
-        store = MetadataStore()
+        store = EphemeralMetadataStore()
         try:
             assert isinstance(store.conn, duckdb.DuckDBPyConnection)
             result = store.conn.execute("SELECT 42;").fetchone()
@@ -77,7 +77,7 @@ class TestMetadataDB:
         finally:
             store.close()
 
-    def test_setup_ephemeral_tables(self, store: MetadataStore) -> None:
+    def test_setup_ephemeral_tables(self, store: EphemeralMetadataStore) -> None:
         # check if tables exist
         tables = store.conn.execute("SHOW TABLES;").fetchall()
         table_names = [table[0] for table in tables]
@@ -97,7 +97,7 @@ class TestMetadataDB:
 
     def test_batch_insert_files(
         self,
-        store: MetadataStore,
+        store: EphemeralMetadataStore,
         sample_files_metadata: list[tuple[int, pathlib.Path]],
     ) -> None:
         store.batch_insert_files(sample_files_metadata)
@@ -115,7 +115,7 @@ class TestMetadataDB:
         assert result[0] == expected_path
 
     def test_batch_insert_files_empty_list(
-        self, store: MetadataStore
+        self, store: EphemeralMetadataStore
     ) -> None:
         store.batch_insert_files([])
         count_result = store.conn.execute("SELECT COUNT(*) FROM temp_files;").fetchone()
@@ -123,7 +123,7 @@ class TestMetadataDB:
         assert count_result[0] == 0
 
     def test_batch_insert_files_unique_constraint_path(
-        self, store: MetadataStore, tmp_path: pathlib.Path
+        self, store: EphemeralMetadataStore, tmp_path: pathlib.Path
     ) -> None:
         file_path = tmp_path / "unique_test.txt"
         file_path.touch()
@@ -138,7 +138,7 @@ class TestMetadataDB:
             store.batch_insert_files(metadata2)
 
     def test_batch_insert_files_duplicate_file_id(
-        self, store: MetadataStore, tmp_path: pathlib.Path
+        self, store: EphemeralMetadataStore, tmp_path: pathlib.Path
     ) -> None:
         file_path1 = tmp_path / "file_A.txt"
         file_path1.touch()
@@ -155,7 +155,7 @@ class TestMetadataDB:
 
     def test_batch_insert_chunks(
         self,
-        store: MetadataStore,
+        store: EphemeralMetadataStore,
         sample_files_metadata: list[tuple[int, pathlib.Path]],
         sample_chunk_data_list: list[ChunkData],
     ) -> None:
@@ -177,7 +177,7 @@ class TestMetadataDB:
         assert result[2] == chunk_to_check.start_char_offset
 
     def test_batch_insert_chunks_empty_list(
-        self, store: MetadataStore
+        self, store: EphemeralMetadataStore
     ) -> None:
         store.batch_insert_chunks([])
         count_result = store.conn.execute("SELECT COUNT(*) FROM temp_chunks;").fetchone()
@@ -186,7 +186,7 @@ class TestMetadataDB:
 
     def test_batch_insert_chunks_fk_constraint_violation(
         self,
-        store: MetadataStore,
+        store: EphemeralMetadataStore,
         sample_chunk_data_list: list[ChunkData],
     ) -> None:
         with pytest.raises(MetadataDBError, match="Failed during batch chunk insert"):
@@ -194,7 +194,7 @@ class TestMetadataDB:
 
     def test_batch_insert_chunks_unique_constraint_chunk_id(
         self,
-        store: MetadataStore,
+        store: EphemeralMetadataStore,
         sample_files_metadata: list[tuple[int, pathlib.Path]],
         sample_chunk_data_list: list[ChunkData],
     ) -> None:
@@ -218,7 +218,7 @@ class TestMetadataDB:
 
     def test_retrieve_chunk_for_display_valid_id(
         self,
-        store: MetadataStore,
+        store: EphemeralMetadataStore,
         sample_files_metadata: list[tuple[int, pathlib.Path]],
         sample_chunk_data_list: list[ChunkData],
     ) -> None:
@@ -236,14 +236,14 @@ class TestMetadataDB:
         assert end_offset == chunk_to_retrieve.end_char_offset
 
     def test_retrieve_chunk_for_display_invalid_id(
-        self, store: MetadataStore
+        self, store: EphemeralMetadataStore
     ) -> None:
         retrieved = store.retrieve_chunk_for_display(99999)
         assert retrieved is None
 
     def test_retrieve_chunk_for_display_chunk_exists_file_missing_in_db(
         self,
-        store: MetadataStore,
+        store: EphemeralMetadataStore,
         sample_files_metadata: list[tuple[int, pathlib.Path]],
         sample_chunk_data_list: list[ChunkData],
     ) -> None:

@@ -23,7 +23,7 @@ from .exceptions import (
 )
 
 # assuming these are in .exceptions
-from .metadata_store import MetadataStore
+from .metadata_store import PersistentMetadataStore, BaseMetadataStore
 from .processor import (
     ProcessedChunkInfo,
     calculate_file_hash,
@@ -57,7 +57,7 @@ class Indexer:
         self.config = config
         self.console = console
         self.db_conn: Optional[duckdb.DuckDBPyConnection] = None
-        self.metadata_store: Optional[MetadataStore] = None
+        self.metadata_store: Optional[PersistentMetadataStore] = None
         self.usearch_index: Optional[usearch.index.Index] = None
         self._current_usearch_label: int = 0  # global counter for unique usearch labels
 
@@ -92,7 +92,7 @@ class Indexer:
         self.console.print("Preparing data stores (database and vector index)...")
         # database
         try:
-            self.metadata_store = MetadataStore(persistent=True, db_path=self.config.db_path)
+            self.metadata_store = PersistentMetadataStore(db_path=self.config.db_path)
             self.db_conn = self.metadata_store.conn
             self.console.print(f"Connected to database: {self.config.db_path}")
 

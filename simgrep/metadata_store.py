@@ -1,5 +1,7 @@
 import pathlib
+from abc import ABC
 from typing import Any, Dict, List, Optional, Tuple
+
 from .metadata_db import (
     batch_insert_chunks,
     batch_insert_files,
@@ -17,20 +19,18 @@ from .metadata_db import (
 )
 from .models import ChunkData
 
-__all__ = ["MetadataStore"]
+__all__ = [
+    "BaseMetadataStore",
+    "EphemeralMetadataStore",
+    "PersistentMetadataStore",
+]
 
 
-class MetadataStore:
-    """Convenience wrapper around metadata_db operations."""
+class BaseMetadataStore(ABC):
+    """Base class providing common DB helper methods."""
 
-    def __init__(self, persistent: bool = False, db_path: Optional[pathlib.Path] = None) -> None:
-        if persistent:
-            if db_path is None:
-                raise ValueError("db_path must be provided for persistent MetadataStore")
-            self.conn = connect_persistent_db(db_path)
-        else:
-            self.conn = create_inmemory_db_connection()
-            setup_ephemeral_tables(self.conn)
+    def __init__(self, conn) -> None:
+        self.conn = conn
 
     def close(self) -> None:
         self.conn.close()
@@ -82,3 +82,20 @@ class MetadataStore:
 
     def get_index_counts(self) -> Tuple[int, int]:
         return get_index_counts(self.conn)
+
+
+class EphemeralMetadataStore(BaseMetadataStore):
+    """In-memory store with temporary tables for ephemeral searches."""
+
+    def __init__(self) -> None:
+        conn = create_inmemory_db_connection()
+        setup_ephemeral_tables(conn)
+        super().__init__(conn)
+
+
+class PersistentMetadataStore(BaseMetadataStore):
+    """Persistent on-disk store for indexing projects."""
+
+    def __init__(self, db_path: pathlib.Path) -> None:
+        conn = connect_persistent_db(db_path)
+        super().__init__(conn)

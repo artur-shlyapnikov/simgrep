@@ -12,7 +12,7 @@ pytest.importorskip("usearch.index")
 
 from simgrep.models import OutputMode, SimgrepConfig
 from simgrep.searcher import perform_persistent_search
-from simgrep.metadata_store import MetadataStore
+from simgrep.metadata_store import PersistentMetadataStore
 
 
 # Fixtures
@@ -60,15 +60,15 @@ def default_simgrep_config_for_search_tests(
 def populated_persistent_index_for_searcher(
     persistent_search_test_data_path: Path,
     default_simgrep_config_for_search_tests: SimgrepConfig,
-) -> Generator[
-    Tuple[MetadataStore, usearch.index.Index, SimgrepConfig], None, None
+] -> Generator[
+    Tuple[PersistentMetadataStore, usearch.index.Index, SimgrepConfig], None, None
 ]:
     """
     Indexes dummy data and provides the DB connection, USearch index, and config for tests.
     This is session-scoped for efficiency as indexing can be slow.
     """
     from simgrep.indexer import Indexer, IndexerConfig
-    from simgrep.metadata_store import MetadataStore
+    from simgrep.metadata_store import PersistentMetadataStore
     from simgrep.vector_store import load_persistent_index
 
     cfg = default_simgrep_config_for_search_tests
@@ -99,7 +99,7 @@ def populated_persistent_index_for_searcher(
 
     indexer.index_path(target_path=persistent_search_test_data_path, wipe_existing=True)
 
-    store = MetadataStore(persistent=True, db_path=db_file)
+    store = PersistentMetadataStore(db_path=db_file)
     vector_index = load_persistent_index(usearch_file)
 
     if vector_index is None:
@@ -120,7 +120,7 @@ class TestSearcherPersistentIntegration:
     def test_perform_persistent_search_show_mode_with_results(
         self,
         populated_persistent_index_for_searcher: Tuple[
-            MetadataStore, usearch.index.Index, SimgrepConfig
+            PersistentMetadataStore, usearch.index.Index, SimgrepConfig
         ],
         test_console: Console,
         capsys: pytest.CaptureFixture,
@@ -162,7 +162,7 @@ class TestSearcherPersistentIntegration:
     def test_perform_persistent_search_paths_mode_with_results(
         self,
         populated_persistent_index_for_searcher: Tuple[
-            MetadataStore, usearch.index.Index, SimgrepConfig
+            PersistentMetadataStore, usearch.index.Index, SimgrepConfig
         ],
         test_console: Console,
         capsys: pytest.CaptureFixture,
@@ -196,7 +196,7 @@ class TestSearcherPersistentIntegration:
     def test_perform_persistent_search_show_mode_no_results(
         self,
         populated_persistent_index_for_searcher: Tuple[
-            MetadataStore, usearch.index.Index, SimgrepConfig
+            PersistentMetadataStore, usearch.index.Index, SimgrepConfig
         ],
         test_console: Console,
         capsys: pytest.CaptureFixture,
@@ -225,7 +225,7 @@ class TestSearcherPersistentIntegration:
     def test_perform_persistent_search_paths_mode_no_results(
         self,
         populated_persistent_index_for_searcher: Tuple[
-            MetadataStore, usearch.index.Index, SimgrepConfig
+            PersistentMetadataStore, usearch.index.Index, SimgrepConfig
         ],
         test_console: Console,
         capsys: pytest.CaptureFixture,
@@ -254,7 +254,7 @@ class TestSearcherPersistentIntegration:
     def test_perform_persistent_search_respects_k_results(
         self,
         populated_persistent_index_for_searcher: Tuple[
-            MetadataStore,
+            PersistentMetadataStore,
             usearch.index.Index,
             SimgrepConfig,
         ],
@@ -293,7 +293,7 @@ class TestSearcherPersistentIntegration:
     def test_perform_persistent_search_paths_relative_output(
         self,
         populated_persistent_index_for_searcher: Tuple[
-            MetadataStore,
+            PersistentMetadataStore,
             usearch.index.Index,
             SimgrepConfig,
         ],

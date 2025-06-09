@@ -37,7 +37,11 @@ try:
         get_project_by_name,
         insert_project,
     )
-    from .metadata_store import MetadataStore
+    from .metadata_store import (
+        EphemeralMetadataStore,
+        PersistentMetadataStore,
+        BaseMetadataStore,
+    )
     from .models import ChunkData, OutputMode, SimgrepConfig  # OutputMode moved here
     from .processor import (
         ProcessedChunkInfo,
@@ -77,7 +81,11 @@ except ImportError:
             get_project_by_name,
             insert_project,
         )
-        from simgrep.metadata_store import MetadataStore
+        from simgrep.metadata_store import (
+            EphemeralMetadataStore,
+            PersistentMetadataStore,
+            BaseMetadataStore,
+        )
         from simgrep.models import ChunkData, OutputMode, SimgrepConfig
         from simgrep.processor import (
             ProcessedChunkInfo,
@@ -228,11 +236,11 @@ def search(
                 raise typer.Exit()
             raise typer.Exit(code=1)
 
-        persistent_store: Optional[MetadataStore] = None
+        persistent_store: Optional[PersistentMetadataStore] = None
         persistent_vector_index: Optional[usearch.index.Index] = None
         try:
             console.print("  Loading persistent database...")
-            persistent_store = MetadataStore(persistent=True, db_path=project_db_file)
+            persistent_store = PersistentMetadataStore(db_path=project_db_file)
             console.print("  Loading persistent vector index...")
             persistent_vector_index = load_persistent_index(project_usearch_file)
 
@@ -282,11 +290,11 @@ def search(
 
     # --- Ephemeral Search (path_to_search is provided) ---
     console.print(f"Performing ephemeral search for: '[bold blue]{query_text}[/bold blue]' in path: '[green]{path_to_search}[/green]'")
-    store: Optional[MetadataStore] = None
+    store: Optional[EphemeralMetadataStore] = None
     try:
         # --- Initialize In-Memory Database ---
         console.print("\n[bold]Setup: Initializing In-Memory Database[/bold]")
-        store = MetadataStore()
+        store = EphemeralMetadataStore()
         console.print("  In-memory database and tables created.")
 
         # --- Load Tokenizer ---
@@ -660,9 +668,9 @@ def status() -> None:
         )
         raise typer.Exit(code=1)
 
-    store: Optional[MetadataStore] = None
+    store: Optional[PersistentMetadataStore] = None
     try:
-        store = MetadataStore(persistent=True, db_path=db_file)
+        store = PersistentMetadataStore(db_path=db_file)
         files_count, chunks_count = get_index_counts(store.conn)
         console.print(f"Default Project: {files_count} files indexed, {chunks_count} chunks.")
     except MetadataDBError as e:

@@ -4,7 +4,7 @@ import pytest
 from rich.console import Console
 
 from simgrep.indexer import Indexer, IndexerConfig, IndexerError
-from simgrep.metadata_store import MetadataStore
+from simgrep.metadata_store import PersistentMetadataStore
 from simgrep.processor import calculate_file_hash
 from simgrep.vector_store import load_persistent_index
 
@@ -94,7 +94,7 @@ class TestIndexerPersistent:
         # Verify database content (basic checks)
         store = None
         try:
-            store = MetadataStore(persistent=True, db_path=indexer_config.db_path)
+            store = PersistentMetadataStore(db_path=indexer_config.db_path)
             db_conn = store.conn
 
             # Check indexed_files table: file1.txt, file2.md, subdir/file3.txt should be there
@@ -162,7 +162,7 @@ class TestIndexerPersistent:
 
         store = None
         try:
-            store = MetadataStore(persistent=True, db_path=indexer_config.db_path)
+            store = PersistentMetadataStore(db_path=indexer_config.db_path)
             db_conn = store.conn
             file_count_result = db_conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()
             assert file_count_result is not None
@@ -190,7 +190,7 @@ class TestIndexerPersistent:
 
         file_to_check = sample_files_dir / "file1.txt"
 
-        store2 = MetadataStore(persistent=True, db_path=indexer_config.db_path)
+        store2 = PersistentMetadataStore(db_path=indexer_config.db_path)
         try:
             row = store2.conn.execute(
                 "SELECT content_hash, last_modified_os FROM indexed_files WHERE file_path = ?;",
@@ -230,7 +230,7 @@ class TestIndexerPersistent:
 
         store_check = None
         try:
-            store_check = MetadataStore(persistent=True, db_path=indexer_config.db_path)
+            store_check = PersistentMetadataStore(db_path=indexer_config.db_path)
             db_conn = store_check.conn
             file_count_result = db_conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()
             assert file_count_result is not None
@@ -260,7 +260,7 @@ class TestIndexerPersistent:
 
         store_tmp = None
         try:
-            store_tmp = MetadataStore(persistent=True, db_path=indexer_config.db_path)
+            store_tmp = PersistentMetadataStore(db_path=indexer_config.db_path)
             db_conn = store_tmp.conn
             file_count_result = db_conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()
             assert file_count_result is not None
@@ -294,7 +294,7 @@ class TestIndexerPersistent:
         file1_path = (sample_files_dir / "file1.txt").resolve()
         file2_path = (sample_files_dir / "file2.md").resolve()
 
-        store_before = MetadataStore(persistent=True, db_path=indexer_config.db_path)
+        store_before = PersistentMetadataStore(db_path=indexer_config.db_path)
         try:
             conn = store_before.conn
             file2_chunks_before_row = conn.execute(
@@ -322,7 +322,7 @@ class TestIndexerPersistent:
         indexer2 = Indexer(config=indexer_config, console=test_console)
         indexer2.index_path(target_path=sample_files_dir, wipe_existing=False)
 
-        store_after = MetadataStore(persistent=True, db_path=indexer_config.db_path)
+        store_after = PersistentMetadataStore(db_path=indexer_config.db_path)
         try:
             file2_hash_after_row = store_after.conn.execute(
                 "SELECT content_hash FROM indexed_files WHERE file_path = ?;",
@@ -357,7 +357,7 @@ class TestIndexerPersistent:
         indexer3 = Indexer(config=indexer_config, console=test_console)
         indexer3.index_path(target_path=sample_files_dir, wipe_existing=False)
 
-        store_final = MetadataStore(persistent=True, db_path=indexer_config.db_path)
+        store_final = PersistentMetadataStore(db_path=indexer_config.db_path)
         try:
             new_hash_row = store_final.conn.execute(
                 "SELECT content_hash FROM indexed_files WHERE file_path = ?;",

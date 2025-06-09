@@ -7,7 +7,7 @@ from rich.console import Console
 from .config import DEFAULT_K_RESULTS, SimgrepConfig
 from .exceptions import MetadataDBError, VectorStoreError
 from .formatter import format_paths, format_show_basic
-from .metadata_store import MetadataStore
+from .metadata_store import PersistentMetadataStore
 from .models import OutputMode
 from .processor import generate_embeddings
 from .vector_store import (
@@ -18,7 +18,7 @@ from .vector_store import (
 def perform_persistent_search(
     query_text: str,
     console: Console,
-    metadata_store: MetadataStore,
+    metadata_store: PersistentMetadataStore,
     vector_index: usearch.index.Index,
     global_config: SimgrepConfig,
     output_mode: OutputMode,
