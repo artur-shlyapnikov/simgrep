@@ -260,14 +260,6 @@ class Indexer:
                 )
                 return num_chunks_this_file, errors_this_file
 
-            if not processed_chunks:
-                self.console.print(f"[yellow]Info: No chunks generated for {file_path}.[/yellow]")
-                progress.update(
-                    task_id,
-                    advance=1,
-                    description=f"Processed (no chunks): {file_display_name}",
-                )
-                return num_chunks_this_file, errors_this_file
 
             embeddings_np = self._generate_embeddings_for_chunks(processed_chunks)
             self._store_processed_chunks(file_id, processed_chunks, embeddings_np)
