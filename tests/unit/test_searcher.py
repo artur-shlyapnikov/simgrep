@@ -3,7 +3,7 @@ import pytest
 from rich.console import Console
 
 from simgrep import searcher
-from simgrep.models import OutputMode, SimgrepConfig
+from simgrep.models import OutputMode, SearchResult, SimgrepConfig
 
 
 class MinimalStore:
@@ -19,7 +19,7 @@ def test_perform_persistent_search_no_results(monkeypatch: pytest.MonkeyPatch, c
         return np.zeros((1, 3), dtype=np.float32)
 
     def fake_search_inmemory_index(index: object, query_embedding: np.ndarray, k: int = 5):
-        return [(1, 0.05)]
+        return [SearchResult(label=1, score=0.05)]
 
     monkeypatch.setattr(searcher, "generate_embeddings", fake_generate_embeddings)
     monkeypatch.setattr(searcher, "search_inmemory_index", fake_search_inmemory_index)

@@ -1,15 +1,17 @@
 import logging
 import os
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Union
 
 import numpy as np
 import usearch.index
 
 try:
     from .exceptions import VectorStoreError
-except ImportError:
+    from .models import SearchResult
+except ImportError:  # pragma: no cover - fallback for direct execution
     from simgrep.exceptions import VectorStoreError  # type: ignore
+    from simgrep.models import SearchResult  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +93,7 @@ def create_inmemory_index(
 
 def search_inmemory_index(
     index: usearch.index.Index, query_embedding: np.ndarray, k: int = 5
-) -> List[Tuple[int, float]]:
+) -> List[SearchResult]:
     """
     Searches an in-memory USearch index for the top-k most similar vectors.
 
@@ -145,7 +147,7 @@ def search_inmemory_index(
         logger.error(f"USearch search operation failed: {e}")
         raise VectorStoreError("USearch search operation failed") from e
 
-    results: List[Tuple[int, float]] = []
+    results: List[SearchResult] = []
     actual_keys: Optional[np.ndarray] = None
     actual_distances: Optional[np.ndarray] = None
     num_found_for_query: int = 0
@@ -195,7 +197,7 @@ def search_inmemory_index(
                     f"Unknown metric '{index.metric}' for similarity conversion. Returning raw negative distance."
                 )
                 similarity = -distance  # default to negative distance if metric unknown
-            results.append((key, similarity))
+            results.append(SearchResult(label=key, score=similarity))
     else:
         logger.info("No matches found by USearch for the query.")
 

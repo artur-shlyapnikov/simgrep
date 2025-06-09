@@ -5,6 +5,7 @@ import usearch.index
 pytest.importorskip("numpy")
 pytest.importorskip("usearch.index")
 
+from simgrep.models import SearchResult
 from simgrep.vector_store import create_inmemory_index, search_inmemory_index
 
 
@@ -55,8 +56,9 @@ class TestSearchInmemoryIndex:
         results = search_inmemory_index(index, query, k=2)
 
         assert results
-        assert results[0][0] == simple_labels[0]
-        assert pytest.approx(1.0, abs=1e-5) == results[0][1]
+        assert isinstance(results[0], SearchResult)
+        assert results[0].label == simple_labels[0]
+        assert pytest.approx(1.0, abs=1e-5) == results[0].score
         assert len(results) <= 2
 
     def test_dimension_mismatch_errors(self, simple_embeddings: np.ndarray, simple_labels: np.ndarray) -> None:

@@ -1,5 +1,5 @@
 import pathlib
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 import usearch.index
 from rich.console import Console
@@ -8,7 +8,7 @@ from .config import DEFAULT_K_RESULTS, SimgrepConfig
 from .exceptions import MetadataDBError, VectorStoreError
 from .formatter import format_paths, format_show_basic
 from .metadata_store import MetadataStore
-from .models import OutputMode
+from .models import OutputMode, SearchResult
 from .processor import generate_embeddings
 from .vector_store import (
     search_inmemory_index,  # this function is generic for any usearch index
@@ -40,7 +40,7 @@ def perform_persistent_search(
 
     console.print(f"  Searching persistent index for top {k_results} similar chunks...")
     try:
-        search_matches: List[Tuple[int, float]] = search_inmemory_index(
+        search_matches: List[SearchResult] = search_inmemory_index(
             index=vector_index, query_embedding=query_embedding, k=k_results
         )
     except (VectorStoreError, ValueError) as e:
@@ -48,7 +48,7 @@ def perform_persistent_search(
         raise  # re-raise
 
     # Filter by min_score
-    filtered_matches = [(label, score) for (label, score) in search_matches if score >= min_score]
+    filtered_matches = [m for m in search_matches if m.score >= min_score]
 
     if not filtered_matches:
         if output_mode == OutputMode.paths:
@@ -68,7 +68,9 @@ def perform_persistent_search(
     # process and format results
     if output_mode == OutputMode.show:
         console.print(f"\n[bold cyan]Search Results (Top {len(filtered_matches)} from persistent index):[/bold cyan]")
-        for matched_usearch_label, similarity_score in filtered_matches:
+        for result in filtered_matches:
+            matched_usearch_label = result.label
+            similarity_score = result.score
             try:
                 retrieved_details = metadata_store.retrieve_chunk_details_persistent(matched_usearch_label)
             except MetadataDBError as e:
@@ -93,7 +95,8 @@ def perform_persistent_search(
     elif output_mode == OutputMode.paths:
         paths_from_matches: List[pathlib.Path] = []
         unique_paths_seen = set()  # to ensure uniqueness before format_paths
-        for matched_usearch_label, _similarity_score in filtered_matches:
+        for result in filtered_matches:
+            matched_usearch_label = result.label
             try:
                 retrieved_details = metadata_store.retrieve_chunk_details_persistent(matched_usearch_label)
             except MetadataDBError as e:

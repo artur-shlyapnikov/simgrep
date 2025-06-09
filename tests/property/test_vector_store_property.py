@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
-from hypothesis import HealthCheck, given, settings, strategies as st
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 from hypothesis.extra import numpy as hynp
 
 pytest.importorskip("numpy")
@@ -38,7 +39,7 @@ def test_search_results_subset_and_len(data: tuple[np.ndarray, np.ndarray, np.nd
     index = create_inmemory_index(embeddings, labels)
     results = search_inmemory_index(index, query, k=5)
 
-    result_keys = {key for key, _ in results}
+    result_keys = {res.label for res in results}
 
     assert result_keys.issubset(set(labels.tolist()))
     assert len(results) <= 5
