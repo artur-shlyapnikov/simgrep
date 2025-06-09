@@ -1,3 +1,5 @@
+import json
+import os
 import pathlib
 
 import pytest
@@ -66,4 +68,26 @@ class TestCliEphemeralE2E:
         )
         assert result.exit_code == 0
         assert "root.txt" in result.stdout
-        assert "subdir/nested.txt" in result.stdout
+        assert os.path.join("subdir", "nested.txt") in result.stdout
+
+    def test_ephemeral_search_json_output(self, tmp_path: pathlib.Path, temp_simgrep_home: pathlib.Path) -> None:
+        docs_dir = tmp_path / "ephemeral_docs_json"
+        docs_dir.mkdir()
+        file1 = docs_dir / "data.txt"
+        file1.write_text("some interesting data for json output")
+
+        result = run_simgrep_command(["search", "interesting json", str(docs_dir), "--output", "json"])
+        assert result.exit_code == 0
+
+        try:
+            json_output = json.loads(result.stdout)
+            assert isinstance(json_output, list)
+            assert len(json_output) >= 1
+            item = json_output[0]
+            assert "file_path" in item
+            assert "data.txt" in item["file_path"]
+            assert "score" in item
+            assert "chunk_text" in item
+            assert "interesting data" in item["chunk_text"]
+        except json.JSONDecodeError:
+            pytest.fail("--output json did not produce valid JSON")

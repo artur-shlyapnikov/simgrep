@@ -1,6 +1,7 @@
 import pytest
 from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
+from hypothesis.strategies import characters
 from transformers import PreTrainedTokenizerBase
 
 from simgrep.processor import chunk_text_by_tokens, load_tokenizer
@@ -17,9 +18,9 @@ def tokenizer() -> PreTrainedTokenizerBase:
     return load_tokenizer(MODEL_NAME)
 
 
-@settings(max_examples=50, suppress_health_check=[HealthCheck.filter_too_much])
+@settings(max_examples=200, suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow])
 @given(
-    text=st.text(),
+    text=st.text(alphabet=st.characters(max_codepoint=0x10FFFF, blacklist_categories=("Cc", "Cs"))),
     chunk_size_tokens=st.integers(min_value=1, max_value=20),
     overlap_tokens=st.integers(min_value=0, max_value=19),
 )
@@ -27,25 +28,34 @@ def test_chunk_text_roundtrip(tokenizer: PreTrainedTokenizerBase, text: str, chu
     assume(overlap_tokens < chunk_size_tokens)
     assume(text == text.strip())
 
-    token_ids = tokenizer.encode(text, add_special_tokens=False)
-    expected = tokenizer.decode(token_ids, skip_special_tokens=True)
-    assume(expected == text.lower())
+    encoding = tokenizer(text, add_special_tokens=False, return_offsets_mapping=True)
+    token_ids = encoding.input_ids
+    all_offsets = encoding.offset_mapping
+    expected_decoded_text = tokenizer.decode(token_ids, skip_special_tokens=True)
 
-    # ensure the text fits entirely in one chunk so overlap does not
-    # introduce duplicate text when concatenating chunk contents
-    # ensure only one chunk is produced to avoid duplicate text when
-    # concatenating overlapping chunks
+    # To test the roundtrip logic, we force the chunker to produce only one chunk
+    # that covers all the tokens. This simplifies checking offsets and content.
     chunk_size_tokens = max(chunk_size_tokens, len(token_ids) + overlap_tokens)
 
     chunks = chunk_text_by_tokens(text, tokenizer, chunk_size_tokens, overlap_tokens)
 
-    if expected == "":
+    if not token_ids:
         assert chunks == []
         return
 
-    concatenated = "".join(chunk["text"] for chunk in chunks)
-    assert concatenated == expected
-    assert chunks[0]["start_char_offset"] == 0
-    assert chunks[-1]["end_char_offset"] == len(text)
-    for chunk in chunks:
-        assert chunk["start_char_offset"] <= chunk["end_char_offset"]
+    # It's possible for text to produce tokens which then decode to an empty string.
+    # In this case, we might get a single chunk with empty text.
+    if not chunks:
+        assert expected_decoded_text == ""
+        return
+
+    assert len(chunks) == 1
+    chunk = chunks[0]
+
+    # The decoded text from the single chunk should match the decoded text of all tokens.
+    assert chunk["text"] == expected_decoded_text
+
+    # The offsets should span from the start of the first token to the end of the last token.
+    assert chunk["start_char_offset"] == all_offsets[0][0]
+    assert chunk["end_char_offset"] == all_offsets[-1][1]
+    assert chunk["start_char_offset"] <= chunk["end_char_offset"]

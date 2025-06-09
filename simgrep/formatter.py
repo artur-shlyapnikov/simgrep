@@ -1,5 +1,6 @@
+import json
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from rich.console import Console
 
@@ -77,3 +78,28 @@ def format_paths(
             output_paths_str_list.append(str(p_abs.resolve()))
 
     return "\n".join(output_paths_str_list)
+
+
+def format_json(results: List[Dict[str, Any]]) -> str:
+    """
+    Formats a list of result dictionaries as a JSON string.
+    Converts Path objects to strings for serialization.
+
+    Args:
+        results: A list of dictionaries, where each dictionary represents a search result.
+
+    Returns:
+        A JSON formatted string.
+    """
+    if not results:
+        return "[]"
+
+    serializable_results = []
+    for res in results:
+        serializable_res = res.copy()
+        for key, value in serializable_res.items():
+            if isinstance(value, Path):
+                serializable_res[key] = str(value)
+        serializable_results.append(serializable_res)
+
+    return json.dumps(serializable_results, indent=2)

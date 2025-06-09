@@ -1,3 +1,4 @@
+import json
 import os
 import pathlib
 import sys
@@ -133,7 +134,7 @@ class TestCliPersistentE2E:
         search_banana_result = run_simgrep_command(["search", "bananas"])
         assert search_banana_result.exit_code == 0
         assert "doc1.txt" in search_banana_result.stdout
-        assert str(pathlib.Path("subdir") / "doc_sub.txt") in search_banana_result.stdout  # Check subpath
+        assert os.path.join("subdir", "doc_sub.txt") in search_banana_result.stdout  # Check subpath
 
     def test_index_and_search_persistent_paths_mode(self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path) -> None:
         # 1. Add path and index (assuming it's clean or wiped by indexer logic)
@@ -289,8 +290,37 @@ class TestCliPersistentE2E:
         )
         assert search_result.exit_code == 0
         assert "doc1.txt" in search_result.stdout
-        assert "subdir/doc_sub.txt" in search_result.stdout
+        assert os.path.join("subdir", "doc_sub.txt") in search_result.stdout
         assert str(sample_docs_dir_session) not in search_result.stdout
+
+    def test_index_and_search_persistent_json_mode(self, temp_simgrep_home: pathlib.Path, sample_docs_dir_session: pathlib.Path) -> None:
+        """
+        Tests persistent search with --output json.
+        """
+        # 1. Add path and index
+        run_simgrep_command(["project", "add-path", str(sample_docs_dir_session)])
+        run_simgrep_command(["index", "--rebuild"], input_str="y\n")
+
+        # 2. Search with --output json
+        search_result = run_simgrep_command(["search", "apples", "--output", "json"])
+        assert search_result.exit_code == 0
+
+        # 3. Validate JSON output
+        try:
+            json_output = json.loads(search_result.stdout)
+            assert isinstance(json_output, list)
+            assert len(json_output) > 0
+
+            first_result = json_output[0]
+            assert "file_path" in first_result
+            assert "chunk_text" in first_result
+            assert "score" in first_result
+            assert "usearch_label" in first_result
+            assert "doc" in first_result["file_path"]  # Check if path is plausible
+            assert "apples" in first_result["chunk_text"].lower()
+
+        except json.JSONDecodeError:
+            pytest.fail("The output of --output json was not valid JSON.")
 
     def test_project_add_path_and_index(self, temp_simgrep_home: pathlib.Path, tmp_path: pathlib.Path) -> None:
         docs_dir = tmp_path / "docs"

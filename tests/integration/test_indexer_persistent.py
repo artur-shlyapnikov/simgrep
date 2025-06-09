@@ -106,7 +106,7 @@ class TestIndexerPersistent:
             # The exact count depends on how empty files are handled by the indexer logic for DB insertion.
             # If empty files are added to indexed_files, count would be 4.
             # Current Indexer._process_and_index_file skips chunking for empty files but still adds to DB.
-            assert file_count_result[0] >= 3
+            assert file_count_result[0] == 4
 
             # Check text_chunks table: should have some chunks
             chunk_count_result = db_conn.execute("SELECT COUNT(*) FROM text_chunks;").fetchone()

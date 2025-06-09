@@ -308,7 +308,7 @@
 
 *Goal: Implement all specified output modes and improve CLI usability.*
 
-* **Deliverable 5.1: `json` Output Mode**
+* **Deliverable 5.1: `json` Output Mode** ✅
   * **Goal:** Provide detailed structured output.
   * **Tasks:**
         1. In `formatter.py`, implement `format_json(results: List[ChunkData]) -> str`.

@@ -6,7 +6,7 @@ from rich.console import Console
 
 from .config import DEFAULT_K_RESULTS, SimgrepConfig
 from .exceptions import MetadataDBError, VectorStoreError
-from .formatter import format_paths, format_show_basic
+from .formatter import format_json, format_paths, format_show_basic
 from .metadata_store import MetadataStore
 from .models import OutputMode, SearchResult
 from .processor import generate_embeddings
@@ -33,14 +33,16 @@ def perform_persistent_search(
     Orchestrates the search process against a pre-existing, loaded persistent index.
     """
     embedding_model_name = global_config.default_embedding_model_name
-    console.print(f"  Embedding query: '[italic blue]{query_text}[/italic blue]' using model '{embedding_model_name}'...")
+    if output_mode != OutputMode.json:
+        console.print(f"  Embedding query: '[italic blue]{query_text}[/italic blue]' using model '{embedding_model_name}'...")
     try:
         query_embedding = generate_embeddings(texts=[query_text], model_name=embedding_model_name)
     except RuntimeError as e:
         console.print(f"[bold red]Failed to generate query embedding:[/bold red]\n  {e}")
         raise  # re-raise for main.py to catch and exit
 
-    console.print(f"  Searching persistent index for top {k_results} similar chunks...")
+    if output_mode != OutputMode.json:
+        console.print(f"  Searching persistent index for top {k_results} similar chunks...")
     try:
         search_matches: List[SearchResult] = search_inmemory_index(index=vector_index, query_embedding=query_embedding, k=k_results)
     except (VectorStoreError, ValueError) as e:
@@ -58,6 +60,8 @@ def perform_persistent_search(
                     console=console,
                 )
             )
+        elif output_mode == OutputMode.json:
+            console.print("[]")
         else:  # outputmode.show
             console.print("  No relevant chunks found in the persistent index.")
         return
@@ -100,6 +104,8 @@ def perform_persistent_search(
                     console=console,
                 )
             )
+        elif output_mode == OutputMode.json:
+            console.print("[]")
         else:  # outputmode.show
             console.print("  No relevant chunks found in the persistent index (after filtering).")
         return
@@ -131,3 +137,6 @@ def perform_persistent_search(
             console=console,
         )
         console.print(output_string)
+    elif output_mode == OutputMode.json:
+        # Use a direct print for JSON to avoid Rich's wrapping
+        print(format_json(final_results))
