@@ -2,17 +2,38 @@ import tomllib
 from pathlib import Path
 from typing import List, Optional
 
+import pathspec
+
 
 def gather_files_to_process(path: Path, patterns: List[str]) -> List[Path]:
-    """Return files in ``path`` matching any of the glob ``patterns``."""
+    """Return files in ``path`` matching any of the glob ``patterns``.
+
+    Respects ``.gitignore`` entries found in the target directory.
+    """
+    base_dir = path.parent if path.is_file() else path
+
+    ignore_spec = None
+    gitignore_file = base_dir / ".gitignore"
+    if gitignore_file.is_file():
+        try:
+            ignore_spec = pathspec.PathSpec.from_lines("gitwildmatch", gitignore_file.read_text().splitlines())
+        except Exception:
+            ignore_spec = None
+
     if path.is_file():
-        return [path]
+        if ignore_spec and ignore_spec.match_file(path.name):
+            return []
+        return [path.resolve()]
 
     found: set[Path] = set()
     for pattern in patterns:
-        for p in path.rglob(pattern):
-            if p.is_file():
-                found.add(p.resolve())
+        for p in base_dir.rglob(pattern):
+            if not p.is_file():
+                continue
+            rel = p.relative_to(base_dir)
+            if ignore_spec and ignore_spec.match_file(str(rel)):
+                continue
+            found.add(p.resolve())
 
     return sorted(found)
 
