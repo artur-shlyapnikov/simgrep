@@ -26,9 +26,14 @@ ProcessedChunkInfo: Optional[Any] = None
 class EphemeralSearcher:
     """Utility to perform one-off searches on arbitrary files or directories."""
 
-    def __init__(self, console: Optional[Console] = None, config: Optional[SimgrepConfig] = None) -> None:
+    def __init__(self, console: Optional[Console] = None, config: Optional[SimgrepConfig] = None, *, quiet: bool = False) -> None:
         self.console = console or Console()
         self.config = config or SimgrepConfig()
+        self.quiet = quiet
+
+    def _log(self, message: str) -> None:
+        if not self.quiet:
+            self.console.print(message)
 
     def search(
         self,
@@ -92,53 +97,53 @@ class EphemeralSearcher:
         cfg = self.config
 
         if not is_machine:
-            self.console.print(f"Performing ephemeral search for: '[bold blue]{query_text}[/bold blue]' in path: '[green]{path_to_search}[/green]'")
+            self._log(f"Performing ephemeral search for: '[bold blue]{query_text}[/bold blue]' in path: '[green]{path_to_search}[/green]'")
 
         store: Optional[MetadataStore] = None
         try:
             if not is_machine:
-                self.console.print("\n[bold]Setup: Initializing In-Memory Database[/bold]")
+                self._log("\n[bold]Setup: Initializing In-Memory Database[/bold]")
             store = MetadataStore()
             if not is_machine:
-                self.console.print("  In-memory database and tables created.")
+                self._log("  In-memory database and tables created.")
 
             if not is_machine:
-                self.console.print("\n[bold]Setup: Loading Tokenizer[/bold]")
-                self.console.print(f"  Loading tokenizer for model: '{cfg.default_embedding_model_name}'...")
+                self._log("\n[bold]Setup: Loading Tokenizer[/bold]")
+                self._log(f"  Loading tokenizer for model: '{cfg.default_embedding_model_name}'...")
             tokenizer = load_tokenizer(cfg.default_embedding_model_name)
             if not is_machine:
-                self.console.print(f"    Tokenizer loaded successfully: {tokenizer.__class__.__name__}")
+                self._log(f"    Tokenizer loaded successfully: {tokenizer.__class__.__name__}")
 
             search_patterns = list(patterns) if patterns else ["*.txt"]
             files_to_process = gather_files_to_process(path_to_search, search_patterns)
 
             if not is_machine:
                 if path_to_search.is_file():
-                    self.console.print(f"Processing single file: [green]{path_to_search}[/green]")
+                    self._log(f"Processing single file: [green]{path_to_search}[/green]")
                 else:
-                    self.console.print(f"Scanning directory: [green]{path_to_search}[/green] for files matching: {search_patterns}...")
+                    self._log(f"Scanning directory: [green]{path_to_search}[/green] for files matching: {search_patterns}...")
                     if not files_to_process:
-                        self.console.print(f"[yellow]No files found in directory {path_to_search} with patterns {search_patterns}[/yellow]")
+                        self._log(f"[yellow]No files found in directory {path_to_search} with patterns {search_patterns}[/yellow]")
                     else:
-                        self.console.print(f"Found {len(files_to_process)} file(s) to process.")
+                        self._log(f"Found {len(files_to_process)} file(s) to process.")
 
             if not files_to_process:
                 if not is_machine:
-                    self.console.print("No files selected for processing. Exiting.")
+                    self._log("No files selected for processing. Exiting.")
                 raise typer.Exit()
 
             all_chunks: List[ChunkData] = []
             label_counter = 0
 
             if not is_machine:
-                self.console.print("\n[bold]Step 1 & 2: Processing files, extracting and chunking text (token-based)[/bold]")
+                self._log("\n[bold]Step 1 & 2: Processing files, extracting and chunking text (token-based)[/bold]")
             progress_columns = [
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
                 BarColumn(),
                 TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
             ]
-            with Progress(*progress_columns, console=self.console, transient=False, disable=is_machine) as progress:
+            with Progress(*progress_columns, console=self.console, transient=False, disable=is_machine or self.quiet) as progress:
                 task = progress.add_task("Processing files...", total=len(files_to_process))
                 for file_idx, file_path in enumerate(files_to_process):
                     progress.update(task, description=f"Processing: {file_path.name}")
@@ -146,7 +151,7 @@ class EphemeralSearcher:
                         text = extract_text_from_file(file_path)
                         if not text.strip():
                             if not is_machine:
-                                self.console.print(f"    [yellow]Skipped: File '{file_path}' is empty or contains only whitespace.[/yellow]")
+                                self._log(f"    [yellow]Skipped: File '{file_path}' is empty or contains only whitespace.[/yellow]")
                             progress.advance(task)
                             continue
 
@@ -170,25 +175,25 @@ class EphemeralSearcher:
                             )
                             label_counter += 1
                         if not is_machine:
-                            self.console.print(f"    Extracted {len(chunk_infos)} token-based chunk(s).")
+                            self._log(f"    Extracted {len(chunk_infos)} token-based chunk(s).")
                     finally:
                         progress.advance(task)
 
             if not all_chunks:
                 if not is_machine:
-                    self.console.print("\n[yellow]No text chunks extracted from any files. Cannot perform search.[/yellow]")
+                    self._log("\n[yellow]No text chunks extracted from any files. Cannot perform search.[/yellow]")
                 raise typer.Exit()
 
             if not is_machine:
-                self.console.print("\n[bold]Setup: Populating In-Memory Database[/bold]")
+                self._log("\n[bold]Setup: Populating In-Memory Database[/bold]")
             files_meta = {(c.source_file_id, c.source_file_path) for c in all_chunks}
             store.batch_insert_files(list(files_meta))
             store.batch_insert_chunks(all_chunks)
             if not is_machine:
-                self.console.print(f"  Inserted {len(all_chunks)} chunk(s) into DB.")
+                self._log(f"  Inserted {len(all_chunks)} chunk(s) into DB.")
 
             if not is_machine:
-                self.console.print(f"\n[bold]Step 3: Generating Embeddings for {len(all_chunks)} total chunk(s)[/bold]")
+                self._log(f"\n[bold]Step 3: Generating Embeddings for {len(all_chunks)} total chunk(s)[/bold]")
             model = load_embedding_model(cfg.default_embedding_model_name)
             query_embedding = generate_embeddings(
                 texts=[query_text],
@@ -205,7 +210,7 @@ class EphemeralSearcher:
 
             if chunk_embeddings.size == 0:
                 if not is_machine:
-                    self.console.print("  No chunk embeddings available. Skipping vector search.")
+                    self._log("  No chunk embeddings available. Skipping vector search.")
                 search_matches: List[SearchResult] = []
             else:
                 labels_np = np.array([c.usearch_label for c in all_chunks], dtype=np.int64)
@@ -213,10 +218,10 @@ class EphemeralSearcher:
                 search_matches = search_inmemory_index(index=idx, query_embedding=query_embedding, k=top)
 
             if not is_machine:
-                self.console.print("\n[bold]Step 5: Displaying Results[/bold]")
+                self._log("\n[bold]Step 5: Displaying Results[/bold]")
 
             if relative_paths and output_mode != OutputMode.paths and not is_machine:
-                self.console.print(
+                self._log(
                     (
                         "[yellow]Warning: --relative-paths is only effective with --output paths. "
                         "Paths will be displayed according to the selected output mode.[/yellow]"
@@ -225,14 +230,14 @@ class EphemeralSearcher:
 
             if not search_matches:
                 if output_mode == OutputMode.paths:
-                    self.console.print(format_paths(file_paths=[], use_relative=False, base_path=None, console=self.console))
+                    self._log(format_paths(file_paths=[], use_relative=False, base_path=None, console=self.console))
                 elif output_mode == OutputMode.json:
-                    self.console.print("[]")
+                    self._log("[]")
                 elif output_mode == OutputMode.count_results:
-                    self.console.print(format_count([]))
+                    self._log(format_count([]))
                 else:
                     if not is_machine:
-                        self.console.print("  No relevant chunks found for your query in the processed file(s).")
+                        self._log("  No relevant chunks found for your query in the processed file(s).")
                 return
 
             results: List[Dict[str, Any]] = []
@@ -257,13 +262,13 @@ class EphemeralSearcher:
 
             if not results:
                 if output_mode == OutputMode.paths:
-                    self.console.print(format_paths(file_paths=[], use_relative=False, base_path=None, console=self.console))
+                    print(format_paths(file_paths=[], use_relative=False, base_path=None, console=self.console))
                 elif output_mode == OutputMode.json:
-                    self.console.print("[]")
+                    print("[]")
                 elif output_mode == OutputMode.count_results:
-                    self.console.print(format_count([]))
+                    print(format_count([]))
                 else:
-                    if not is_machine:
+                    if not is_machine and not self.quiet:
                         self.console.print("  No relevant chunks found for your query in the processed file(s) (after filtering).")
                 return
 
@@ -280,19 +285,29 @@ class EphemeralSearcher:
                 )
                 print(out_str)
             elif output_mode == OutputMode.show:
-                self.console.print(f"\n[bold cyan]Search Results (Top {len(results)}):[/bold cyan]")
-                for r in results:
-                    out = format_show_basic(file_path=r["file_path"], chunk_text=r["chunk_text"], score=r["score"])
-                    self.console.print("---")
-                    self.console.print(out)
+                header = f"Search Results (Top {len(results)}):"
+                if self.quiet:
+                    print(header)
+                    for r in results:
+                        print("---")
+                        print(format_show_basic(file_path=r["file_path"], chunk_text=r["chunk_text"], score=r["score"]))
+                else:
+                    self.console.print(f"\n[bold cyan]{header}[/bold cyan]")
+                    for r in results:
+                        out = format_show_basic(file_path=r["file_path"], chunk_text=r["chunk_text"], score=r["score"])
+                        self.console.print("---")
+                        self.console.print(out)
             elif output_mode == OutputMode.json:
                 print(format_json(results))
             elif output_mode == OutputMode.count_results:
-                self.console.print(format_count(results))
+                if self.quiet:
+                    print(format_count(results))
+                else:
+                    self.console.print(format_count(results))
         finally:
             if store:
                 if not is_machine:
-                    self.console.print("\n[bold]Cleanup: Closing In-Memory Database[/bold]")
+                    self._log("\n[bold]Cleanup: Closing In-Memory Database[/bold]")
                 store.close()
                 if not is_machine:
-                    self.console.print("  Database connection closed.")
+                    self._log("  Database connection closed.")

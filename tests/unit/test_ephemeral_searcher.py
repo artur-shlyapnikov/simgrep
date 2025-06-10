@@ -148,3 +148,22 @@ def test_ephemeral_searcher_no_results(monkeypatch: pytest.MonkeyPatch, tmp_path
 
     out = capsys.readouterr().out
     assert "No relevant chunks found" in out
+
+
+def test_ephemeral_searcher_quiet(monkeypatched_searcher: None, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
+    test_file = tmp_path / "file.txt"
+    test_file.write_text("hello")
+
+    console = Console()
+    searcher = EphemeralSearcher(console=console, quiet=True)
+    searcher.search(
+        query_text="hello",
+        path_to_search=tmp_path,
+        patterns=["*.txt"],
+        output_mode=OutputMode.show,
+        top=1,
+    )
+
+    out = capsys.readouterr().out
+    assert "Search Results" in out
+    assert "Processing files" not in out
