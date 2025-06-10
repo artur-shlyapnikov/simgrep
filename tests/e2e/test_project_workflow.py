@@ -51,7 +51,7 @@ def test_project_init_index_and_search_workflow(tmp_path: Path) -> None:
             assert (project_dir / ".simgrep").exists()
 
             # 3. Index the project (explicitly, to avoid cwd flakiness)
-            index_result = runner.invoke(app, ["index", "--rebuild", "--project", "my-test-project"], input="y\n")
+            index_result = runner.invoke(app, ["index", "--rebuild", "--project", "my-test-project", "--yes"])
             assert index_result.exit_code == 0, index_result.stdout
             assert "Successfully indexed project 'my-test-project'" in index_result.stdout
 
