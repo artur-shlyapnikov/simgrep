@@ -400,6 +400,11 @@ def index(
         "-w",
         help="Number of concurrent workers for indexing. Defaults to CPU count.",
     ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        help="Skip confirmation prompts and assume 'yes'.",
+    ),
 ) -> None:
     """
     Creates or updates a persistent index for all paths in a project.
@@ -415,12 +420,13 @@ def index(
     console.print(f"Starting indexing for project '[magenta]{active_project}[/magenta]'")
     if rebuild:
         console.print(f"[bold yellow]Warning: This will wipe and rebuild the '{active_project}' project index.[/bold yellow]")
-        if not typer.confirm(
-            f"Are you sure you want to wipe and rebuild the '{active_project}' project index?",
-            default=False,
-        ):
-            console.print("Aborted indexing.")
-            raise typer.Abort()
+        if not yes:
+            if not typer.confirm(
+                f"Are you sure you want to wipe and rebuild the '{active_project}' project index?",
+                default=False,
+            ):
+                console.print("Aborted indexing.")
+                raise typer.Abort()
 
     try:
         global_db_path = global_simgrep_config.db_directory / "global_metadata.duckdb"

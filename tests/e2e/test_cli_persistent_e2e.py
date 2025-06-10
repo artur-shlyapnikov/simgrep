@@ -138,8 +138,7 @@ def populated_persistent_index_func_scope(temp_simgrep_home: pathlib.Path, sampl
 
     # 2. Index the sample documents
     index_result = run_simgrep_command(
-        ["index", "--project", "default", "--rebuild"],
-        input_str="y\n",
+        ["index", "--project", "default", "--rebuild", "--yes"],
     )
     assert index_result.exit_code == 0
 
@@ -158,8 +157,7 @@ def populated_persistent_index(temp_simgrep_home: pathlib.Path, sample_docs_dir_
 
     # 2. Index the sample documents
     index_result = run_simgrep_command(
-        ["index", "--project", "default", "--rebuild"],
-        input_str="y\n",
+        ["index", "--project", "default", "--rebuild", "--yes"],
     )
     assert index_result.exit_code == 0
     assert "Successfully indexed" in index_result.stdout
@@ -258,7 +256,7 @@ class TestCliPersistentE2E:
 
         run_simgrep_command(["init", "--global"])
         run_simgrep_command(["project", "add-path", str(empty_dir)])
-        index_result = run_simgrep_command(["index", "--rebuild"], input_str="y\n")
+        index_result = run_simgrep_command(["index", "--rebuild", "--yes"])
         assert index_result.exit_code == 0
         assert "No files found to index" in index_result.stdout
         assert "0 files processed" in index_result.stdout  # Or similar message indicating no work done
@@ -407,7 +405,7 @@ class TestCliPersistentE2E:
         assert add_src_again_result.exit_code == 0
 
         # Index the project
-        index_result = run_simgrep_command(["index", "--project", "multi-path-proj", "--rebuild"], input_str="y\n")
+        index_result = run_simgrep_command(["index", "--project", "multi-path-proj", "--rebuild", "--yes"])
         assert index_result.exit_code == 0
         assert "2 files processed" in index_result.stdout  # doc1.txt and util.txt
 
@@ -503,9 +501,8 @@ class TestCliPersistentE2E:
         # 3. Add path and index from root
         run_simgrep_command(["project", "add-path", str(project_root)], cwd=project_root)
         index_result = run_simgrep_command(
-            ["index", "--rebuild", "--pattern", "*.md"],
+            ["index", "--rebuild", "--pattern", "*.md", "--yes"],
             cwd=project_root,
-            input_str="y\n",
         )
         assert index_result.exit_code == 0, index_result.stdout
 
@@ -539,7 +536,7 @@ class TestCliPersistentE2E:
         assert f'project_name = "{expected_project_name}"' in simgrep_config.read_text()
 
         # 4. Verify indexing works
-        index_result = run_simgrep_command(["index", "--rebuild"], cwd=project_dir, input_str="y\n")
+        index_result = run_simgrep_command(["index", "--rebuild", "--yes"], cwd=project_dir)
         assert index_result.exit_code == 0, index_result.stdout
         assert f"Successfully indexed project '{expected_project_name}'" in index_result.stdout
 
@@ -590,8 +587,8 @@ def populated_filtering_index(temp_simgrep_home: pathlib.Path, sample_docs_for_f
             "*.txt",
             "--pattern",
             "*.py",
+            "--yes",
         ],
-        input_str="y\n",
     )
     assert index_result.exit_code == 0
     assert "Successfully indexed" in index_result.stdout
@@ -663,7 +660,7 @@ class TestCliIndexerRobustnessE2E:
         run_simgrep_command(["init", "--global"])
         run_simgrep_command(["project", "create", "symlink-test"])
         run_simgrep_command(["project", "add-path", str(project_dir), "--project", "symlink-test"])
-        run_simgrep_command(["index", "--project", "symlink-test", "--rebuild"], input_str="y\n")
+        run_simgrep_command(["index", "--project", "symlink-test", "--rebuild", "--yes"])
 
         search_result = run_simgrep_command(["search", "symlinked file", "--project", "symlink-test"])
         assert search_result.exit_code == 0
@@ -685,7 +682,7 @@ class TestCliIndexerRobustnessE2E:
         run_simgrep_command(["init", "--global"])
         run_simgrep_command(["project", "create", "symlink-dir-test"])
         run_simgrep_command(["project", "add-path", str(project_dir), "--project", "symlink-dir-test"])
-        index_result = run_simgrep_command(["index", "--project", "symlink-dir-test", "--rebuild"], input_str="y\n")
+        index_result = run_simgrep_command(["index", "--project", "symlink-dir-test", "--rebuild", "--yes"])
         assert index_result.exit_code == 0
 
         search_result = run_simgrep_command(["search", "symlinked directory", "--project", "symlink-dir-test"])
@@ -708,7 +705,7 @@ class TestCliIndexerRobustnessE2E:
             run_simgrep_command(["init", "--global"])
             run_simgrep_command(["project", "create", "unreadable-test"])
             run_simgrep_command(["project", "add-path", str(project_dir), "--project", "unreadable-test"])
-            index_result = run_simgrep_command(["index", "--project", "unreadable-test", "--rebuild"], input_str="y\n")
+            index_result = run_simgrep_command(["index", "--project", "unreadable-test", "--rebuild", "--yes"])
 
             assert index_result.exit_code == 0
             assert "Error: I/O error processing" in index_result.stdout
@@ -733,7 +730,7 @@ class TestCliIndexerRobustnessE2E:
         run_simgrep_command(["init", "--global"])
         run_simgrep_command(["project", "create", "binary-test"])
         run_simgrep_command(["project", "add-path", str(project_dir), "--project", "binary-test"])
-        index_result = run_simgrep_command(["index", "--project", "binary-test", "--rebuild", "--pattern", "*.*"], input_str="y\n")
+        index_result = run_simgrep_command(["index", "--project", "binary-test", "--rebuild", "--pattern", "*.*", "--yes"])
 
         assert index_result.exit_code == 0
         assert "1 files processed" in index_result.stdout

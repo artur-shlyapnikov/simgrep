@@ -308,7 +308,7 @@ The tool is designed to be intuitive for simple use cases ("semantic grep replac
 *   **Progress:** `Rich` progress bars for indexing and other long operations.
 *   **Status Messages:** Clear, concise messages for success, warnings, errors.
 *   **`simgrep status [--project <name>]`:** Shows indexed paths, number of files/chunks, DB size, embedding model, last index time for the project.
-*   **Confirmation:** Prompts for destructive actions (e.g., `index --rebuild`, `project delete`).
+*   **Confirmation:** Prompts for destructive actions (e.g., `index --rebuild`, `project delete`). Use `--yes` to skip prompts in automation.
 *   **Error Reporting:** User-friendly error messages with suggestions if possible. Stack traces hidden by default, shown with `--verbose`.
 
 **7.3. Defaults and Tunability**
