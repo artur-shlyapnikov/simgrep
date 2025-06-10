@@ -104,6 +104,17 @@ Build the index. This may take some time for the first run.
 simgrep index
 ```
 
+### Indexing with Multiple Workers
+
+You can speed up indexing by enabling concurrent file processing. Use the
+`--workers` option to control the number of worker threads:
+
+```bash
+simgrep index --workers 4
+```
+
+By default, `simgrep` uses all available CPU cores.
+
 *Note: `simgrep` automatically detects you are in the `my-codebase` project. You can also be explicit with `--project my-codebase`.*
 
 **4. Search your project:**

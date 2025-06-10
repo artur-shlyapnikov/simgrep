@@ -1,3 +1,4 @@
+import os
 import sys
 import warnings
 from importlib.metadata import version
@@ -638,7 +639,7 @@ def search(
                 usearch_labels_np = np.array([cd.usearch_label for cd in all_chunkdata_objects], dtype=np.int64)
                 vector_index: usearch.index.Index = create_inmemory_index(embeddings=chunk_embeddings, labels_for_usearch=usearch_labels_np)
                 if not is_machine_readable_output:
-                    console.print(f"    Index created with {len(vector_index)} item(s). " f"Metric: {vector_index.metric}, DType: {str(vector_index.dtype)}")
+                    console.print(f"    Index created with {len(vector_index)} item(s). Metric: {vector_index.metric}, DType: {str(vector_index.dtype)}")
 
                 if not is_machine_readable_output:
                     console.print(f"  Searching index for top {top} similar chunk(s)...")
@@ -796,6 +797,12 @@ def index(
         "-p",
         help="Glob pattern(s) for files to index. Can be used multiple times. Defaults to project settings or '*.txt'.",
     ),
+    workers: Optional[int] = typer.Option(
+        None,
+        "--workers",
+        "-w",
+        help="Number of concurrent workers for indexing. Defaults to CPU count.",
+    ),
 ) -> None:
     """
     Creates or updates a persistent index for all paths in a project.
@@ -848,6 +855,7 @@ def index(
             chunk_size_tokens=global_simgrep_config.default_chunk_size_tokens,
             chunk_overlap_tokens=global_simgrep_config.default_chunk_overlap_tokens,
             file_scan_patterns=scan_patterns,
+            max_index_workers=workers if workers is not None else (os.cpu_count() or 4),
         )
 
         indexer_instance = Indexer(config=indexer_config, console=console)

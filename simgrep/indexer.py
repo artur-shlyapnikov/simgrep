@@ -1,5 +1,6 @@
 import os
 import pathlib
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Tuple
 
 import duckdb
@@ -46,6 +47,7 @@ class IndexerConfig(BaseModel):
     chunk_size_tokens: int
     chunk_overlap_tokens: int
     file_scan_patterns: List[str] = Field(default_factory=lambda: ["*.txt"])
+    max_index_workers: int = os.cpu_count() or 4
 
 
 class Indexer:
@@ -157,6 +159,14 @@ class Indexer:
             self.config.chunk_size_tokens,
             self.config.chunk_overlap_tokens,
         )
+
+    def _preprocess_file(self, file_path: pathlib.Path) -> Tuple[List[ProcessedChunkInfo], np.ndarray]:
+        """Extract, chunk, and embed a single file."""
+        chunks = self._extract_and_chunk_file(file_path)
+        if not chunks:
+            return [], np.empty((0, self.embedding_ndim), dtype=np.float32)
+        embeddings = self._generate_embeddings_for_chunks(chunks)
+        return chunks, embeddings
 
     def _generate_embeddings_for_chunks(self, chunks: List[ProcessedChunkInfo]) -> np.ndarray:
         """Generate embeddings for chunk texts."""
@@ -372,11 +382,55 @@ class Indexer:
             ]
             with Progress(*progress_columns, console=self.console, transient=False) as progress:
                 file_processing_task = progress.add_task("[cyan]Indexing files...", total=len(files_to_process))
-                for file_p in files_to_process:
-                    resolved_fp = file_p.resolve()
-                    if not wipe_existing and resolved_fp in existing_records:
+
+                with ThreadPoolExecutor(max_workers=self.config.max_index_workers) as pool:
+                    future_map: Dict[Any, Tuple[pathlib.Path, str, int, float]] = {}
+
+                    for file_p in files_to_process:
+                        resolved_fp = file_p.resolve()
+                        if not wipe_existing and resolved_fp in existing_records:
+                            try:
+                                current_hash = calculate_file_hash(resolved_fp)
+                            except FileNotFoundError:
+                                progress.update(
+                                    file_processing_task,
+                                    advance=1,
+                                    description=f"Skipped (missing): {file_p.name}",
+                                )
+                                total_errors += 1
+                                continue
+                            except IOError as e:
+                                self.console.print(
+                                    f"[bold red]Error: I/O error processing {resolved_fp}: {e}[/bold red]"
+                                )
+                                progress.update(
+                                    file_processing_task,
+                                    advance=1,
+                                    description=f"Skipped (I/O Err): {file_p.name}",
+                                )
+                                total_errors += 1
+                                continue
+
+                            stored_id, stored_hash = existing_records[resolved_fp]
+                            if current_hash == stored_hash:
+                                self.console.print(
+                                    f"[yellow]Skipped (unchanged): {file_p}[/yellow]"
+                                )
+                                progress.update(
+                                    file_processing_task,
+                                    advance=1,
+                                    description=f"Skipped (unchanged): {file_p.name}",
+                                )
+                                total_files_processed += 1
+                                continue
+                            assert self.metadata_store is not None
+                            removed_labels = self.metadata_store.delete_file_records(stored_id)
+                            if self.usearch_index is not None and removed_labels:
+                                self.usearch_index.remove(keys=np.array(removed_labels, dtype=np.int64))
+
                         try:
-                            current_hash = calculate_file_hash(resolved_fp)
+                            file_hash = calculate_file_hash(resolved_fp)
+                            stat = resolved_fp.stat()
                         except FileNotFoundError:
                             progress.update(
                                 file_processing_task,
@@ -385,28 +439,89 @@ class Indexer:
                             )
                             total_errors += 1
                             continue
-
-                        stored_id, stored_hash = existing_records[resolved_fp]
-                        if current_hash == stored_hash:
+                        except IOError as e:
+                            self.console.print(
+                                f"[bold red]Error: I/O error processing {resolved_fp}: {e}[/bold red]"
+                            )
                             progress.update(
                                 file_processing_task,
                                 advance=1,
-                                description=f"Skipped (unchanged): {file_p.name}",
+                                description=f"Skipped (I/O Err): {file_p.name}",
                             )
-                            total_files_processed += 1
+                            total_errors += 1
                             continue
-                        assert self.metadata_store is not None
-                        removed_labels = self.metadata_store.delete_file_records(stored_id)
-                        if self.usearch_index is not None and removed_labels:
-                            self.usearch_index.remove(keys=np.array(removed_labels, dtype=np.int64))
 
-                    num_c, num_e = self._process_and_index_file(resolved_fp, progress, file_processing_task)
-                    total_chunks_indexed += num_c
-                    total_errors += num_e
-                    if num_e == 0 and num_c >= 0:  # successfully processed or skipped empty/no chunks
+                        fut = pool.submit(self._preprocess_file, resolved_fp)
+                        future_map[fut] = (
+                            resolved_fp,
+                            file_hash,
+                            stat.st_size,
+                            stat.st_mtime,
+                        )
+
+                    for fut in as_completed(future_map):
+                        file_path, fh, size_b, mtime = future_map[fut]
+                        file_display = file_path.name
+                        try:
+                            chunks, embeddings_np = fut.result()
+                        except Exception as e:
+                            self.console.print(f"[bold red]Error: Unexpected error preprocessing {file_path}: {e}[/bold red]")
+                            total_errors += 1
+                            progress.update(
+                                file_processing_task,
+                                advance=1,
+                                description=f"Skipped (error): {file_display}",
+                            )
+                            continue
+
+                        if not self.metadata_store:
+                            self.console.print(f"[bold red]Error: DB connection not available for file {file_path}. Skipping.[/bold red]")
+                            total_errors += 1
+                            progress.update(
+                                file_processing_task,
+                                advance=1,
+                                description=f"Skipped (DB error): {file_display}",
+                            )
+                            continue
+
+                        file_id = self.metadata_store.insert_indexed_file_record(
+                            file_path=str(file_path.resolve()),
+                            content_hash=fh,
+                            file_size_bytes=size_b,
+                            last_modified_os_timestamp=mtime,
+                        )
+
+                        if file_id is None:
+                            self.console.print(f"[bold red]Error: Failed to get file_id for {file_path}. Skipping.[/bold red]")
+                            total_errors += 1
+                            progress.update(
+                                file_processing_task,
+                                advance=1,
+                                description=f"Skipped (DB insert): {file_display}",
+                            )
+                            continue
+
+                        if not chunks:
+                            info_msg = "no chunks"
+                            if size_b == 0:
+                                info_msg = "empty"
+                            self.console.print(f"[yellow]Info: File {file_path} {info_msg}. Skipping chunking.[/yellow]")
+                            total_files_processed += 1
+                            progress.update(
+                                file_processing_task,
+                                advance=1,
+                                description=f"Processed ({info_msg}): {file_display}",
+                            )
+                            continue
+
+                        self._store_processed_chunks(file_id, chunks, embeddings_np)
+                        total_chunks_indexed += len(chunks)
                         total_files_processed += 1
-                    # if num_e > 0, it's an error, file not fully processed.
-                    # progress.update advances automatically in _process_and_index_file
+                        progress.update(
+                            file_processing_task,
+                            advance=1,
+                            description=f"Processed: {file_display} ({len(chunks)} chunks)",
+                        )
 
             # finalization
             if self.usearch_index is not None:
