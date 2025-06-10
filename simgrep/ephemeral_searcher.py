@@ -20,7 +20,7 @@ extract_text_from_file: Optional[Any] = None
 generate_embeddings: Optional[Any] = None
 load_embedding_model: Optional[Any] = None
 load_tokenizer: Optional[Any] = None
-ProcessedChunkInfo: Optional[Any] = None
+ProcessedChunkInfo: Optional[Any] = None  # alias for the dataclass, loaded lazily
 
 
 class EphemeralSearcher:
@@ -56,7 +56,7 @@ class EphemeralSearcher:
             )
         ):
             from .processor import (
-                ProcessedChunkInfo as _ProcessedChunkInfo,
+                ProcessedChunk as _ProcessedChunkInfo,
             )
             from .processor import (
                 chunk_text_by_tokens as _chunk_text_by_tokens,
@@ -159,13 +159,13 @@ class EphemeralSearcher:
                         for c in chunk_infos:
                             all_chunks.append(
                                 ChunkData(
-                                    text=c["text"],
+                                    text=c.text,
                                     source_file_path=file_path,
                                     source_file_id=file_idx,
                                     usearch_label=label_counter,
-                                    start_char_offset=c["start_char_offset"],
-                                    end_char_offset=c["end_char_offset"],
-                                    token_count=c["token_count"],
+                                    start_char_offset=c.start_char_offset,
+                                    end_char_offset=c.end_char_offset,
+                                    token_count=c.token_count,
                                 )
                             )
                             label_counter += 1
