@@ -399,9 +399,23 @@ class Indexer:
                                 )
                                 total_errors += 1
                                 continue
+                            except IOError as e:
+                                self.console.print(
+                                    f"[bold red]Error: I/O error processing {resolved_fp}: {e}[/bold red]"
+                                )
+                                progress.update(
+                                    file_processing_task,
+                                    advance=1,
+                                    description=f"Skipped (I/O Err): {file_p.name}",
+                                )
+                                total_errors += 1
+                                continue
 
                             stored_id, stored_hash = existing_records[resolved_fp]
                             if current_hash == stored_hash:
+                                self.console.print(
+                                    f"[yellow]Info: File {file_p} unchanged. Skipping.[/yellow]"
+                                )
                                 progress.update(
                                     file_processing_task,
                                     advance=1,
@@ -422,6 +436,17 @@ class Indexer:
                                 file_processing_task,
                                 advance=1,
                                 description=f"Skipped (missing): {file_p.name}",
+                            )
+                            total_errors += 1
+                            continue
+                        except IOError as e:
+                            self.console.print(
+                                f"[bold red]Error: I/O error processing {resolved_fp}: {e}[/bold red]"
+                            )
+                            progress.update(
+                                file_processing_task,
+                                advance=1,
+                                description=f"Skipped (I/O Err): {file_p.name}",
                             )
                             total_errors += 1
                             continue
