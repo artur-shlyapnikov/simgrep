@@ -27,7 +27,6 @@ try:
         connect_global_db,
         create_project_scaffolding,
         get_all_projects,
-        get_index_counts,
         get_project_by_name,
         get_project_config,
     )
@@ -63,7 +62,6 @@ except ImportError:
             connect_global_db,
             create_project_scaffolding,
             get_all_projects,
-            get_index_counts,
             get_project_by_name,
             get_project_config,
         )
@@ -490,7 +488,7 @@ def status() -> None:
     store: Optional[MetadataStore] = None
     try:
         store = MetadataStore(persistent=True, db_path=db_file)
-        files_count, chunks_count = get_index_counts(store.conn)
+        files_count, chunks_count = store.get_index_counts()
         console.print(f"Default Project: {files_count} files indexed, {chunks_count} chunks.")
     except MetadataDBError as e:
         console.print(f"[bold red]Error retrieving status: {e}[/bold red]")
