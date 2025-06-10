@@ -414,7 +414,7 @@ class Indexer:
                             stored_id, stored_hash = existing_records[resolved_fp]
                             if current_hash == stored_hash:
                                 self.console.print(
-                                    f"[yellow]Info: File {file_p} unchanged. Skipping.[/yellow]"
+                                    f"[yellow]Skipped (unchanged): {file_p}[/yellow]"
                                 )
                                 progress.update(
                                     file_processing_task,
