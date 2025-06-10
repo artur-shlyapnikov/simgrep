@@ -26,12 +26,12 @@ try:
         add_project_path,
         connect_global_db,
         create_project_scaffolding,
-        get_all_projects,
         get_project_by_name,
         get_project_config,
     )
     from .metadata_store import MetadataStore
     from .models import OutputMode, SimgrepConfig
+    from .project_manager import ProjectManager
     from .searcher import perform_persistent_search
     from .utils import (
         find_project_root,
@@ -61,7 +61,6 @@ except ImportError:
             add_project_path,
             connect_global_db,
             create_project_scaffolding,
-            get_all_projects,
             get_project_by_name,
             get_project_config,
         )
@@ -70,6 +69,7 @@ except ImportError:
             OutputMode,
             SimgrepConfig,
         )
+        from simgrep.project_manager import ProjectManager
         from simgrep.searcher import perform_persistent_search
         from simgrep.utils import (
             find_project_root,
@@ -509,24 +509,12 @@ def project_create(name: str) -> None:
     """Create a new named project."""
     try:
         cfg = load_global_config()
-    except SimgrepConfigError as e:
-        console.print(f"[bold red]Error:[/bold red] {e}")
-        raise typer.Exit(code=1)
-
-    global_db_path = cfg.db_directory / "global_metadata.duckdb"
-    conn = connect_global_db(global_db_path)
-    try:
-        if get_project_by_name(conn, name) is not None:
-            console.print(f"[bold red]Project '{name}' already exists.[/bold red]")
-            raise typer.Exit(code=1)
-
-        create_project_scaffolding(conn, cfg, name)
+        manager = ProjectManager(cfg)
+        manager.create_project(name)
         console.print(f"[green]Project '{name}' created.[/green]")
-    except (MetadataDBError, SimgrepConfigError) as e:
+    except (SimgrepConfigError, MetadataDBError) as e:
         console.print(f"[bold red]Error creating project: {e}[/bold red]")
         raise typer.Exit(code=1)
-    finally:
-        conn.close()
 
 
 @project_app.command("add-path")
@@ -549,29 +537,21 @@ def project_add_path(
     """Adds a path to a project. Simgrep will scan this path during indexing."""
     try:
         cfg = load_global_config()
+        manager = ProjectManager(cfg)
     except SimgrepConfigError as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(code=1)
 
     active_project = get_active_project(project)
 
-    global_db_path = cfg.db_directory / "global_metadata.duckdb"
-    conn = connect_global_db(global_db_path)
     try:
-        project_info = get_project_by_name(conn, active_project)
-        if project_info is None:
-            console.print(f"[bold red]Error: Project '{active_project}' not found.[/bold red]")
-            raise typer.Exit(code=1)
-
-        project_id = project_info[0]
-        add_project_path(conn, project_id, str(path_to_add))
-        console.print(f"Added path '[green]{path_to_add}[/green]' to project '[magenta]{active_project}[/magenta]'.")
-
-    except (MetadataDBError, SimgrepConfigError) as e:
+        manager.add_path(active_project, path_to_add)
+        console.print(
+            f"Added path '[green]{path_to_add}[/green]' to project '[magenta]{active_project}[/magenta]'."
+        )
+    except MetadataDBError as e:
         console.print(f"[bold red]Error adding path to project: {e}[/bold red]")
         raise typer.Exit(code=1)
-    finally:
-        conn.close()
 
 
 @project_app.command("list")
@@ -579,19 +559,11 @@ def project_list() -> None:
     """List all configured projects."""
     try:
         cfg = load_global_config()
-    except SimgrepConfigError as e:
-        console.print(f"[bold red]Error:[/bold red] {e}")
-        raise typer.Exit(code=1)
-
-    global_db_path = cfg.db_directory / "global_metadata.duckdb"
-    conn = connect_global_db(global_db_path)
-    try:
-        projects = get_all_projects(conn)
-    except MetadataDBError as e:
+        manager = ProjectManager(cfg)
+        projects = manager.list_projects()
+    except (SimgrepConfigError, MetadataDBError) as e:
         console.print(f"[bold red]Error listing projects: {e}[/bold red]")
         raise typer.Exit(code=1)
-    finally:
-        conn.close()
 
     for proj in projects:
         label = " (default)" if proj == "default" else ""
