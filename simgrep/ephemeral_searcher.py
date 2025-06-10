@@ -15,6 +15,13 @@ from .models import ChunkData, OutputMode, SearchResult
 from .utils import gather_files_to_process
 from .vector_store import create_inmemory_index, search_inmemory_index
 
+chunk_text_by_tokens: Optional[Any] = None
+extract_text_from_file: Optional[Any] = None
+generate_embeddings: Optional[Any] = None
+load_embedding_model: Optional[Any] = None
+load_tokenizer: Optional[Any] = None
+ProcessedChunkInfo: Optional[Any] = None
+
 
 class EphemeralSearcher:
     """Utility to perform one-off searches on arbitrary files or directories."""
@@ -37,15 +44,49 @@ class EphemeralSearcher:
         keyword_filter: Optional[str] = None,
     ) -> None:
         """Run an ephemeral search and print results to the console."""
+        global chunk_text_by_tokens, extract_text_from_file, generate_embeddings, load_embedding_model, load_tokenizer, ProcessedChunkInfo
+        if any(
+            f is None
+            for f in (
+                chunk_text_by_tokens,
+                extract_text_from_file,
+                generate_embeddings,
+                load_embedding_model,
+                load_tokenizer,
+            )
+        ):
+            from .processor import (
+                ProcessedChunkInfo as _ProcessedChunkInfo,
+            )
+            from .processor import (
+                chunk_text_by_tokens as _chunk_text_by_tokens,
+            )
+            from .processor import (
+                extract_text_from_file as _extract_text_from_file,
+            )
+            from .processor import (
+                generate_embeddings as _generate_embeddings,
+            )
+            from .processor import (
+                load_embedding_model as _load_embedding_model,
+            )
+            from .processor import (
+                load_tokenizer as _load_tokenizer,
+            )
 
-        from .processor import (
-            ProcessedChunkInfo,
-            chunk_text_by_tokens,
-            extract_text_from_file,
-            generate_embeddings,
-            load_embedding_model,
-            load_tokenizer,
-        )
+            if chunk_text_by_tokens is None:
+                chunk_text_by_tokens = _chunk_text_by_tokens
+            if extract_text_from_file is None:
+                extract_text_from_file = _extract_text_from_file
+            if generate_embeddings is None:
+                generate_embeddings = _generate_embeddings
+            if load_embedding_model is None:
+                load_embedding_model = _load_embedding_model
+            if load_tokenizer is None:
+                load_tokenizer = _load_tokenizer
+            if ProcessedChunkInfo is None:
+                ProcessedChunkInfo = _ProcessedChunkInfo
+
 
         is_machine = output_mode in (OutputMode.json, OutputMode.paths)
         cfg = self.config
