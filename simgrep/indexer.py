@@ -22,7 +22,7 @@ from transformers import PreTrainedTokenizerBase
 from .exceptions import MetadataDBError, VectorStoreError
 from .metadata_store import MetadataStore
 from .processor import (
-    ProcessedChunkInfo,
+    ProcessedChunk,
     calculate_file_hash,
     chunk_text_by_tokens,
     extract_text_from_file,
@@ -147,7 +147,7 @@ class Indexer:
         if self.metadata_store is None:
             raise IndexerError("DB connection is None at the end of _prepare_data_stores.")
 
-    def _extract_and_chunk_file(self, file_path: pathlib.Path) -> List[ProcessedChunkInfo]:
+    def _extract_and_chunk_file(self, file_path: pathlib.Path) -> List[ProcessedChunk]:
         """Return token chunks extracted from the file."""
         text_content = extract_text_from_file(file_path)
         if not text_content.strip():
@@ -160,7 +160,7 @@ class Indexer:
             self.config.chunk_overlap_tokens,
         )
 
-    def _preprocess_file(self, file_path: pathlib.Path) -> Tuple[List[ProcessedChunkInfo], np.ndarray]:
+    def _preprocess_file(self, file_path: pathlib.Path) -> Tuple[List[ProcessedChunk], np.ndarray]:
         """Extract, chunk, and embed a single file."""
         chunks = self._extract_and_chunk_file(file_path)
         if not chunks:
@@ -168,15 +168,15 @@ class Indexer:
         embeddings = self._generate_embeddings_for_chunks(chunks)
         return chunks, embeddings
 
-    def _generate_embeddings_for_chunks(self, chunks: List[ProcessedChunkInfo]) -> np.ndarray:
+    def _generate_embeddings_for_chunks(self, chunks: List[ProcessedChunk]) -> np.ndarray:
         """Generate embeddings for chunk texts."""
-        chunk_texts = [c["text"] for c in chunks]
+        chunk_texts = [c.text for c in chunks]
         return generate_embeddings(chunk_texts, model_name=self.config.embedding_model_name, model=self.embedding_model, is_query=False)
 
     def _store_processed_chunks(
         self,
         file_id: int,
-        processed_chunks: List[ProcessedChunkInfo],
+        processed_chunks: List[ProcessedChunk],
         embeddings_np: np.ndarray,
     ) -> None:
         chunk_db_records: List[Dict[str, Any]] = []
@@ -189,10 +189,10 @@ class Indexer:
                 {
                     "file_id": file_id,
                     "usearch_label": current_label,
-                    "chunk_text": chunk_info["text"],
-                    "start_char_offset": chunk_info["start_char_offset"],
-                    "end_char_offset": chunk_info["end_char_offset"],
-                    "token_count": chunk_info["token_count"],
+                    "chunk_text": chunk_info.text,
+                    "start_char_offset": chunk_info.start_char_offset,
+                    "end_char_offset": chunk_info.end_char_offset,
+                    "token_count": chunk_info.token_count,
                     "embedding_hash": None,
                 }
             )

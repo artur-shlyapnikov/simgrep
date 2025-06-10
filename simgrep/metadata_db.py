@@ -1,19 +1,18 @@
-import datetime
 import logging
 import pathlib
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import duckdb
 
 # assuming models.py is in the same directory or simgrep is installed
 try:
     from .exceptions import MetadataDBError
-    from .models import ChunkData, ProjectConfig, SimgrepConfig
+    from .models import ProjectConfig, SimgrepConfig
 except ImportError:
     # this fallback might be needed if running scripts directly from the simgrep folder
     # or if the package structure is not fully resolved in some contexts.
     from simgrep.exceptions import MetadataDBError  # type: ignore
-    from simgrep.models import ChunkData, ProjectConfig, SimgrepConfig  # type: ignore
+    from simgrep.models import ProjectConfig, SimgrepConfig  # type: ignore
 
 logger = logging.getLogger(__name__)
 

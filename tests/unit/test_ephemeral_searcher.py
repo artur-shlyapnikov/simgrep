@@ -1,5 +1,5 @@
 import pathlib
-from typing import Any, Dict, List
+from typing import Any, List
 
 import numpy as np
 import pytest
@@ -7,6 +7,7 @@ from rich.console import Console
 
 from simgrep.ephemeral_searcher import EphemeralSearcher
 from simgrep.models import OutputMode, SearchResult
+from simgrep.processor import ProcessedChunk
 
 
 class DummyTokenizer:
@@ -25,14 +26,15 @@ def fake_extract_text_from_file(path: pathlib.Path) -> str:
     return "dummy text for testing"
 
 
-def fake_chunk_text_by_tokens(**kwargs: Any) -> List[Dict[str, Any]]:
+
+def fake_chunk_text_by_tokens(**kwargs: Any) -> List[ProcessedChunk]:
     return [
-        {
-            "text": "chunk text",
-            "start_char_offset": 0,
-            "end_char_offset": 5,
-            "token_count": 1,
-        }
+        ProcessedChunk(
+            text="chunk text",
+            start_char_offset=0,
+            end_char_offset=5,
+            token_count=1,
+        )
     ]
 
 
