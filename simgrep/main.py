@@ -266,6 +266,7 @@ def search(
         "--keyword",
         help="Additionally filter result chunks by a case-insensitive keyword.",
     ),
+    quiet: bool = typer.Option(False, "--quiet", help="Suppress progress bars and informational output."),
     min_score: float = typer.Option(
         0.1,
         "--min-score",
@@ -281,6 +282,9 @@ def search(
     persistent index is searched instead.
     """
     is_machine_readable_output = output in (OutputMode.json, OutputMode.paths)
+
+    if quiet:
+        console.quiet = True
 
     if path_to_search is None:
         try:
@@ -360,7 +364,7 @@ def search(
                     console.print("  Persistent database connection closed.")
         return  # End of persistent search path
 
-    searcher = EphemeralSearcher(console=console)
+    searcher = EphemeralSearcher(console=console, quiet=quiet)
     searcher.search(
         query_text=query_text,
         path_to_search=path_to_search,
@@ -403,6 +407,7 @@ def index(
         "--yes",
         help="Skip confirmation prompts and assume 'yes'.",
     ),
+    quiet: bool = typer.Option(False, "--quiet", help="Suppress progress bars and informational output."),
 ) -> None:
     """
     Creates or updates a persistent index for all paths in a project.
@@ -413,6 +418,9 @@ def index(
     except SimgrepConfigError as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(code=1)
+
+    if quiet:
+        console.quiet = True
 
     active_project = get_active_project(project)
     console.print(f"Starting indexing for project '[magenta]{active_project}[/magenta]'")
@@ -459,10 +467,13 @@ def index(
             max_index_workers=workers if workers is not None else (os.cpu_count() or 4),
         )
 
-        indexer_instance = Indexer(config=indexer_config, console=console)
+        indexer_instance = Indexer(config=indexer_config, console=console, quiet=quiet)
         indexer_instance.run_index(target_paths=project_cfg.indexed_paths, wipe_existing=rebuild)
 
-        console.print(f"[bold green]Successfully indexed project '{active_project}'.[/bold green]")
+        if quiet:
+            print(f"Successfully indexed project '{active_project}'.")
+        else:
+            console.print(f"[bold green]Successfully indexed project '{active_project}'.[/bold green]")
 
     except SimgrepConfigError as e:
         console.print(f"[bold red]Configuration Error:[/bold red]\n  {e}")

@@ -51,52 +51,57 @@ class IndexerConfig(BaseModel):
 
 
 class Indexer:
-    def __init__(self, config: IndexerConfig, console: Console):
+    def __init__(self, config: IndexerConfig, console: Console, *, quiet: bool = False):
         self.config = config
         self.console = console
+        self.quiet = quiet
         self.db_conn: Optional[duckdb.DuckDBPyConnection] = None
         self.metadata_store: Optional[MetadataStore] = None
         self.usearch_index: Optional[usearch.index.Index] = None
         self._current_usearch_label: int = 0  # global counter for unique usearch labels
 
+    def _log(self, message: str) -> None:
+        if not self.quiet:
+            self.console.print(message)
+
         try:
-            self.console.print(f"Loading tokenizer for model: '{self.config.embedding_model_name}'...")
+            self._log(f"Loading tokenizer for model: '{self.config.embedding_model_name}'...")
             self.tokenizer: PreTrainedTokenizerBase = load_tokenizer(self.config.embedding_model_name)
-            self.console.print("Tokenizer loaded.")
+            self._log("Tokenizer loaded.")
         except RuntimeError as e:
             raise IndexerError(f"Failed to load tokenizer: {e}") from e
 
         try:
-            self.console.print(f"Loading embedding model: '{self.config.embedding_model_name}'...")
+            self._log(f"Loading embedding model: '{self.config.embedding_model_name}'...")
             self.embedding_model = load_embedding_model(self.config.embedding_model_name)
-            self.console.print("Embedding model loaded.")
+            self._log("Embedding model loaded.")
 
-            self.console.print("Determining embedding dimension...")
+            self._log("Determining embedding dimension...")
             dummy_emb = generate_embeddings(["simgrep_test_string"], model_name=self.config.embedding_model_name, model=self.embedding_model, is_query=False)
             if dummy_emb.ndim != 2 or dummy_emb.shape[0] == 0 or dummy_emb.shape[1] == 0:
                 raise IndexerError(
                     f"Could not determine embedding dimension using model {self.config.embedding_model_name}. Dummy embedding shape: {dummy_emb.shape}"
                 )
             self.embedding_ndim: int = dummy_emb.shape[1]
-            self.console.print(f"Embedding dimension set to: {self.embedding_ndim}")
+            self._log(f"Embedding dimension set to: {self.embedding_ndim}")
         except RuntimeError as e:
             raise IndexerError(f"Failed to load embedding model or generate dummy embedding for ndim: {e}") from e
         except Exception as e_model_load:  # Catch other potential errors from SentenceTransformer
             raise IndexerError(f"Unexpected error loading embedding model '{self.config.embedding_model_name}': {e_model_load}") from e_model_load
 
     def _prepare_data_stores(self, wipe_existing: bool) -> None:
-        self.console.print("Preparing data stores (database and vector index)...")
+        self._log("Preparing data stores (database and vector index)...")
         # database
         try:
             self.metadata_store = MetadataStore(persistent=True, db_path=self.config.db_path)
             self.db_conn = self.metadata_store.conn
-            self.console.print(f"Connected to database: {self.config.db_path}")
+            self._log(f"Connected to database: {self.config.db_path}")
 
             if wipe_existing and self.metadata_store:
-                self.console.print(f"Wiping existing data from database: {self.config.db_path}...")
+                self._log(f"Wiping existing data from database: {self.config.db_path}...")
                 self.metadata_store.clear_persistent_project_data()
                 self._current_usearch_label = 0
-                self.console.print("Database wiped.")
+                self._log("Database wiped.")
         except MetadataDBError as e:
             self.db_conn = None
             self.metadata_store = None
@@ -109,28 +114,28 @@ class Indexer:
         # vector store
         try:
             if wipe_existing:
-                self.console.print(f"Wiping existing vector index: {self.config.usearch_index_path}...")
+                self._log(f"Wiping existing vector index: {self.config.usearch_index_path}...")
                 self.config.usearch_index_path.unlink(missing_ok=True)
                 self.usearch_index = usearch.index.Index(
                     ndim=self.embedding_ndim,
                     metric="cos",
                     dtype="f32",  # todo: make metric/dtype configurable
                 )
-                self.console.print("New empty vector index created.")
+                self._log("New empty vector index created.")
             else:  # for future incremental logic
-                self.console.print(f"Loading vector index from: {self.config.usearch_index_path}...")
+                self._log(f"Loading vector index from: {self.config.usearch_index_path}...")
                 self.usearch_index = load_persistent_index(self.config.usearch_index_path)
                 if self.usearch_index is None:
-                    self.console.print("No existing vector index found. Creating new one.")
+                    self._log("No existing vector index found. Creating new one.")
                     self.usearch_index = usearch.index.Index(ndim=self.embedding_ndim, metric="cos", dtype="f32")
                 else:
-                    self.console.print(f"Loaded existing vector index with {len(self.usearch_index)} items.")
+                    self._log(f"Loaded existing vector index with {len(self.usearch_index)} items.")
                     if len(self.usearch_index) > 0:
                         try:
                             max_existing_label = self.usearch_index.keys[len(self.usearch_index.keys) - 1]
                             self._current_usearch_label = int(max_existing_label) + 1
                         except Exception:
-                            self.console.print("[yellow]Warning: Could not determine max key from existing index, starting labels from 0.[/yellow]")
+                            self._log("[yellow]Warning: Could not determine max key from existing index, starting labels from 0.[/yellow]")
                             self._current_usearch_label = 0
                     else:
                         self._current_usearch_label = 0
@@ -217,7 +222,7 @@ class Indexer:
         progress.update(task_id, description=f"Processing: {file_display_name}...")
 
         if not self.metadata_store:  # should be set by _prepare_data_stores
-            self.console.print(f"[bold red]Error: DB connection not available for file {file_path}. Skipping.[/bold red]")
+            self._log(f"[bold red]Error: DB connection not available for file {file_path}. Skipping.[/bold red]")
             errors_this_file += 1
             progress.update(
                 task_id,
@@ -242,7 +247,7 @@ class Indexer:
             )
 
             if file_id is None:
-                self.console.print(f"[bold red]Error: Failed to get file_id for {file_path}. Skipping.[/bold red]")
+                self._log(f"[bold red]Error: Failed to get file_id for {file_path}. Skipping.[/bold red]")
                 errors_this_file += 1
                 progress.update(
                     task_id,
@@ -256,7 +261,7 @@ class Indexer:
                 info_msg = "no chunks"
                 if file_path.stat().st_size == 0:
                     info_msg = "empty"
-                self.console.print(f"[yellow]Info: File {file_path} {info_msg}. Skipping chunking.[/yellow]")
+                self._log(f"[yellow]Info: File {file_path} {info_msg}. Skipping chunking.[/yellow]")
                 progress.update(
                     task_id,
                     advance=1,
@@ -274,7 +279,7 @@ class Indexer:
             )
 
         except FileNotFoundError as e:  # from calculate_file_hash or stat()
-            self.console.print(f"[bold red]Error: File not found processing {file_path}: {e}[/bold red]")
+            self._log(f"[bold red]Error: File not found processing {file_path}: {e}[/bold red]")
             errors_this_file += 1
             progress.update(
                 task_id,
@@ -282,7 +287,7 @@ class Indexer:
                 description=f"Skipped (Not Found): {file_display_name}",
             )
         except RuntimeError as e:  # from processor functions
-            self.console.print(f"[bold red]Error: Runtime error processing {file_path}: {e}[/bold red]")
+            self._log(f"[bold red]Error: Runtime error processing {file_path}: {e}[/bold red]")
             errors_this_file += 1
             progress.update(
                 task_id,
@@ -290,7 +295,7 @@ class Indexer:
                 description=f"Skipped (Runtime Err): {file_display_name}",
             )
         except (MetadataDBError, VectorStoreError) as e:
-            self.console.print(f"[bold red]Error: Data store error for {file_path}: {e}[/bold red]")
+            self._log(f"[bold red]Error: Data store error for {file_path}: {e}[/bold red]")
             errors_this_file += 1
             progress.update(
                 task_id,
@@ -298,7 +303,7 @@ class Indexer:
                 description=f"Skipped (Store Err): {file_display_name}",
             )
         except IOError as e:  # general io
-            self.console.print(f"[bold red]Error: I/O error processing {file_path}: {e}[/bold red]")
+            self._log(f"[bold red]Error: I/O error processing {file_path}: {e}[/bold red]")
             errors_this_file += 1
             progress.update(
                 task_id,
@@ -306,7 +311,7 @@ class Indexer:
                 description=f"Skipped (I/O Err): {file_display_name}",
             )
         except Exception as e:
-            self.console.print(f"[bold red]Error: Unexpected error processing {file_path}: {e}[/bold red]")
+            self._log(f"[bold red]Error: Unexpected error processing {file_path}: {e}[/bold red]")
             errors_this_file += 1
             progress.update(
                 task_id,
@@ -314,7 +319,7 @@ class Indexer:
                 description=f"Skipped (Unexpected): {file_display_name}",
             )
             # optionally re-raise for critical unexpected errors or log traceback
-            # import traceback; self.console.print(traceback.format_exc())
+            # import traceback; self._log(traceback.format_exc())
 
         return num_chunks_this_file, errors_this_file
 
@@ -331,10 +336,10 @@ class Indexer:
             # file discovery
             files_to_process: List[pathlib.Path]
             all_found_files_set = set()
-            self.console.print(f"Scanning {len(target_paths)} path(s) for files matching patterns: {self.config.file_scan_patterns}...")
+            self._log(f"Scanning {len(target_paths)} path(s) for files matching patterns: {self.config.file_scan_patterns}...")
             for target_path in target_paths:
                 if not target_path.exists():
-                    self.console.print(f"[yellow]Warning: Path '{target_path}' does not exist. Skipping.[/yellow]")
+                    self._log(f"[yellow]Warning: Path '{target_path}' does not exist. Skipping.[/yellow]")
                     continue
                 if target_path.is_file():
                     all_found_files_set.add(target_path)
@@ -347,9 +352,9 @@ class Indexer:
             files_to_process = sorted(list(all_found_files_set))
 
             if not files_to_process:
-                self.console.print("[yellow]No files found to index in any of the provided paths with current patterns.[/yellow]")
+                self._log("[yellow]No files found to index in any of the provided paths with current patterns.[/yellow]")
             else:
-                self.console.print(f"Found {len(files_to_process)} total file(s) to process.")
+                self._log(f"Found {len(files_to_process)} total file(s) to process.")
 
             existing_records: Dict[pathlib.Path, Tuple[int, str]] = {}
             if not wipe_existing:
@@ -380,7 +385,7 @@ class Indexer:
                 TextColumn("/"),
                 TimeRemainingColumn(),
             ]
-            with Progress(*progress_columns, console=self.console, transient=False) as progress:
+            with Progress(*progress_columns, console=self.console, transient=False, disable=self.quiet) as progress:
                 file_processing_task = progress.add_task("[cyan]Indexing files...", total=len(files_to_process))
 
                 with ThreadPoolExecutor(max_workers=self.config.max_index_workers) as pool:
@@ -400,7 +405,7 @@ class Indexer:
                                 total_errors += 1
                                 continue
                             except IOError as e:
-                                self.console.print(
+                                self._log(
                                     f"[bold red]Error: I/O error processing {resolved_fp}: {e}[/bold red]"
                                 )
                                 progress.update(
@@ -413,7 +418,7 @@ class Indexer:
 
                             stored_id, stored_hash = existing_records[resolved_fp]
                             if current_hash == stored_hash:
-                                self.console.print(
+                                self._log(
                                     f"[yellow]Skipped (unchanged): {file_p}[/yellow]"
                                 )
                                 progress.update(
@@ -440,7 +445,7 @@ class Indexer:
                             total_errors += 1
                             continue
                         except IOError as e:
-                            self.console.print(
+                            self._log(
                                 f"[bold red]Error: I/O error processing {resolved_fp}: {e}[/bold red]"
                             )
                             progress.update(
@@ -465,7 +470,7 @@ class Indexer:
                         try:
                             chunks, embeddings_np = fut.result()
                         except Exception as e:
-                            self.console.print(f"[bold red]Error: Unexpected error preprocessing {file_path}: {e}[/bold red]")
+                            self._log(f"[bold red]Error: Unexpected error preprocessing {file_path}: {e}[/bold red]")
                             total_errors += 1
                             progress.update(
                                 file_processing_task,
@@ -475,7 +480,7 @@ class Indexer:
                             continue
 
                         if not self.metadata_store:
-                            self.console.print(f"[bold red]Error: DB connection not available for file {file_path}. Skipping.[/bold red]")
+                            self._log(f"[bold red]Error: DB connection not available for file {file_path}. Skipping.[/bold red]")
                             total_errors += 1
                             progress.update(
                                 file_processing_task,
@@ -492,7 +497,7 @@ class Indexer:
                         )
 
                         if file_id is None:
-                            self.console.print(f"[bold red]Error: Failed to get file_id for {file_path}. Skipping.[/bold red]")
+                            self._log(f"[bold red]Error: Failed to get file_id for {file_path}. Skipping.[/bold red]")
                             total_errors += 1
                             progress.update(
                                 file_processing_task,
@@ -505,7 +510,7 @@ class Indexer:
                             info_msg = "no chunks"
                             if size_b == 0:
                                 info_msg = "empty"
-                            self.console.print(f"[yellow]Info: File {file_path} {info_msg}. Skipping chunking.[/yellow]")
+                            self._log(f"[yellow]Info: File {file_path} {info_msg}. Skipping chunking.[/yellow]")
                             total_files_processed += 1
                             progress.update(
                                 file_processing_task,
@@ -525,26 +530,26 @@ class Indexer:
 
             # finalization
             if self.usearch_index is not None:
-                self.console.print(f"Saving vector index with {len(self.usearch_index)} items...")
+                self._log(f"Saving vector index with {len(self.usearch_index)} items...")
                 saved = save_persistent_index(self.usearch_index, self.config.usearch_index_path)
                 if saved:
-                    self.console.print("Vector index saved.")
+                    self._log("Vector index saved.")
                 else:
-                    self.console.print(f"[yellow]Failed to save vector index to {self.config.usearch_index_path}[/yellow]")
+                    self._log(f"[yellow]Failed to save vector index to {self.config.usearch_index_path}[/yellow]")
 
-            self.console.print(f"\n[bold green]Indexing complete for project '{self.config.project_name}'.[/bold green]")
-            self.console.print(f"  Summary: {total_files_processed} files processed, {total_chunks_indexed} chunks indexed, {total_errors} errors encountered.")
+            self._log(f"\n[bold green]Indexing complete for project '{self.config.project_name}'.[/bold green]")
+            self._log(f"  Summary: {total_files_processed} files processed, {total_chunks_indexed} chunks indexed, {total_errors} errors encountered.")
 
         except IndexerError as e:  # catch errors from _prepare_data_stores or other indexer logic
-            self.console.print(f"[bold red]Indexer Error: {e}[/bold red]")
+            self._log(f"[bold red]Indexer Error: {e}[/bold red]")
             raise  # re-raise for main.py to catch
         except Exception as e:
-            self.console.print(f"[bold red]Unexpected critical error during indexing: {e}[/bold red]")
-            # import traceback; self.console.print(traceback.format_exc())
+            self._log(f"[bold red]Unexpected critical error during indexing: {e}[/bold red]")
+            # import traceback; self._log(traceback.format_exc())
             raise IndexerError(f"Unexpected critical error: {e}") from e  # wrap in indexererror
         finally:
             if self.metadata_store is not None:
                 try:
                     self.metadata_store.close()
                 except Exception as e:
-                    self.console.print(f"[bold red]Error closing database connection: {e}[/bold red]")
+                    self._log(f"[bold red]Error closing database connection: {e}[/bold red]")
