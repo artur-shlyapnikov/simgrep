@@ -4,7 +4,7 @@ import pytest
 from rich.console import Console
 
 from simgrep.indexer import Indexer, IndexerConfig
-from simgrep.processor import ProcessedChunkInfo
+from simgrep.processor import ProcessedChunk
 
 pytest.importorskip("transformers")
 pytest.importorskip("sentence_transformers")
@@ -34,11 +34,11 @@ def test_extract_and_chunk_file(tmp_path: pathlib.Path, indexer_instance: Indexe
     file_path.write_text("Hello world. This is a test file.")
     chunks = indexer_instance._extract_and_chunk_file(file_path)
     assert len(chunks) > 0
-    assert "text" in chunks[0]
+    assert hasattr(chunks[0], "text")
 
 
 def test_generate_embeddings_for_chunks(indexer_instance: Indexer) -> None:
-    chunks = [ProcessedChunkInfo(text="hello", start_char_offset=0, end_char_offset=5, token_count=1)]
+    chunks = [ProcessedChunk(text="hello", start_char_offset=0, end_char_offset=5, token_count=1)]
     embeddings = indexer_instance._generate_embeddings_for_chunks(chunks)
     assert embeddings.shape[0] == len(chunks)
     assert embeddings.shape[1] == indexer_instance.embedding_ndim
@@ -55,7 +55,7 @@ def test_store_processed_chunks(tmp_path: pathlib.Path, indexer_instance: Indexe
     )
     assert file_id is not None
 
-    chunks = [ProcessedChunkInfo(text="hello", start_char_offset=0, end_char_offset=5, token_count=1)]
+    chunks = [ProcessedChunk(text="hello", start_char_offset=0, end_char_offset=5, token_count=1)]
     embeddings = indexer_instance._generate_embeddings_for_chunks(chunks)
     indexer_instance._store_processed_chunks(file_id, chunks, embeddings)
 

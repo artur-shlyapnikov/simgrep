@@ -204,10 +204,10 @@ class TestChunkTextByTokens:
         chunks = chunk_text_by_tokens(text, tokenizer, 10, 2)
         assert len(chunks) == 1
         # all-minilm-l6-v2 is uncased, so output text will be lowercased.
-        assert chunks[0]["text"] == text.strip().lower()
-        assert chunks[0]["start_char_offset"] == 0
-        assert chunks[0]["end_char_offset"] == len(text)
-        assert chunks[0]["token_count"] == len(tokenizer.encode(text, add_special_tokens=False))
+        assert chunks[0].text == text.strip().lower()
+        assert chunks[0].start_char_offset == 0
+        assert chunks[0].end_char_offset == len(text)
+        assert chunks[0].token_count == len(tokenizer.encode(text, add_special_tokens=False))
 
     def test_text_equals_chunk_size(self, tokenizer: PreTrainedTokenizerBase) -> None:
         from simgrep.processor import chunk_text_by_tokens
@@ -226,8 +226,8 @@ class TestChunkTextByTokens:
         chunks = chunk_text_by_tokens(text, tokenizer, len(actual_token_ids), 0)
         assert len(chunks) == 1
         # all-minilm-l6-v2 is uncased, so output text will be lowercased.
-        assert chunks[0]["text"].strip() == text.strip().lower()
-        assert chunks[0]["token_count"] == len(actual_token_ids)
+        assert chunks[0].text.strip() == text.strip().lower()
+        assert chunks[0].token_count == len(actual_token_ids)
 
     def test_multiple_chunks_no_overlap(self, tokenizer: PreTrainedTokenizerBase) -> None:
         from simgrep.processor import chunk_text_by_tokens
@@ -246,16 +246,16 @@ class TestChunkTextByTokens:
 
         reconstructed_token_ids = []
         for chunk in chunks:
-            chunk_token_ids = tokenizer.encode(chunk["text"], add_special_tokens=False)
+            chunk_token_ids = tokenizer.encode(chunk.text, add_special_tokens=False)
             reconstructed_token_ids.extend(chunk_token_ids)
 
         # we can't directly compare token_ids list due to how chunking might split words/subwords
         # but we can check character offsets
-        assert chunks[0]["start_char_offset"] == 0
+        assert chunks[0].start_char_offset == 0
         if len(chunks) > 1:
             # the start of the second chunk should be the end of the first token sequence of the first chunk
             # this is also tricky. let's check total length.
-            assert chunks[-1]["end_char_offset"] == len(text)
+            assert chunks[-1].end_char_offset == len(text)
 
     def test_multiple_chunks_with_overlap(self, tokenizer: PreTrainedTokenizerBase) -> None:
         from simgrep.processor import chunk_text_by_tokens
@@ -272,7 +272,7 @@ class TestChunkTextByTokens:
             # the first `overlap` tokens of the second chunk's *token source*.
             # this is hard to verify perfectly without knowing the exact token boundaries from original.
             # a simpler check: the start_char_offset of chunk2 should be less than end_char_offset of chunk1
-            assert chunks[1]["start_char_offset"] < chunks[0]["end_char_offset"]
+            assert chunks[1].start_char_offset < chunks[0].end_char_offset
 
     def test_invalid_chunk_size(self, tokenizer: PreTrainedTokenizerBase) -> None:
         from simgrep.processor import chunk_text_by_tokens
@@ -318,10 +318,10 @@ class TestChunkTextByTokens:
         # Expected text: "word1 word2"
         # Expected offsets from original text: tokens span from char 0 to char 14
         chunk1 = chunks[0]
-        assert chunk1["text"] == "word1 word2"
-        assert chunk1["start_char_offset"] == 0
-        assert chunk1["end_char_offset"] == 14
-        assert chunk1["token_count"] == 4
+        assert chunk1.text == "word1 word2"
+        assert chunk1.start_char_offset == 0
+        assert chunk1.end_char_offset == 14
+        assert chunk1.token_count == 4
 
         # --- Check Chunk 2 ---
         # Step is chunk_size - overlap = 3. Next chunk starts at token index 3.
@@ -329,20 +329,20 @@ class TestChunkTextByTokens:
         # Expected text: "##2 word3 word"
         # Expected offsets from original text: tokens span from char 13 to char 28
         chunk2 = chunks[1]
-        assert chunk2["text"] == "##2 word3 word"
-        assert chunk2["start_char_offset"] == 13
-        assert chunk2["end_char_offset"] == 28
-        assert chunk2["token_count"] == 4
+        assert chunk2.text == "##2 word3 word"
+        assert chunk2.start_char_offset == 13
+        assert chunk2.end_char_offset == 28
+        assert chunk2.token_count == 4
 
         # --- Check Chunk 3 ---
         # Step is 3. Next chunk starts at token index 6.
         # Expected tokens: ['word', '##4'] (indices 6-7)
         # Expected text: "word4"
         chunk3 = chunks[2]
-        assert chunk3["text"] == "word4"
-        assert chunk3["start_char_offset"] == 24
-        assert chunk3["end_char_offset"] == 29
-        assert chunk3["token_count"] == 2
+        assert chunk3.text == "word4"
+        assert chunk3.start_char_offset == 24
+        assert chunk3.end_char_offset == 29
+        assert chunk3.token_count == 2
 
 
 class TestGenerateEmbeddings:

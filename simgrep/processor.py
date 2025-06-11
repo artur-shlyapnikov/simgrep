@@ -1,7 +1,8 @@
 import hashlib
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TypedDict, cast
+from typing import Any, Dict, List, Optional, cast
 
 import numpy as np
 import unstructured.partition.auto as auto_partition
@@ -13,7 +14,8 @@ from transformers import AutoTokenizer, PreTrainedTokenizerBase
 from unstructured.documents.elements import Element
 
 
-class ProcessedChunkInfo(TypedDict):
+@dataclass
+class ProcessedChunk:
     text: str
     start_char_offset: int
     end_char_offset: int
@@ -108,7 +110,7 @@ def chunk_text_by_tokens(
     tokenizer: PreTrainedTokenizerBase,
     chunk_size_tokens: int,
     overlap_tokens: int,
-) -> List[ProcessedChunkInfo]:
+) -> List[ProcessedChunk]:
     """
     Splits a given text into a list of overlapping token-based chunks.
     """
@@ -135,7 +137,7 @@ def chunk_text_by_tokens(
     if not all_token_ids:
         return []
 
-    chunks: List[ProcessedChunkInfo] = []
+    chunks: List[ProcessedChunk] = []
     step = chunk_size_tokens - overlap_tokens
 
     current_token_idx = 0
@@ -159,7 +161,7 @@ def chunk_text_by_tokens(
         num_tokens_in_this_chunk = len(chunk_token_ids_batch)
 
         chunks.append(
-            ProcessedChunkInfo(
+            ProcessedChunk(
                 text=chunk_text,
                 start_char_offset=start_char,
                 end_char_offset=end_char,

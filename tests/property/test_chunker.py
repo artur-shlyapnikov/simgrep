@@ -51,8 +51,8 @@ def test_chunk_text_roundtrip(tokenizer: PreTrainedTokenizerBase, text: str, chu
     assert len(chunks) == 1
     chunk = chunks[0]
 
-    assert chunk["text"] == expected_decoded_text
+    assert chunk.text == expected_decoded_text
 
-    assert chunk["start_char_offset"] == all_offsets[0][0]
-    assert chunk["end_char_offset"] == all_offsets[-1][1]
-    assert chunk["start_char_offset"] <= chunk["end_char_offset"]
+    assert chunk.start_char_offset == all_offsets[0][0]
+    assert chunk.end_char_offset == all_offsets[-1][1]
+    assert chunk.start_char_offset <= chunk.end_char_offset
