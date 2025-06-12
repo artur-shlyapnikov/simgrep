@@ -1,8 +1,11 @@
+import hashlib
 import tomllib
 from pathlib import Path
 from typing import List, Optional
 
 import pathspec
+
+from .models import SimgrepConfig
 
 
 def gather_files_to_process(path: Path, patterns: List[str]) -> List[Path]:
@@ -65,3 +68,10 @@ def get_project_name_from_local_config(project_root: Path) -> Optional[str]:
         return data.get("project_name")
     except (tomllib.TOMLDecodeError, OSError):
         return None
+
+
+def get_ephemeral_cache_paths(search_root: Path, cfg: SimgrepConfig) -> tuple[Path, Path]:
+    """Return paths for ephemeral cache files based on the search root."""
+    key = hashlib.sha1(str(search_root.resolve()).encode()).hexdigest()[:12]
+    base = cfg.ephemeral_cache_dir / key
+    return base / "metadata.duckdb", base / "index.usearch"
