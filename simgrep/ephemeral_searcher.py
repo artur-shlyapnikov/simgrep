@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 from pathlib import Path
 from typing import List, Optional
 
@@ -36,6 +37,7 @@ class EphemeralSearcher:
     ) -> None:
         cfg = self.config
         search_patterns = list(patterns) if patterns else ["*.txt"]
+        is_machine = output_mode in (OutputMode.json, OutputMode.paths)
 
         db_path, index_path = get_ephemeral_cache_paths(path_to_search, cfg)
         store: Optional[MetadataStore] = None
@@ -56,7 +58,8 @@ class EphemeralSearcher:
                 chunk_overlap_tokens=cfg.default_chunk_overlap_tokens,
                 file_scan_patterns=search_patterns,
             )
-            indexer = Indexer(config=idx_cfg, console=self.console)
+            index_console = self.console if not is_machine else Console(file=io.StringIO())
+            indexer = Indexer(config=idx_cfg, console=index_console)
             indexer.run_index([path_to_search], wipe_existing=True)
             store = MetadataStore(persistent=True, db_path=db_path)
             index = load_persistent_index(index_path)
