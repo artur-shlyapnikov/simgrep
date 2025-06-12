@@ -627,8 +627,9 @@ class TestCliConfigE2E:
         # Run a command that requires global config
         result = run_simgrep_command(["project", "list"])
         assert result.exit_code == 1
-        assert "Global config not found" in result.stdout
-        assert "Please run 'simgrep init --global'" in result.stdout
+        cleaned_stdout = " ".join(result.stdout.split())
+        assert "Global config not found" in cleaned_stdout
+        assert "Please run 'simgrep init --global' to create it." in cleaned_stdout
 
     def test_status_on_fresh_init(self, temp_simgrep_home: pathlib.Path) -> None:
         """Tests the status command on a fresh global init."""
