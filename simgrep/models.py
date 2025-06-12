@@ -55,6 +55,10 @@ class SimgrepConfig(BaseModel):
 
     db_directory: Path = Field(default_factory=lambda: Path("~/.config/simgrep").expanduser())
 
+    ephemeral_cache_dir: Path = Field(
+        default_factory=lambda: Path("~/.config/simgrep/ephemeral_cache").expanduser()
+    )
+
     # centralizing other global defaults from main.py constants / architecture doc:
     # these will be used by persistent indexing logic in later deliverables.
     # ephemeral search in main.py might still use its local constants for now.

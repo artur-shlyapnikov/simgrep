@@ -232,14 +232,12 @@ The tool is designed to be intuitive for simple use cases ("semantic grep replac
 *   **Implicit/Ephemeral Indexing (Grep-like usage):**
     *   `simgrep "query" ./some/path`
     1.  No project context is active for `./some/path`.
-    2.  An ephemeral, in-memory DuckDB and USearch index are created.
-    3.  `./some/path` is recursively scanned (if dir) or read (if file).
-    4.  Files are processed, chunked, embedded, and added to the ephemeral index.
-    5.  Search is performed against this temporary index.
+    2.  A cache directory is determined under `~/.config/simgrep/ephemeral_cache/<hash>`.
+    3.  If the cache files exist, the metadata DB and USearch index are loaded from disk.
+    4.  Otherwise the target path is indexed with those paths and saved for reuse.
+    5.  Search is performed against this persistent cache.
     6.  Results are displayed.
-    7.  Ephemeral index is discarded.
-    *   This provides immediate utility without persistent state for one-off searches.
-    *   A warning might suggest creating a project for faster subsequent searches on the same path.
+    *   This still works for one-off searches, but repeated searches of the same path are faster thanks to the on-disk cache.
 
 **6.2. Indexing**
 

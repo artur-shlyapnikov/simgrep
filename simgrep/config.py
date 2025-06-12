@@ -53,6 +53,7 @@ def initialize_global_config(overwrite: bool = False) -> None:
     try:
         config.db_directory.mkdir(parents=True, exist_ok=True)
         config.default_project_data_dir.mkdir(parents=True, exist_ok=True)
+        config.ephemeral_cache_dir.mkdir(parents=True, exist_ok=True)
     except OSError as e:
         error_message = f"Fatal: Could not create simgrep data directory at '{config.db_directory}'. Please check permissions. Error: {e}"
         print(error_message, file=sys.stderr)

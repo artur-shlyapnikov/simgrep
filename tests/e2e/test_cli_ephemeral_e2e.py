@@ -66,7 +66,7 @@ class TestCliEphemeralE2E:
 
         assert result.exit_code == 0
         if output_mode == "show":
-            assert "Processing:" in result.stdout
+            assert ("Processing:" in result.stdout) or ("Processed:" in result.stdout)
             assert "100%" in result.stdout
         assert validation_fn(result)
 

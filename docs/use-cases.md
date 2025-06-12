@@ -4,7 +4,8 @@
 
 ## Ephemeral Search
 
-For one-off queries, `simgrep` creates a temporary index in memory, searches it, then discards it.
+For ad-hoc queries, `simgrep` builds an index in `~/.config/simgrep/ephemeral_cache/<hash>`.
+If that cache already exists it is reused for faster results.
 
 ```mermaid
 sequenceDiagram
@@ -14,8 +15,8 @@ sequenceDiagram
     participant USearch
     participant DuckDB
     User->>simgrep: simgrep search "query" path
-    simgrep->>DuckDB: store chunks in memory
-    simgrep->>USearch: build in-memory index
+    simgrep->>DuckDB: store chunks in cache
+    simgrep->>USearch: build or load cached index
     simgrep->>USearch: query embeddings
     USearch-->>simgrep: similar chunks
     simgrep->>User: display results
