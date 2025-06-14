@@ -3,9 +3,9 @@ import logging
 import pathlib
 from typing import Any, Dict, List, Optional, Tuple
 
-from .exceptions import MetadataDBError
+from .core.errors import MetadataDBError
+from .core.models import ChunkData
 from .metadata_db import connect_persistent_db, create_inmemory_db_connection
-from .models import ChunkData
 
 logger = logging.getLogger(__name__)
 
@@ -92,19 +92,13 @@ class MetadataStore:
 
         logger.info(f"Batch inserting {len(data_to_insert)} chunk(s) into temp_chunks.")
         try:
-            sql = (
-                "INSERT INTO temp_chunks (chunk_id, file_id, text_content, "
-                "start_char_offset, end_char_offset, token_count) "
-                "VALUES (?, ?, ?, ?, ?, ?)"
-            )
+            sql = "INSERT INTO temp_chunks (chunk_id, file_id, text_content, " "start_char_offset, end_char_offset, token_count) " "VALUES (?, ?, ?, ?, ?, ?)"
             self.conn.executemany(sql, data_to_insert)
         except Exception as e:
             logger.error(f"DuckDB error during batch chunk insert: {e}")
             raise MetadataDBError("Failed during batch chunk insert") from e
 
-    def retrieve_chunk_for_display(
-        self, chunk_id: int
-    ) -> Optional[Tuple[str, pathlib.Path, int, int]]:
+    def retrieve_chunk_for_display(self, chunk_id: int) -> Optional[Tuple[str, pathlib.Path, int, int]]:
         query = """
             SELECT tc.text_content, tf.file_path, tc.start_char_offset, tc.end_char_offset
             FROM temp_chunks tc
@@ -128,18 +122,14 @@ class MetadataStore:
             return None
 
     # --- persistent table helpers ---
-    def retrieve_chunk_details_persistent(
-        self, usearch_label: int
-    ) -> Optional[Tuple[str, pathlib.Path, int, int]]:
+    def retrieve_chunk_details_persistent(self, usearch_label: int) -> Optional[Tuple[str, pathlib.Path, int, int]]:
         query = """
             SELECT tc.chunk_text, f.file_path, tc.start_char_offset, tc.end_char_offset
             FROM text_chunks tc
             JOIN indexed_files f ON tc.file_id = f.file_id
             WHERE tc.usearch_label = ?;
         """
-        logger.debug(
-            f"Retrieving persistent chunk details for usearch_label: {usearch_label}"
-        )
+        logger.debug(f"Retrieving persistent chunk details for usearch_label: {usearch_label}")
         try:
             result = self.conn.execute(query, [usearch_label]).fetchone()
             if result:
@@ -152,12 +142,8 @@ class MetadataStore:
                 )
             return None
         except Exception as e:
-            logger.error(
-                f"DuckDB error retrieving persistent chunk (label {usearch_label}): {e}"
-            )
-            raise MetadataDBError(
-                f"Failed to retrieve persistent chunk details for label {usearch_label}"
-            ) from e
+            logger.error(f"DuckDB error retrieving persistent chunk (label {usearch_label}): {e}")
+            raise MetadataDBError(f"Failed to retrieve persistent chunk details for label {usearch_label}") from e
 
     def retrieve_filtered_chunk_details(
         self,
@@ -190,9 +176,7 @@ class MetadataStore:
             params.append(f"%{keyword_filter.lower()}%")
 
         full_query = "\n".join(query_parts) + ";"
-        logger.debug(
-            f"Executing filtered chunk retrieval query: {full_query} with params: {params}"
-        )
+        logger.debug(f"Executing filtered chunk retrieval query: {full_query} with params: {params}")
 
         try:
             cursor = self.conn.execute(full_query, params)
@@ -214,9 +198,7 @@ class MetadataStore:
             raise MetadataDBError("Failed to retrieve filtered chunk details") from e
 
     def clear_persistent_project_data(self) -> None:
-        logger.info(
-            "Clearing all data from 'text_chunks' and 'indexed_files' tables for persistent project."
-        )
+        logger.info("Clearing all data from 'text_chunks' and 'indexed_files' tables for persistent project.")
         try:
             with self.conn.cursor() as cursor:
                 cursor.execute("BEGIN TRANSACTION;")
@@ -276,9 +258,7 @@ class MetadataStore:
                 )
             )
 
-        logger.info(
-            f"Batch inserting {len(data_to_insert)} chunk record(s) into persistent 'text_chunks'."
-        )
+        logger.info(f"Batch inserting {len(data_to_insert)} chunk record(s) into persistent 'text_chunks'.")
         try:
             with self.conn.cursor() as cursor:
                 cursor.execute("BEGIN TRANSACTION;")
@@ -302,9 +282,7 @@ class MetadataStore:
 
     def get_all_indexed_file_records(self) -> List[Tuple[int, str, str]]:
         try:
-            rows = self.conn.execute(
-                "SELECT file_id, file_path, content_hash FROM indexed_files;"
-            ).fetchall()
+            rows = self.conn.execute("SELECT file_id, file_path, content_hash FROM indexed_files;").fetchall()
             return [(int(r[0]), str(r[1]), str(r[2])) for r in rows]
         except Exception as e:
             logger.error(f"DuckDB error fetching all indexed file records: {e}")

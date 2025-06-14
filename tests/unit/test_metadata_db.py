@@ -4,9 +4,9 @@ from typing import Iterator
 import duckdb
 import pytest
 
-from simgrep.metadata_db import MetadataDBError
-from simgrep.metadata_store import MetadataStore
-from simgrep.models import ChunkData
+from simgrep.core.errors import MetadataDBError
+from simgrep.core.models import ChunkData
+from simgrep.repository import MetadataStore
 
 
 @pytest.fixture
@@ -128,7 +128,7 @@ class TestMetadataDB:
         # or, more directly for testing unique on file_path:
         metadata2 = [(1, file_path)]  # different id, same path
         # temp_files.file_path has a unique constraint
-        with pytest.raises(MetadataDBError, match="Failed during batch file insert"):
+        with pytest.raises(duckdb.ConstraintException):
             store.batch_insert_files(metadata2)
 
     def test_batch_insert_files_duplicate_file_id(self, store: MetadataStore, tmp_path: pathlib.Path) -> None:
@@ -142,7 +142,7 @@ class TestMetadataDB:
 
         store.batch_insert_files(metadata1)
         # temp_files.file_id is primary key
-        with pytest.raises(MetadataDBError, match="Failed during batch file insert"):
+        with pytest.raises(duckdb.ConstraintException):
             store.batch_insert_files(metadata2)
 
     def test_batch_insert_chunks(
@@ -179,7 +179,8 @@ class TestMetadataDB:
         store: MetadataStore,
         sample_chunk_data_list: list[ChunkData],
     ) -> None:
-        with pytest.raises(MetadataDBError, match="Failed during batch chunk insert"):
+        # This should fail because the corresponding files are not in the DB
+        with pytest.raises(duckdb.ConstraintException):
             store.batch_insert_chunks(sample_chunk_data_list)
 
     def test_batch_insert_chunks_unique_constraint_chunk_id(
@@ -203,7 +204,7 @@ class TestMetadataDB:
         extended_chunk_list = sample_chunk_data_list + [chunk_with_duplicate_id]
 
         # temp_chunks.chunk_id is primary key
-        with pytest.raises(MetadataDBError, match="Failed during batch chunk insert"):
+        with pytest.raises(duckdb.ConstraintException):
             store.batch_insert_chunks(extended_chunk_list)
 
     def test_retrieve_chunk_for_display_valid_id(

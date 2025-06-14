@@ -3,7 +3,7 @@ from typing import Any, Dict, List
 
 from rich.console import Console
 
-from simgrep.formatter import format_count, format_paths, format_show_basic
+from simgrep.ui.formatters import format_count, format_paths, format_show_basic
 
 
 class TestFormatShowBasic:

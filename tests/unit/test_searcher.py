@@ -6,8 +6,10 @@ import pytest
 import usearch.index
 from rich.console import Console
 
-from simgrep import searcher
-from simgrep.models import OutputMode, SearchResult, SimgrepConfig
+from simgrep.adapters.sentence_embedder import SentenceEmbedder
+from simgrep.adapters.usearch_index import USearchIndex
+from simgrep.core.models import OutputMode, SearchResult, SimgrepConfig
+from simgrep.services.search_service import SearchService
 
 
 class MinimalStore:
@@ -17,7 +19,15 @@ class MinimalStore:
         file_filter: Optional[List[str]] = None,
         keyword_filter: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
+        # Simulate filtering: only return details for label 1
         if 1 in usearch_labels:
+            # Simulate keyword filter not matching
+            if keyword_filter and "some text" not in keyword_filter:
+                return []
+            # Simulate file filter not matching
+            if file_filter and not any(Path("/fake/file.txt").match(p) for p in file_filter):
+                return []
+
             return [
                 {
                     "file_path": Path("/fake/file.txt"),
@@ -29,62 +39,58 @@ class MinimalStore:
             ]
         return []
 
+    def close(self) -> None:
+        pass
 
-def fake_generate_embeddings(texts: list[str], model_name: str, is_query: bool = False) -> np.ndarray:
-    return np.zeros((1, 3), dtype=np.float32)
 
-
-def fake_search_inmemory_index_low_score(index: object, query_embedding: np.ndarray, k: int = 5) -> List[SearchResult]:
+def fake_search_low_score(self, vec: np.ndarray, k: int) -> List[SearchResult]:
     return [SearchResult(label=1, score=0.05)]
 
 
-def fake_search_inmemory_index_no_results(index: object, query_embedding: np.ndarray, k: int = 5) -> List[SearchResult]:
+def fake_search_no_results(self, vec: np.ndarray, k: int) -> List[SearchResult]:
     return []
 
 
 @pytest.mark.parametrize(
-    "search_fn, min_score, expected_message",
+    "search_fn, min_score, expected_results_len",
     [
         pytest.param(
-            fake_search_inmemory_index_low_score,
+            fake_search_low_score,
             0.9,
-            "No relevant chunks found in the persistent index (after filtering).",
+            0,
             id="no_results_after_score_filter",
         ),
         pytest.param(
-            fake_search_inmemory_index_no_results,
+            fake_search_no_results,
             0.1,
-            "No relevant chunks found in the persistent index.",
+            0,
             id="no_initial_results",
         ),
     ],
 )
-def test_perform_persistent_search_no_results(
+def test_search_service_no_results(
     monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
     search_fn: Callable[..., List[SearchResult]],
     min_score: float,
-    expected_message: str,
+    expected_results_len: int,
 ) -> None:
-    """Tests that no results are shown, either from an empty search or filtering."""
-    console = Console()
+    """Tests that SearchService returns no results, either from an empty search or filtering."""
     store = MinimalStore()
+    embedder = SentenceEmbedder(model_name="Qwen/Qwen3-Embedding-0.6B")
+    vector_index = USearchIndex(ndim=embedder.ndim)
+    vector_index.add(np.array([0], dtype=np.int64), np.zeros((1, embedder.ndim), dtype=np.float32))
 
-    monkeypatch.setattr(searcher, "generate_embeddings", fake_generate_embeddings)
-    monkeypatch.setattr(searcher, "search_inmemory_index", search_fn)
+    # Monkeypatch the search method on the instance
+    monkeypatch.setattr(USearchIndex, "search", search_fn)
 
-    vector_index = usearch.index.Index(ndim=3)
-    # Add a dummy vector to avoid the `len(vector_index) == 0` check
-    vector_index.add(np.array([0], dtype=np.int64), np.zeros((1, 3), dtype=np.float32))
-    searcher.perform_persistent_search(
-        query_text="irrelevant",
-        console=console,
-        metadata_store=store,  # type: ignore[arg-type]
-        vector_index=vector_index,
-        global_config=SimgrepConfig(),
-        output_mode=OutputMode.show,
+    service = SearchService(store=store, embedder=embedder, index=vector_index)  # type: ignore
+
+    results = service.search(
+        query="irrelevant",
+        k=5,
         min_score=min_score,
+        file_filter=None,
+        keyword_filter=None,
     )
 
-    out = capsys.readouterr().out
-    assert expected_message in out
+    assert len(results) == expected_results_len

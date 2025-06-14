@@ -5,8 +5,8 @@ import duckdb
 import pytest
 
 # Ensure consistent exception type
-from simgrep.metadata_db import MetadataDBError
-from simgrep.metadata_store import MetadataStore
+from simgrep.core.errors import MetadataDBError
+from simgrep.repository import MetadataStore
 
 
 @pytest.fixture

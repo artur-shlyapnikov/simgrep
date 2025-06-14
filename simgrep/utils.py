@@ -1,3 +1,4 @@
+import hashlib
 import tomllib
 from pathlib import Path
 from typing import List, Optional
@@ -65,3 +66,18 @@ def get_project_name_from_local_config(project_root: Path) -> Optional[str]:
         return data.get("project_name")
     except (tomllib.TOMLDecodeError, OSError):
         return None
+
+
+def calculate_file_hash(file_path: Path) -> str:
+    """Compute the SHA256 hash of a file's contents."""
+    if not file_path.exists() or not file_path.is_file():
+        raise FileNotFoundError(f"File not found or is not a file: {file_path}")
+
+    sha256_hash = hashlib.sha256()
+    try:
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                sha256_hash.update(chunk)
+        return sha256_hash.hexdigest()
+    except OSError as e:
+        raise IOError(f"Error reading file for hashing: {e}") from e

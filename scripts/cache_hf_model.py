@@ -4,13 +4,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 try:
-    # Import our loading functions to leverage the new download-progress UI
-    from simgrep.processor import load_embedding_model, load_tokenizer
+    from simgrep.adapters.hf_chunker import load_tokenizer
+    from simgrep.adapters.sentence_embedder import _load_embedding_model as load_embedding_model
 except ImportError:
-    logger.error(
-        "Failed to import from simgrep.processor. "
-        "Ensure simgrep is installed in editable mode (`make install` or `uv pip install -e .`)."
-    )
+    logger.error("Failed to import from simgrep.adapters. " "Ensure simgrep is installed in editable mode (`make install` or `uv pip install -e .`).")
     raise
 
 MODEL_NAME = "Qwen/Qwen3-Embedding-0.6B"

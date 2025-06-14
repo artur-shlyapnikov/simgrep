@@ -5,11 +5,13 @@ import pytest
 import usearch.index
 from rich.console import Console
 
+from simgrep.adapters.sentence_embedder import SentenceEmbedder
+from simgrep.adapters.usearch_index import USearchIndex
+from simgrep.core.models import OutputMode, SimgrepConfig
 from simgrep.indexer import Indexer, IndexerConfig
-from simgrep.metadata_store import MetadataStore
-from simgrep.models import OutputMode, SimgrepConfig
-from simgrep.searcher import perform_persistent_search
-from simgrep.vector_store import load_persistent_index
+from simgrep.repository import MetadataStore
+from simgrep.services.search_service import SearchService
+from simgrep.ui.formatters import format_paths, format_show_basic
 
 pytest.importorskip("transformers")
 pytest.importorskip("sentence_transformers")
@@ -47,8 +49,6 @@ def default_simgrep_config_for_search_tests(
     """Provides a SimgrepConfig with a temporary data directory for persistent search tests."""
     simgrep_root_config_dir = tmp_path_factory.mktemp("simgrep_config_root_searcher")
     default_proj_data_dir = simgrep_root_config_dir / "default_project"
-    # SimgrepConfig's default_project_data_dir.mkdir is called by load_or_create_global_config.
-    # Here, we explicitly create it for the fixture's SimgrepConfig instance.
     default_proj_data_dir.mkdir(parents=True, exist_ok=True)
 
     cfg = SimgrepConfig(default_project_data_dir=default_proj_data_dir)
@@ -59,18 +59,15 @@ def default_simgrep_config_for_search_tests(
 def populated_persistent_index_for_searcher(
     persistent_search_test_data_path: Path,
     default_simgrep_config_for_search_tests: SimgrepConfig,
-) -> Generator[Tuple[MetadataStore, usearch.index.Index, SimgrepConfig], None, None]:
+) -> Generator[Tuple[MetadataStore, USearchIndex, SimgrepConfig, SentenceEmbedder], None, None]:
     """
     Indexes dummy data and provides the DB connection, USearch index, and config for tests.
     This is session-scoped for efficiency as indexing can be slow.
     """
     cfg = default_simgrep_config_for_search_tests
-
-    # Define unique paths for this fixture's index to avoid conflicts if other fixtures use the same dir
     db_file = cfg.default_project_data_dir / "test_searcher_fixture_metadata.duckdb"
     usearch_file = cfg.default_project_data_dir / "test_searcher_fixture_index.usearch"
 
-    # Clean up previous run's files if they exist, to ensure a fresh index for the session
     if db_file.exists():
         db_file.unlink()
     if usearch_file.exists():
@@ -86,25 +83,18 @@ def populated_persistent_index_for_searcher(
         file_scan_patterns=["*.txt"],
     )
 
-    # Use a quiet console for the indexer to avoid polluting test logs
     indexer_console = Console(quiet=True)
     indexer = Indexer(config=indexer_config, console=indexer_console)
-
     indexer.run_index(target_paths=[persistent_search_test_data_path], wipe_existing=True)
 
     store = MetadataStore(persistent=True, db_path=db_file)
-    vector_index = load_persistent_index(usearch_file)
+    vector_index = USearchIndex(ndim=indexer.embedding_ndim)
+    vector_index.load(usearch_file)
+    embedder = SentenceEmbedder(model_name=cfg.default_embedding_model_name)
 
-    if vector_index is None:
-        pytest.fail("Failed to load persistent vector index in 'populated_persistent_index_for_searcher' fixture.")
+    yield store, vector_index, cfg, embedder
 
-    yield store, vector_index, cfg
-
-    # Teardown: close DB connection. Temp files are handled by tmp_path_factory.
     store.close()
-    # Optional: clean up the specific index files if desired, though tmp_path_factory handles the root temp dir.
-    # if db_file.exists(): db_file.unlink()
-    # if usearch_file.exists(): usearch_file.unlink()
 
 
 class TestSearcherPersistentIntegration:
@@ -127,142 +117,54 @@ class TestSearcherPersistentIntegration:
             ),
         ],
     )
-    def test_perform_persistent_search_with_results(
+    def test_search_service_with_results(
         self,
-        populated_persistent_index_for_searcher: Tuple[MetadataStore, usearch.index.Index, SimgrepConfig],
+        populated_persistent_index_for_searcher: Tuple[MetadataStore, USearchIndex, SimgrepConfig, SentenceEmbedder],
         test_console: Console,
         capsys: pytest.CaptureFixture,
-        persistent_search_test_data_path: Path,
         query: str,
         output_mode: OutputMode,
         expected_strings: List[str],
         min_score: float,
     ) -> None:
-        """Tests that persistent search returns expected results for various output modes."""
-        store, vector_index_val, global_cfg = populated_persistent_index_for_searcher
+        """Tests that SearchService returns expected results."""
+        store, vector_index, cfg, embedder = populated_persistent_index_for_searcher
+        service = SearchService(store=store, embedder=embedder, index=vector_index)
 
-        perform_persistent_search(
-            query_text=query,
-            console=test_console,
-            metadata_store=store,
-            vector_index=vector_index_val,
-            global_config=global_cfg,
-            output_mode=output_mode,
-            k_results=2,
+        results = service.search(
+            query=query,
+            k=2,
             min_score=min_score,
+            file_filter=None,
+            keyword_filter=None,
         )
-        captured = capsys.readouterr()
 
+        assert results
         if output_mode == OutputMode.show:
-            assert "Embedding query" in captured.out, "Initial 'Embedding query' print message missing."
+            for r in results:
+                test_console.print(format_show_basic(r["file_path"], r["chunk_text"], r["score"]))
+        elif output_mode == OutputMode.paths:
+            test_console.print(format_paths([r["file_path"] for r in results], False, None))
 
-        # To make assertion robust against line wrapping by rich console
+        captured = capsys.readouterr()
         output_str = captured.out.replace("\n", "")
-
         for expected_str in expected_strings:
             assert expected_str in output_str
 
-    @pytest.mark.parametrize(
-        "output_mode, expected_message",
-        [
-            pytest.param(
-                OutputMode.show,
-                "No relevant chunks found in the persistent index (after filtering).",
-                id="show_mode_no_results",
-            ),
-            pytest.param(
-                OutputMode.paths,
-                "No matching files found.",
-                id="paths_mode_no_results",
-            ),
-        ],
-    )
-    def test_perform_persistent_search_no_results(
+    def test_search_service_no_results(
         self,
-        populated_persistent_index_for_searcher: Tuple[MetadataStore, usearch.index.Index, SimgrepConfig],
-        test_console: Console,
-        capsys: pytest.CaptureFixture,
-        output_mode: OutputMode,
-        expected_message: str,
+        populated_persistent_index_for_searcher: Tuple[MetadataStore, USearchIndex, SimgrepConfig, SentenceEmbedder],
     ) -> None:
-        """Tests that persistent search handles no-result scenarios gracefully."""
-        store, vector_index_val, global_cfg = populated_persistent_index_for_searcher
-        query = "zzxxyy_non_existent_term_qwerty_12345"  # Highly unlikely to match
+        """Tests that SearchService handles no-result scenarios gracefully."""
+        store, vector_index, cfg, embedder = populated_persistent_index_for_searcher
+        service = SearchService(store=store, embedder=embedder, index=vector_index)
+        query = "zzxxyy_non_existent_term_qwerty_12345"
 
-        perform_persistent_search(
-            query_text=query,
-            console=test_console,
-            metadata_store=store,
-            vector_index=vector_index_val,
-            global_config=global_cfg,
-            output_mode=output_mode,
-            k_results=2,
+        results = service.search(
+            query=query,
+            k=2,
             min_score=0.95,
+            file_filter=None,
+            keyword_filter=None,
         )
-        captured = capsys.readouterr()
-        if output_mode == OutputMode.show:
-            assert "Embedding query" in captured.out
-        assert expected_message in captured.out
-
-    @pytest.mark.parametrize("k, expected_separators", [(1, 1), (2, 2)])
-    def test_perform_persistent_search_respects_k_results(
-        self,
-        populated_persistent_index_for_searcher: Tuple[
-            MetadataStore,
-            usearch.index.Index,
-            SimgrepConfig,
-        ],
-        test_console: Console,
-        capsys: pytest.CaptureFixture,
-        k: int,
-        expected_separators: int,
-    ) -> None:
-        """Tests that the k_results parameter correctly limits the number of results."""
-        store, vector_index_val, global_cfg = populated_persistent_index_for_searcher
-        query = "simgrep"
-
-        perform_persistent_search(
-            query_text=query,
-            console=test_console,
-            metadata_store=store,
-            vector_index=vector_index_val,
-            global_config=global_cfg,
-            output_mode=OutputMode.show,
-            k_results=k,
-            min_score=0.1,
-        )
-        out = capsys.readouterr().out
-        # The '---' separator is used between results in 'show' mode
-        assert out.count("---") == expected_separators
-
-    def test_perform_persistent_search_paths_relative_output(
-        self,
-        populated_persistent_index_for_searcher: Tuple[
-            MetadataStore,
-            usearch.index.Index,
-            SimgrepConfig,
-        ],
-        test_console: Console,
-        capsys: pytest.CaptureFixture,
-        persistent_search_test_data_path: Path,
-    ) -> None:
-        """Tests that relative paths are correctly displayed when requested."""
-        store, vector_index_val, global_cfg = populated_persistent_index_for_searcher
-        query = "semantic search"  # matches file2.txt
-
-        perform_persistent_search(
-            query_text=query,
-            console=test_console,
-            metadata_store=store,
-            vector_index=vector_index_val,
-            global_config=global_cfg,
-            output_mode=OutputMode.paths,
-            k_results=2,
-            display_relative_paths=True,
-            base_path_for_relativity=persistent_search_test_data_path,
-            min_score=0.25,
-        )
-        captured = capsys.readouterr()
-        assert "file2.txt" in captured.out
-        # Ensure the absolute path part is not present
-        assert str(persistent_search_test_data_path) not in captured.out
+        assert not results

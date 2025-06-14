@@ -5,7 +5,7 @@ from hypothesis import strategies as st
 from hypothesis.extra import numpy as hynp
 from hypothesis.strategies import DrawFn
 
-from simgrep.vector_store import create_inmemory_index, search_inmemory_index
+from simgrep.adapters.usearch_index import USearchIndex
 
 pytest.importorskip("numpy")
 pytest.importorskip("usearch.index")
@@ -37,8 +37,9 @@ def _embedding_label_strategy() -> st.SearchStrategy[tuple[np.ndarray, np.ndarra
 def test_search_results_subset_and_len(data: tuple[np.ndarray, np.ndarray, np.ndarray]) -> None:
     embeddings, labels, query = data
 
-    index = create_inmemory_index(embeddings, labels)
-    results = search_inmemory_index(index, query, k=5)
+    index = USearchIndex(ndim=embeddings.shape[1])
+    index.add(keys=labels, vecs=embeddings)
+    results = index.search(vec=query, k=5)
 
     result_keys = {res.label for res in results}
 

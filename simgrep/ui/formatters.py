@@ -1,8 +1,11 @@
+import dataclasses
 import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from rich.console import Console
+
+from simgrep.core.models import SearchResult
 
 
 def format_show_basic(file_path: Path, chunk_text: str, score: float) -> str:
@@ -17,7 +20,7 @@ def format_show_basic(file_path: Path, chunk_text: str, score: float) -> str:
     Returns:
         A formatted string representing the search result.
     """
-    formatted_score = f"{score:.4f}"  # format score to 4 decimal places
+    formatted_score = f"{score:.4f}"
     return f"File: {str(file_path)}\nScore: {formatted_score}\nChunk: {chunk_text}"
 
 
@@ -80,7 +83,7 @@ def format_paths(
     return "\n".join(output_paths_str_list)
 
 
-def format_json(results: List[Dict[str, Any]]) -> str:
+def format_json(results: List[SearchResult]) -> str:
     """
     Formats a list of result dictionaries as a JSON string.
     Converts Path objects to strings for serialization.
@@ -96,16 +99,15 @@ def format_json(results: List[Dict[str, Any]]) -> str:
 
     serializable_results = []
     for res in results:
-        serializable_res = res.copy()
-        for key, value in serializable_res.items():
-            if isinstance(value, Path):
-                serializable_res[key] = str(value)
+        serializable_res = dataclasses.asdict(res)
+        if isinstance(serializable_res.get("file_path"), Path):
+            serializable_res["file_path"] = str(serializable_res["file_path"])
         serializable_results.append(serializable_res)
 
     return json.dumps(serializable_results, indent=2)
 
 
-def format_count(results: List[Dict[str, Any]]) -> str:
+def format_count(results: List[SearchResult]) -> str:
     """
     Formats the search results into a count summary.
 
@@ -121,7 +123,7 @@ def format_count(results: List[Dict[str, Any]]) -> str:
 
     # Assumes 'file_path' is a key in each result dictionary.
     # The searcher logic ensures this.
-    unique_files = {res["file_path"] for res in results if "file_path" in res}
+    unique_files = {res.file_path for res in results if res.file_path is not None}
     num_files = len(unique_files)
 
     chunk_str = "chunk" if num_chunks == 1 else "chunks"

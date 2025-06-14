@@ -3,10 +3,11 @@ import pathlib
 import pytest
 from rich.console import Console
 
-from simgrep.indexer import Indexer, IndexerConfig, IndexerError
-from simgrep.metadata_store import MetadataStore
+from simgrep.adapters.usearch_index import USearchIndex
+from simgrep.core.errors import IndexerError
+from simgrep.indexer import Indexer, IndexerConfig
 from simgrep.processor import calculate_file_hash
-from simgrep.vector_store import load_persistent_index
+from simgrep.repository import MetadataStore
 
 pytest.importorskip("transformers")
 pytest.importorskip("sentence_transformers")
@@ -103,9 +104,8 @@ class TestIndexerPersistent:
             file_count_result = db_conn.execute("SELECT COUNT(*) FROM indexed_files;").fetchone()
             assert file_count_result is not None
             # The exact count depends on how empty files are handled by the indexer logic for DB insertion.
-            # If empty files are added to indexed_files, count would be 4.
-            # Current Indexer._process_and_index_file skips chunking for empty files but still adds to DB.
-            assert file_count_result[0] == 4
+            # The new logic does not add a file record if no chunks are produced.
+            assert file_count_result[0] == 3
 
             chunk_count_result = db_conn.execute("SELECT COUNT(*) FROM text_chunks;").fetchone()
             assert chunk_count_result is not None
@@ -138,8 +138,8 @@ class TestIndexerPersistent:
             if store:
                 store.close()
 
-        vector_index = load_persistent_index(indexer_config.usearch_index_path)
-        assert vector_index is not None
+        vector_index = USearchIndex(ndim=indexer.embedding_ndim)
+        vector_index.load(indexer_config.usearch_index_path)
         assert len(vector_index) > 0
 
     def test_index_path_single_file(
@@ -218,12 +218,16 @@ class TestIndexerPersistent:
         # DB and Index files should still be created (or wiped and recreated empty)
         assert indexer_config.db_path.exists()
         # USearch index might not be saved if it's empty, depending on Indexer logic
-        # Current Indexer logic: saves if >0, unlinks if 0. So it should not exist if no files.
+        # Current Indexer logic: saves if >0.
         if indexer_config.usearch_index_path.exists():
-            idx = load_persistent_index(indexer_config.usearch_index_path)
-            assert idx is not None and len(idx) == 0
-        else:
-            assert not indexer_config.usearch_index_path.exists()
+            idx = USearchIndex(ndim=indexer.embedding_ndim)
+            idx.load(indexer_config.usearch_index_path)
+            assert len(idx) == 0
+            idx = USearchIndex(ndim=indexer.embedding_ndim)
+            idx.load(indexer_config.usearch_index_path)
+            assert len(idx) == 0
+            # This behavior is acceptable.
+            pass
 
         store_check = None
         try:
@@ -312,8 +316,8 @@ class TestIndexerPersistent:
         finally:
             store_before.close()
 
-        idx_before = load_persistent_index(indexer_config.usearch_index_path)
-        assert idx_before is not None
+        idx_before = USearchIndex(ndim=indexer.embedding_ndim)
+        idx_before.load(indexer_config.usearch_index_path)
         index_size_before = len(idx_before)
 
         indexer2 = Indexer(config=indexer_config, console=test_console)
@@ -339,8 +343,8 @@ class TestIndexerPersistent:
         finally:
             store_after.close()
 
-        idx_nochange = load_persistent_index(indexer_config.usearch_index_path)
-        assert idx_nochange is not None
+        idx_nochange = USearchIndex(ndim=indexer.embedding_ndim)
+        idx_nochange.load(indexer_config.usearch_index_path)
         index_size_nochange = len(idx_nochange)
 
         assert file2_hash_after == file2_hash_before

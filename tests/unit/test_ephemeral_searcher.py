@@ -1,152 +1,77 @@
 import pathlib
 from typing import Any, List
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 from rich.console import Console
 
+from simgrep.core.models import OutputMode, SearchResult
 from simgrep.ephemeral_searcher import EphemeralSearcher
-from simgrep.models import OutputMode, SearchResult
-from simgrep.processor import ProcessedChunk
-
-
-class DummyTokenizer:
-    pass
-
-
-class DummyModel:
-    pass
-
-
-def fake_load_tokenizer(model_name: str) -> DummyTokenizer:
-    return DummyTokenizer()
-
-
-def fake_extract_text_from_file(path: pathlib.Path) -> str:
-    return "dummy text for testing"
-
-
-
-def fake_chunk_text_by_tokens(**kwargs: Any) -> List[ProcessedChunk]:
-    return [
-        ProcessedChunk(
-            text="chunk text",
-            start_char_offset=0,
-            end_char_offset=5,
-            token_count=1,
-        )
-    ]
-
-
-def fake_load_embedding_model(name: str) -> DummyModel:
-    return DummyModel()
-
-
-def fake_generate_embeddings(texts: List[str], model_name: str, model: DummyModel | None = None, is_query: bool = False) -> np.ndarray:
-    vec = np.array([0.1, 0.2, 0.3], dtype=np.float32)
-    if is_query:
-        return vec.reshape(1, -1)
-    return np.tile(vec, (len(texts), 1))
-
-
-def fake_create_inmemory_index(**kwargs: Any) -> object:
-    return object()
-
-
-def fake_search_inmemory_index(**kwargs: Any) -> List[SearchResult]:
-    return [SearchResult(label=0, score=0.9)]
 
 
 @pytest.fixture
-def monkeypatched_searcher(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "simgrep.ephemeral_searcher.load_tokenizer",
-        fake_load_tokenizer,
-    )
-    monkeypatch.setattr(
-        "simgrep.ephemeral_searcher.extract_text_from_file",
-        fake_extract_text_from_file,
-    )
-    monkeypatch.setattr(
-        "simgrep.ephemeral_searcher.chunk_text_by_tokens",
-        fake_chunk_text_by_tokens,
-    )
-    monkeypatch.setattr(
-        "simgrep.ephemeral_searcher.load_embedding_model",
-        fake_load_embedding_model,
-    )
-    monkeypatch.setattr(
-        "simgrep.ephemeral_searcher.generate_embeddings",
-        fake_generate_embeddings,
-    )
-    monkeypatch.setattr(
-        "simgrep.ephemeral_searcher.create_inmemory_index",
-        fake_create_inmemory_index,
-    )
-    monkeypatch.setattr(
-        "simgrep.ephemeral_searcher.search_inmemory_index",
-        fake_search_inmemory_index,
-    )
+def mock_dependencies(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mocks all external dependencies for EphemeralSearcher."""
+    monkeypatch.setattr("simgrep.ephemeral_searcher.UnstructuredExtractor", MagicMock)
+    monkeypatch.setattr("simgrep.ephemeral_searcher.HFTokenChunker", MagicMock)
+    monkeypatch.setattr("simgrep.ephemeral_searcher.SentenceEmbedder", MagicMock)
+    monkeypatch.setattr("simgrep.ephemeral_searcher.USearchIndex", MagicMock)
+    monkeypatch.setattr("simgrep.ephemeral_searcher.MetadataStore", MagicMock)
+    monkeypatch.setattr("simgrep.ephemeral_searcher.SearchService", MagicMock)
+    monkeypatch.setattr("simgrep.ephemeral_searcher.gather_files_to_process", MagicMock)
 
 
-def test_ephemeral_searcher_show(monkeypatched_searcher: None, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_ephemeral_searcher_show(mock_dependencies: None, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     test_file = tmp_path / "file.txt"
     test_file.write_text("hello")
 
-    console = Console()
-    searcher = EphemeralSearcher(console=console)
-    searcher.search(
-        query_text="hello",
-        path_to_search=tmp_path,
-        patterns=["*.txt"],
-        output_mode=OutputMode.show,
-        top=1,
-    )
+    with patch("simgrep.ephemeral_searcher.gather_files_to_process") as mock_gather:
+        mock_gather.return_value = [test_file]
+        with patch("simgrep.ephemeral_searcher.SearchService") as mock_search_service:
+            mock_instance = mock_search_service.return_value
+            mock_instance.search.return_value = [
+                {
+                    "file_path": test_file,
+                    "chunk_text": "hello",
+                    "score": 0.99,
+                }
+            ]
 
-    out = capsys.readouterr().out
-    assert "Search Results" in out
-    assert "file.txt" in out
+            console = Console(force_terminal=True, width=120)  # Force terminal for consistent output
+            searcher = EphemeralSearcher(console=console)
+            searcher.search(
+                query_text="hello",
+                path_to_search=tmp_path,
+                patterns=["*.txt"],
+                output_mode=OutputMode.show,
+                top=1,
+            )
+
+            out = capsys.readouterr().out
+            assert "Search Results" in out
+            assert "file.txt" in out
 
 
-def test_ephemeral_searcher_no_results(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_ephemeral_searcher_no_results(mock_dependencies: None, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     test_file = tmp_path / "file.txt"
     test_file.write_text("hello")
 
-    monkeypatch.setattr("simgrep.ephemeral_searcher.search_inmemory_index", lambda **_: [])
-    monkeypatch.setattr(
-        "simgrep.ephemeral_searcher.load_tokenizer",
-        fake_load_tokenizer,
-    )
-    monkeypatch.setattr(
-        "simgrep.ephemeral_searcher.extract_text_from_file",
-        fake_extract_text_from_file,
-    )
-    monkeypatch.setattr(
-        "simgrep.ephemeral_searcher.chunk_text_by_tokens",
-        fake_chunk_text_by_tokens,
-    )
-    monkeypatch.setattr(
-        "simgrep.ephemeral_searcher.load_embedding_model",
-        fake_load_embedding_model,
-    )
-    monkeypatch.setattr(
-        "simgrep.ephemeral_searcher.generate_embeddings",
-        fake_generate_embeddings,
-    )
-    monkeypatch.setattr(
-        "simgrep.ephemeral_searcher.create_inmemory_index",
-        fake_create_inmemory_index,
-    )
+    with patch("simgrep.ephemeral_searcher.gather_files_to_process") as mock_gather:
+        mock_gather.return_value = [test_file]
+        with patch("simgrep.ephemeral_searcher.SearchService") as mock_search_service:
+            mock_instance = mock_search_service.return_value
+            mock_instance.search.return_value = []  # No results
 
-    console = Console()
-    searcher = EphemeralSearcher(console=console)
-    searcher.search(
-        query_text="hello",
-        path_to_search=tmp_path,
-        patterns=["*.txt"],
-        output_mode=OutputMode.show,
-        top=1,
-    )
+            console = Console(force_terminal=True, width=120)
+            searcher = EphemeralSearcher(console=console)
+            searcher.search(
+                query_text="goodbye",
+                path_to_search=tmp_path,
+                patterns=["*.txt"],
+                output_mode=OutputMode.show,
+                top=1,
+            )
 
-    out = capsys.readouterr().out
-    assert "No relevant chunks found" in out
+            out = capsys.readouterr().out
+            assert "No relevant chunks found" in out

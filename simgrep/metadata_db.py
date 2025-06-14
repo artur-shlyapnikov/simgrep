@@ -4,15 +4,12 @@ from typing import List, Optional, Tuple
 
 import duckdb
 
-# assuming models.py is in the same directory or simgrep is installed
 try:
-    from .exceptions import MetadataDBError
-    from .models import ProjectConfig, SimgrepConfig
+    from .core.errors import MetadataDBError
+    from .core.models import ProjectConfig, SimgrepConfig
 except ImportError:
-    # this fallback might be needed if running scripts directly from the simgrep folder
-    # or if the package structure is not fully resolved in some contexts.
-    from simgrep.exceptions import MetadataDBError  # type: ignore
-    from simgrep.models import ProjectConfig, SimgrepConfig  # type: ignore
+    from simgrep.core.errors import MetadataDBError  # type: ignore
+    from simgrep.core.models import ProjectConfig, SimgrepConfig  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +26,6 @@ def create_inmemory_db_connection() -> duckdb.DuckDBPyConnection:
     except duckdb.Error as e:
         logger.error(f"Failed to create in-memory DuckDB connection: {e}")
         raise MetadataDBError("Failed to create in-memory DuckDB connection") from e
-
-
 
 
 def _create_persistent_tables_if_not_exist(conn: duckdb.DuckDBPyConnection) -> None:
@@ -109,8 +104,6 @@ def connect_persistent_db(db_path: pathlib.Path) -> duckdb.DuckDBPyConnection:
 
     _create_persistent_tables_if_not_exist(conn)
     return conn
-
-
 
 
 def connect_global_db(path: pathlib.Path) -> duckdb.DuckDBPyConnection:

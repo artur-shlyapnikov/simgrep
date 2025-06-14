@@ -3,7 +3,7 @@ from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 from transformers import PreTrainedTokenizerBase
 
-from simgrep.processor import chunk_text_by_tokens, load_tokenizer
+from simgrep.adapters.hf_token_chunker import HFTokenChunker, load_tokenizer
 
 pytest.importorskip("transformers")
 pytest.importorskip("sentence_transformers")
@@ -34,9 +34,14 @@ def test_chunk_text_roundtrip(tokenizer: PreTrainedTokenizerBase, text: str, chu
 
     # To test the roundtrip logic, we force the chunker to produce only one chunk
     # that covers all the tokens. This simplifies checking offsets and content.
-    chunk_size_tokens = max(chunk_size_tokens, len(token_ids) + overlap_tokens)
+    chunk_size_for_one_chunk = max(chunk_size_tokens, len(token_ids) + 1)
 
-    chunks = chunk_text_by_tokens(text, tokenizer, chunk_size_tokens, overlap_tokens)
+    chunker = HFTokenChunker(
+        model_name=MODEL_NAME,
+        chunk_size=chunk_size_for_one_chunk,
+        overlap=overlap_tokens,
+    )
+    chunks = chunker.chunk(text)
 
     if not token_ids:
         assert chunks == []
@@ -51,8 +56,10 @@ def test_chunk_text_roundtrip(tokenizer: PreTrainedTokenizerBase, text: str, chu
     assert len(chunks) == 1
     chunk = chunks[0]
 
+    # The decoded text from the chunk should match the decoded text from all original tokens
     assert chunk.text == expected_decoded_text
 
-    assert chunk.start_char_offset == all_offsets[0][0]
-    assert chunk.end_char_offset == all_offsets[-1][1]
-    assert chunk.start_char_offset <= chunk.end_char_offset
+    if all_offsets:
+        assert chunk.start_char_offset == all_offsets[0][0]
+        assert chunk.end_char_offset == all_offsets[-1][1]
+        assert chunk.start_char_offset <= chunk.end_char_offset

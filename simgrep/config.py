@@ -1,18 +1,17 @@
 import json
-import sys  # for printing to stderr
+import sys
 import tomllib
 from pathlib import Path
 from typing import Any, Dict
 
 try:
+    from .core.models import ProjectConfig, SimgrepConfig
     from .metadata_db import connect_global_db, get_project_by_name, insert_project
-    from .models import ProjectConfig, SimgrepConfig
 except ImportError:
+    from simgrep.core.models import ProjectConfig, SimgrepConfig  # type: ignore
     from simgrep.metadata_db import connect_global_db, get_project_by_name, insert_project  # type: ignore
-    from simgrep.models import ProjectConfig, SimgrepConfig  # type: ignore
 
 
-# default number of top results to fetch for searches
 DEFAULT_K_RESULTS = 5
 
 
@@ -58,10 +57,8 @@ def initialize_global_config(overwrite: bool = False) -> None:
         print(error_message, file=sys.stderr)
         raise SimgrepConfigError(error_message) from e
 
-    # Write config.toml
     _write_config(config)
 
-    # Create global DB and default project
     global_db_path = config.db_directory / "global_metadata.duckdb"
     conn = connect_global_db(global_db_path)
     try:
