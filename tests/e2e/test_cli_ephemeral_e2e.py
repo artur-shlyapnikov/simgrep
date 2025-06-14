@@ -20,6 +20,15 @@ pytest.importorskip("usearch.index")
 
 
 class TestCliEphemeralE2E:
+    @pytest.fixture(autouse=True)
+    def _init_global_for_e2e(self, temp_simgrep_home: pathlib.Path) -> None:
+        """
+        Most E2E tests require a global config to exist, even if they don't
+        use a persistent project, due to model caching etc.
+        This fixture ensures the global config is present for all tests in the class.
+        """
+        run_simgrep_command(["init", "--global"])
+
     @pytest.fixture
     def ephemeral_docs_dir(self, tmp_path: pathlib.Path) -> pathlib.Path:
         """Creates a directory with sample files for ephemeral search tests."""

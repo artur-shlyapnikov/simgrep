@@ -6,6 +6,7 @@ from unittest.mock import patch
 from typer.testing import CliRunner
 
 from simgrep.config import load_global_config
+from simgrep.core.errors import SimgrepConfigError
 from simgrep.main import app
 from simgrep.metadata_db import connect_global_db, get_project_config
 

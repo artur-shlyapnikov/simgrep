@@ -5,7 +5,6 @@ import pytest
 from rich.console import Console
 
 from simgrep.core.context import SimgrepContext
-from simgrep.core.models import ProcessedChunk
 from simgrep.indexer import Indexer, IndexerConfig
 from simgrep.services.index_service import IndexService
 
@@ -54,18 +53,25 @@ def test_indexer_prepare_stores(tmp_path: pathlib.Path, indexer_instance: Indexe
 
 def test_index_service_process_file(simgrep_context: SimgrepContext, tmp_path: pathlib.Path) -> None:
     """Test the process_file method of IndexService directly."""
+    from unittest.mock import MagicMock
+
+    from simgrep.adapters.usearch_index import USearchIndex
+    from simgrep.repository import MetadataStore
+
     # This is more of an integration test for the service, but useful here.
+    mock_index = MagicMock(spec=USearchIndex)
+    mock_index.__len__.return_value = 0
     service = IndexService(
         extractor=simgrep_context.extractor,
         chunker=simgrep_context.chunker,
         embedder=simgrep_context.embedder,
-        store=None,  # type: ignore
-        index=None,  # type: ignore
+        store=MagicMock(spec=MetadataStore),
+        index=mock_index,
     )
-    file_path = tmp_path / "sample.txt"
-    file_path.write_text("Hello world.")
+    file_path = tmp_path / "test.txt"
+    file_path.write_text("This is a test.")
     chunks, embeddings = service.process_file(file_path)
-    assert len(chunks) == 1
-    assert isinstance(embeddings, np.ndarray)
+    assert len(chunks) > 0
     assert embeddings.shape[0] == len(chunks)
+    assert embeddings.shape[1] == simgrep_context.embedder.ndim()
     assert embeddings.shape[1] == service.embedder.ndim

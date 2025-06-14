@@ -3,6 +3,7 @@ from typing import Any, Dict, List
 
 from rich.console import Console
 
+from simgrep.core.models import SearchResult
 from simgrep.ui.formatters import format_count, format_paths, format_show_basic
 
 
@@ -103,29 +104,29 @@ class TestFormatPaths:
 class TestFormatCount:
     def test_format_count_with_results(self) -> None:
         results = [
-            {"file_path": Path("/a/b.txt")},
-            {"file_path": Path("/a/c.txt")},
-            {"file_path": Path("/a/b.txt")},
+            SearchResult(label=1, score=1.0, file_path=Path("/a/b.txt")),
+            SearchResult(label=2, score=1.0, file_path=Path("/a/c.txt")),
+            SearchResult(label=3, score=1.0, file_path=Path("/a/b.txt")),
         ]
         output = format_count(results)
         assert output == "3 matching chunks in 2 files."
 
     def test_format_count_no_results(self) -> None:
-        results: List[Dict[str, Any]] = []
+        results: List[SearchResult] = []
         output = format_count(results)
         assert output == "0 matching chunks in 0 files."
 
     def test_format_count_one_result(self) -> None:
         results = [
-            {"file_path": Path("/a/b.txt")},
+            SearchResult(label=1, score=1.0, file_path=Path("/a/b.txt")),
         ]
         output = format_count(results)
         assert output == "1 matching chunk in 1 file."
 
     def test_format_count_plural_chunks_singular_file(self) -> None:
         results = [
-            {"file_path": Path("/a/b.txt")},
-            {"file_path": Path("/a/b.txt")},
+            SearchResult(label=1, score=1.0, file_path=Path("/a/b.txt")),
+            SearchResult(label=2, score=1.0, file_path=Path("/a/b.txt")),
         ]
         output = format_count(results)
         assert output == "2 matching chunks in 1 file."

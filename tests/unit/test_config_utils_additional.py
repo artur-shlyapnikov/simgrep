@@ -8,7 +8,7 @@ from simgrep.config import (
     _serialize_paths,
     save_config,
 )
-from simgrep.models import OutputMode, ProjectConfig
+from simgrep.core.models import OutputMode, ProjectConfig
 
 
 def test_serialize_paths_simple(tmp_path: Path) -> None:

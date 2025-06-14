@@ -19,6 +19,7 @@ def docs_with_gitignore(tmp_path: pathlib.Path) -> pathlib.Path:
     """
     project_dir = tmp_path / "gitignore_project"
     project_dir.mkdir()
+    (project_dir / ".git").mkdir()  # For .gitignore discovery
 
     # .gitignore file
     (project_dir / ".gitignore").write_text(
@@ -56,6 +57,11 @@ ignored_dir/
 
 
 class TestCliGitignoreE2E:
+    @pytest.fixture(autouse=True)
+    def _init_global_for_e2e(self, temp_simgrep_home: pathlib.Path) -> None:
+        """Initializes global config for all tests in this class."""
+        run_simgrep_command(["init", "--global"])
+
     def test_ephemeral_search_respects_gitignore(self, docs_with_gitignore: pathlib.Path, temp_simgrep_home: pathlib.Path) -> None:
         """
         Tests that ephemeral search (`simgrep search <path>`) correctly ignores files
@@ -143,6 +149,7 @@ class TestCliGitignoreE2E:
         """
         project_dir = tmp_path / "nested_ignore_project"
         project_dir.mkdir()
+        (project_dir / ".git").mkdir()  # For .gitignore discovery
 
         # Root .gitignore
         (project_dir / ".gitignore").write_text("*.log\n")

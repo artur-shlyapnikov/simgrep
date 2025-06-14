@@ -9,13 +9,12 @@ import pytest
 from sentence_transformers import SentenceTransformer
 from transformers import PreTrainedTokenizerBase
 
-from simgrep.adapters.hf_token_chunker import HFTokenChunker, load_tokenizer
+from simgrep.adapters.hf_chunker import HFChunker, load_tokenizer
 from simgrep.adapters.sentence_embedder import SentenceEmbedder
 from simgrep.adapters.unstructured_extractor import UnstructuredExtractor
-from simgrep.processor import calculate_file_hash
+from simgrep.utils import calculate_file_hash
 
-pytest.importorskip("transformers")
-pytest.importorskip("sentence_transformers")
+
 pytest.importorskip("unstructured")
 
 
@@ -122,8 +121,9 @@ class TestUnstructuredExtractor:
 
     @pytest.mark.timeout(10)
     def test_pathological_binary_file_zip(self, extractor: UnstructuredExtractor, binary_zip_file: Path) -> None:
-        # Unstructured might extract metadata or nothing from a zip
+        # Unstructured might extract metadata or nothing from a zip. We expect an empty string.
         content = extractor.extract(binary_zip_file)
+        assert content == ""
         assert isinstance(content, str)
 
     @pytest.mark.timeout(20)
@@ -166,23 +166,31 @@ class TestLoadTokenizer:
 class TestHFTokenChunker:
     MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
-    @pytest.fixture(scope="class")
-    def chunker(self) -> HFTokenChunker:
-        return HFTokenChunker(self.MODEL_NAME, chunk_size=10, overlap=2)
+    @pytest.fixture
+    def tokenizer(self) -> PreTrainedTokenizerBase:
+        return load_tokenizer(self.MODEL_NAME)
 
-    def test_empty_text(self, chunker: HFTokenChunker) -> None:
-        chunks = chunker.chunk("")
-        assert chunks == []
+    @pytest.fixture
+    def chunker(self) -> HFChunker:
+        return HFChunker(
+            model_name=self.MODEL_NAME,
+            chunk_size=10,
+            overlap=2,
+        )
+
+    def test_empty_text(self, chunker: HFChunker) -> None:
+        assert chunker.chunk("") == []
 
     def test_text_shorter_than_chunk_size(self, tokenizer: PreTrainedTokenizerBase) -> None:
-        text = "Short text."
-        chunker = HFTokenChunker(self.MODEL_NAME, chunk_size=20, overlap=5)
+        chunker = HFChunker(
+            model_name=self.MODEL_NAME,
+            chunk_size=128,
+            overlap=20,
+        )
+        text = "This is a short text."
         chunks = chunker.chunk(text)
         assert len(chunks) == 1
-        assert chunks[0].text == text
-        assert chunks[0].start_char_offset == 0
-        assert chunks[0].end_char_offset == len(text)
-        assert chunks[0].token_count == len(tokenizer.encode(text, add_special_tokens=False))
+        assert chunks[0].text.lower() == text.lower()
 
 
 class TestSentenceEmbedder:

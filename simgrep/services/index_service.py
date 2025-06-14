@@ -36,13 +36,18 @@ class IndexService:
         self.store = store
         self.index = index
         self._current_usearch_label: int = 0
-        if len(self.index) > 0:
+        if self.index is not None and len(self.index) > 0:
             try:
-                # Get the highest existing label to continue from there.
-                # USearch keys are not guaranteed to be sorted, so we find the max.
-                max_existing_label = np.max(self.index.keys)
-                self._current_usearch_label = int(max_existing_label) + 1
-            except (ValueError, IndexError):  # ValueError if keys is empty, though we check len > 0
+                keys = self.index.keys()
+                if keys.size > 0:
+                    # Get the highest existing label to continue from there.
+                    # USearch keys are not guaranteed to be sorted, so we find the max.
+                    max_existing_label = np.max(keys)
+                    self._current_usearch_label = int(max_existing_label) + 1
+            except (
+                ValueError,
+                IndexError,
+            ):  # ValueError if keys is empty, though we check len > 0
                 self._current_usearch_label = 0
 
     def process_file(self, file_path: Path) -> Tuple[List[Chunk], np.ndarray]:
@@ -121,10 +126,14 @@ class IndexService:
 
         files_to_process: List[Path]
         all_found_files_set = set()
-        _console.print(f"Scanning {len(target_paths)} path(s) for files matching patterns: {file_scan_patterns}...")
+        _console.print(
+            f"Scanning {len(target_paths)} path(s) for files matching patterns: {file_scan_patterns}..."
+        )
         for target_path in target_paths:
             if not target_path.exists():
-                _console.print(f"[yellow]Warning: Path '{target_path}' does not exist. Skipping.[/yellow]")
+                _console.print(
+                    f"[yellow]Warning: Path '{target_path}' does not exist. Skipping.[/yellow]"
+                )
                 continue
             if target_path.is_file():
                 all_found_files_set.add(target_path)
@@ -137,14 +146,19 @@ class IndexService:
         files_to_process = sorted(list(all_found_files_set))
 
         if not files_to_process:
-            _console.print("[yellow]No files found to index in any of the provided paths with current patterns.[/yellow]")
+            _console.print(
+                "[yellow]No files found to index in any of the provided paths with current patterns.[/yellow]"
+            )
             return 0, 0, 0
         else:
             _console.print(f"Found {len(files_to_process)} total file(s) to process.")
 
         existing_records = {}
         if not wipe_existing:
-            existing_records = {Path(p).resolve(): (fid, chash) for fid, p, chash in self.store.get_all_indexed_file_records()}
+            existing_records = {
+                Path(p).resolve(): (fid, chash)
+                for fid, p, chash in self.store.get_all_indexed_file_records()
+            }
             current_paths = {p.resolve() for p in files_to_process}
             deleted_paths = set(existing_records.keys()) - current_paths
             for del_p in deleted_paths:
@@ -155,7 +169,9 @@ class IndexService:
 
         file_processing_task: Optional[TaskID] = None
         if progress:
-            file_processing_task = progress.add_task("[cyan]Indexing files...", total=len(files_to_process))
+            file_processing_task = progress.add_task(
+                "[cyan]Indexing files...", total=len(files_to_process)
+            )
 
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             future_map = {}
@@ -166,18 +182,32 @@ class IndexService:
                         current_hash = calculate_file_hash(resolved_fp)
                         stored_id, stored_hash = existing_records[resolved_fp]
                         if current_hash == stored_hash:
-                            _console.print(f"[yellow]Skipped (unchanged): {file_p}[/yellow]")
+                            _console.print(
+                                f"[yellow]Skipped (unchanged): {file_p}[/yellow]"
+                            )
                             if progress and file_processing_task is not None:
-                                progress.update(file_processing_task, advance=1, description=f"Skipped (unchanged): {file_p.name}")
+                                progress.update(
+                                    file_processing_task,
+                                    advance=1,
+                                    description=f"Skipped (unchanged): {file_p.name}",
+                                )
                             total_files_processed += 1
                             continue
                         removed_labels = self.store.delete_file_records(stored_id)
                         if self.index is not None and removed_labels:
-                            self.index.remove(keys=np.array(removed_labels, dtype=np.int64))
+                            self.index.remove(
+                                keys=np.array(removed_labels, dtype=np.int64)
+                            )
                     except (IOError, FileNotFoundError) as e:
-                        _console.print(f"[bold red]Error checking file {resolved_fp}: {e}[/bold red]")
+                        _console.print(
+                            f"[bold red]Error checking file {resolved_fp}: {e}[/bold red]"
+                        )
                         if progress and file_processing_task is not None:
-                            progress.update(file_processing_task, advance=1, description=f"Skipped (error): {file_p.name}")
+                            progress.update(
+                                file_processing_task,
+                                advance=1,
+                                description=f"Skipped (error): {file_p.name}",
+                            )
                         total_errors += 1
                         continue
 
@@ -192,7 +222,10 @@ class IndexService:
                     stat = file_path.stat()
                     file_hash = calculate_file_hash(file_path)
                     file_id = self.store.insert_indexed_file_record(
-                        file_path=str(file_path), content_hash=file_hash, file_size_bytes=stat.st_size, last_modified_os_timestamp=stat.st_mtime
+                        file_path=str(file_path),
+                        content_hash=file_hash,
+                        file_size_bytes=stat.st_size,
+                        last_modified_os_timestamp=stat.st_mtime,
                     )
                     if file_id is not None and chunks:
                         self.store_file_chunks(
@@ -203,11 +236,21 @@ class IndexService:
                         total_chunks_indexed += len(chunks)
                     total_files_processed += 1
                     if progress and file_processing_task is not None:
-                        progress.update(file_processing_task, advance=1, description=f"Processed: {file_display} ({len(chunks)} chunks)")
+                        progress.update(
+                            file_processing_task,
+                            advance=1,
+                            description=f"Processed: {file_display} ({len(chunks)} chunks)",
+                        )
                 except Exception as e:
-                    _console.print(f"[bold red]Error processing {file_path}: {e}[/bold red]")
+                    _console.print(
+                        f"[bold red]Error processing {file_path}: {e}[/bold red]"
+                    )
                     total_errors += 1
                     if progress and file_processing_task is not None:
-                        progress.update(file_processing_task, advance=1, description=f"Skipped (error): {file_display}")
+                        progress.update(
+                            file_processing_task,
+                            advance=1,
+                            description=f"Skipped (error): {file_display}",
+                        )
 
         return total_files_processed, total_chunks_indexed, total_errors

@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 
 from simgrep.config import SimgrepConfigError, initialize_global_config, load_global_config
-from simgrep.models import SimgrepConfig
+from simgrep.core.models import SimgrepConfig
 
 
 class TestSimgrepConfig:

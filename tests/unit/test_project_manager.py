@@ -3,6 +3,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from simgrep.config import initialize_global_config, load_global_config
+from simgrep.core.models import ProjectConfig
 from simgrep.project_manager import ProjectManager
 
 
@@ -25,6 +26,7 @@ def test_create_add_get(tmp_path: Path) -> None:
         manager = ProjectManager(cfg)
 
         project_cfg = manager.create_project("myproj")
+        assert isinstance(project_cfg, ProjectConfig)
         project_dir = cfg.db_directory / "projects" / "myproj"
         assert project_dir.exists()
         assert project_cfg.db_path == project_dir / "metadata.duckdb"

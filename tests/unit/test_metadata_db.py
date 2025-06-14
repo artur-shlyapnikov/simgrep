@@ -128,7 +128,7 @@ class TestMetadataDB:
         # or, more directly for testing unique on file_path:
         metadata2 = [(1, file_path)]  # different id, same path
         # temp_files.file_path has a unique constraint
-        with pytest.raises(duckdb.ConstraintException):
+        with pytest.raises(MetadataDBError):
             store.batch_insert_files(metadata2)
 
     def test_batch_insert_files_duplicate_file_id(self, store: MetadataStore, tmp_path: pathlib.Path) -> None:
@@ -142,7 +142,7 @@ class TestMetadataDB:
 
         store.batch_insert_files(metadata1)
         # temp_files.file_id is primary key
-        with pytest.raises(duckdb.ConstraintException):
+        with pytest.raises(MetadataDBError):
             store.batch_insert_files(metadata2)
 
     def test_batch_insert_chunks(
@@ -180,7 +180,7 @@ class TestMetadataDB:
         sample_chunk_data_list: list[ChunkData],
     ) -> None:
         # This should fail because the corresponding files are not in the DB
-        with pytest.raises(duckdb.ConstraintException):
+        with pytest.raises(MetadataDBError):
             store.batch_insert_chunks(sample_chunk_data_list)
 
     def test_batch_insert_chunks_unique_constraint_chunk_id(
@@ -202,9 +202,9 @@ class TestMetadataDB:
             token_count=3,
         )
         extended_chunk_list = sample_chunk_data_list + [chunk_with_duplicate_id]
-
+    
         # temp_chunks.chunk_id is primary key
-        with pytest.raises(duckdb.ConstraintException):
+        with pytest.raises(MetadataDBError):
             store.batch_insert_chunks(extended_chunk_list)
 
     def test_retrieve_chunk_for_display_valid_id(

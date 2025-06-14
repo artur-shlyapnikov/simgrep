@@ -3,6 +3,7 @@ import pathlib
 import pytest
 from rich.console import Console
 
+from simgrep.core.context import SimgrepContext
 from simgrep.indexer import Indexer, IndexerConfig
 
 pytest.importorskip("transformers")
@@ -26,7 +27,12 @@ def test_index_with_workers(tmp_path: pathlib.Path) -> None:
         file_scan_patterns=["*.txt"],
         max_index_workers=2,
     )
-    indexer = Indexer(cfg, Console(quiet=True))
+    context = SimgrepContext.from_defaults(
+        model_name=cfg.embedding_model_name,
+        chunk_size=cfg.chunk_size_tokens,
+        chunk_overlap=cfg.chunk_overlap_tokens,
+    )
+    indexer = Indexer(cfg, context, Console(quiet=True))
     indexer.run_index([data_dir], wipe_existing=True)
 
     assert cfg.db_path.exists()

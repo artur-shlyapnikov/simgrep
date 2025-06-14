@@ -3,7 +3,7 @@ from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 from transformers import PreTrainedTokenizerBase
 
-from simgrep.adapters.hf_token_chunker import HFTokenChunker, load_tokenizer
+from simgrep.adapters.hf_chunker import HFChunker, load_tokenizer
 
 pytest.importorskip("transformers")
 pytest.importorskip("sentence_transformers")
@@ -34,18 +34,22 @@ def test_chunk_text_roundtrip(tokenizer: PreTrainedTokenizerBase, text: str, chu
 
     # To test the roundtrip logic, we force the chunker to produce only one chunk
     # that covers all the tokens. This simplifies checking offsets and content.
-    chunk_size_for_one_chunk = max(chunk_size_tokens, len(token_ids) + 1)
+    # To guarantee one chunk, chunk_size must be >= len(tokens) + overlap.
+    # This ensures the stride is large enough to not produce a second, overlapping chunk.
+    if not token_ids:
+        # For empty text, we expect empty chunks. We can test this with any valid chunker.
+        chunker = HFChunker(model_name=MODEL_NAME, chunk_size=128, overlap=20)
+        assert chunker.chunk(text) == []
+        return
 
-    chunker = HFTokenChunker(
+    chunk_size_for_one_chunk = len(token_ids) + overlap_tokens
+
+    chunker = HFChunker(
         model_name=MODEL_NAME,
         chunk_size=chunk_size_for_one_chunk,
         overlap=overlap_tokens,
     )
     chunks = chunker.chunk(text)
-
-    if not token_ids:
-        assert chunks == []
-        return
 
     # It's possible for text to produce tokens which then decode to an empty string.
     # In this case, we might get a single chunk with empty text.
@@ -60,6 +64,6 @@ def test_chunk_text_roundtrip(tokenizer: PreTrainedTokenizerBase, text: str, chu
     assert chunk.text == expected_decoded_text
 
     if all_offsets:
-        assert chunk.start_char_offset == all_offsets[0][0]
-        assert chunk.end_char_offset == all_offsets[-1][1]
-        assert chunk.start_char_offset <= chunk.end_char_offset
+        assert chunk.start == all_offsets[0][0]
+        assert chunk.end == all_offsets[-1][1]
+        assert chunk.start <= chunk.end

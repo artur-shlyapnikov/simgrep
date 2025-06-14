@@ -7,6 +7,7 @@ from rich.console import Console
 
 from simgrep.adapters.sentence_embedder import SentenceEmbedder
 from simgrep.adapters.usearch_index import USearchIndex
+from simgrep.core.context import SimgrepContext
 from simgrep.core.models import OutputMode, SimgrepConfig
 from simgrep.indexer import Indexer, IndexerConfig
 from simgrep.repository import MetadataStore
@@ -18,27 +19,12 @@ pytest.importorskip("sentence_transformers")
 pytest.importorskip("usearch.index")
 
 
-# Fixtures
-@pytest.fixture
-def test_console() -> Console:
-    """Provides a Rich Console instance that writes to stdout, compatible with capsys."""
-    return Console(width=120)
-
-
 @pytest.fixture(scope="session")
 def persistent_search_test_data_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """Creates dummy files in a temporary directory for indexing in persistent search tests."""
+    """Creates a temporary directory with test files, scoped to the session."""
     data_dir = tmp_path_factory.mktemp("persistent_search_data")
-
-    file1_content = "This file discusses advanced information retrieval techniques. A very specific keyword is xyz_super_unique."
-    (data_dir / "file1.txt").write_text(file1_content)
-
-    file2_content = "Another document mentioning simgrep. Semantic search is powerful."
-    (data_dir / "file2.txt").write_text(file2_content)
-
-    file3_content = "A completely unrelated file about apples and oranges."
-    (data_dir / "file3.txt").write_text(file3_content)
-
+    (data_dir / "file1.txt").write_text("simgrep is a tool for semantic search.")
+    (data_dir / "file2.txt").write_text("You can use it to find similar text.")
     return data_dir
 
 
@@ -51,7 +37,7 @@ def default_simgrep_config_for_search_tests(
     default_proj_data_dir = simgrep_root_config_dir / "default_project"
     default_proj_data_dir.mkdir(parents=True, exist_ok=True)
 
-    cfg = SimgrepConfig(default_project_data_dir=default_proj_data_dir)
+    cfg = SimgrepConfig(default_project_data_dir=default_proj_data_dir, default_embedding_model_name="sentence-transformers/all-MiniLM-L6-v2")
     return cfg
 
 
@@ -74,17 +60,22 @@ def populated_persistent_index_for_searcher(
         usearch_file.unlink()
 
     indexer_config = IndexerConfig(
-        project_name="test_searcher_fixture_project",
+        project_name="searcher_test_project",
         db_path=db_file,
         usearch_index_path=usearch_file,
         embedding_model_name=cfg.default_embedding_model_name,
-        chunk_size_tokens=cfg.default_chunk_size_tokens,
-        chunk_overlap_tokens=cfg.default_chunk_overlap_tokens,
+        chunk_size_tokens=10,
+        chunk_overlap_tokens=2,
         file_scan_patterns=["*.txt"],
     )
 
     indexer_console = Console(quiet=True)
-    indexer = Indexer(config=indexer_config, console=indexer_console)
+    simgrep_context = SimgrepContext.from_defaults(
+        model_name=indexer_config.embedding_model_name,
+        chunk_size=indexer_config.chunk_size_tokens,
+        chunk_overlap=indexer_config.chunk_overlap_tokens,
+    )
+    indexer = Indexer(config=indexer_config, context=simgrep_context, console=indexer_console)
     indexer.run_index(target_paths=[persistent_search_test_data_path], wipe_existing=True)
 
     store = MetadataStore(persistent=True, db_path=db_file)
@@ -98,22 +89,34 @@ def populated_persistent_index_for_searcher(
 
 
 class TestSearcherPersistentIntegration:
+    @pytest.fixture
+    def test_console(self) -> Console:
+        """Provides a Rich Console instance for tests, capturing output."""
+        return Console(record=True)
+
     @pytest.mark.parametrize(
         "query, output_mode, expected_strings, min_score",
         [
             pytest.param(
-                "xyz_super_unique",
+                "semantic search",
                 OutputMode.show,
-                ["File:", "Score:", "Chunk:", "file1.txt"],
+                ["simgrep is a tool for semantic search"],
                 0.25,
-                id="show_mode_with_results",
+                id="show_mode",
             ),
             pytest.param(
-                "semantic search",
+                "similar text",
                 OutputMode.paths,
                 ["file2.txt"],
                 0.25,
-                id="paths_mode_with_results",
+                id="paths_mode",
+            ),
+            pytest.param(
+                "simgrep",
+                OutputMode.show,
+                ["simgrep is a tool for semantic search", "Score: "],
+                0.6,  # High score to filter out the less relevant match
+                id="show_mode_high_min_score",
             ),
         ],
     )
@@ -142,9 +145,9 @@ class TestSearcherPersistentIntegration:
         assert results
         if output_mode == OutputMode.show:
             for r in results:
-                test_console.print(format_show_basic(r["file_path"], r["chunk_text"], r["score"]))
+                print(format_show_basic(r.file_path, r.chunk_text, r.score))
         elif output_mode == OutputMode.paths:
-            test_console.print(format_paths([r["file_path"] for r in results], False, None))
+            print(format_paths([r.file_path for r in results], False, None))
 
         captured = capsys.readouterr()
         output_str = captured.out.replace("\n", "")
