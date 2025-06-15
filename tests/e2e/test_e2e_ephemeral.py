@@ -188,7 +188,7 @@ class TestCliEphemeralE2E:
         # Check for the custom error message on stdout
         assert "Error: Path" in result.stdout
         assert "does not exist" in result.stdout
-        assert "this_path_does_not_exist" in result.stdout
+        assert "this_path_does_not_exist" in result.stdout.replace("\n", "")
 
     def test_ephemeral_search_multiple_patterns(self, tmp_path: pathlib.Path) -> None:
         """

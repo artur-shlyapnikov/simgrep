@@ -376,7 +376,7 @@ class TestIndexerRobustnessE2E:
 
         search_result = run_simgrep_command(["search", "symlinked file", "--project", "symlink-test"])
         assert search_result.exit_code == 0
-        assert str(target_file.resolve()) in search_result.stdout
+        assert str(target_file.resolve()) in search_result.stdout.replace("\n", "")
 
     def test_index_handles_unreadable_file_gracefully(self, temp_simgrep_home: pathlib.Path, tmp_path: pathlib.Path) -> None:
         project_dir = tmp_path / "unreadable_proj"
