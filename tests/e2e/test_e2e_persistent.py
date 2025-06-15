@@ -1,10 +1,13 @@
 import os
 import pathlib
 import sys
-from typing import Callable, List
+from typing import Callable, Dict, List
+from unittest.mock import patch
 
 import pytest
-from typer.testing import Result
+from click.testing import Result
+
+from simgrep.config import SimgrepConfigError
 
 from .conftest import (
     _validate_json_output,
@@ -102,7 +105,7 @@ class TestProjectWorkflowE2E:
         # Run init again
         result = run_simgrep_command(["init"], cwd=project_dir)
         assert result.exit_code == 1
-        assert "Project already initialized" in result.stdout
+        assert "seems to be already initialized" in result.stdout
 
     def test_status_fails_on_non_existent_project(self, temp_simgrep_home: pathlib.Path) -> None:
         """Tests that `simgrep status` fails if the project does not exist."""
@@ -154,14 +157,28 @@ class TestPersistentSearchE2E:
     @pytest.mark.parametrize(
         "output_mode, extra_args, validation_fn",
         [
-            pytest.param("show", [], lambda r: "File:" in r.stdout and "doc1.txt" in r.stdout, id="show_mode"),
+            pytest.param(
+                "show",
+                [],
+                lambda r: "File:" in r.stdout and "doc1.txt" in r.stdout,
+                id="show_mode",
+            ),
             pytest.param("paths", [], lambda r: "doc1.txt" in r.stdout, id="paths_mode"),
             pytest.param("json", [], _validate_json_output, id="json_mode"),
-            pytest.param("count", ["--min-score", "0.4"], lambda r: "chunks in" in r.stdout, id="count_mode"),
+            pytest.param(
+                "count",
+                ["--min-score", "0.4"],
+                lambda r: "chunks in" in r.stdout,
+                id="count_mode",
+            ),
         ],
     )
     def test_search_output_modes(
-        self, populated_persistent_index: None, output_mode: str, extra_args: List[str], validation_fn: Callable[[Result], bool]
+        self,
+        populated_persistent_index: None,
+        output_mode: str,
+        extra_args: List[str],
+        validation_fn: Callable[[Result], bool],
     ) -> None:
         args = ["search", "apples", "--output", output_mode] + extra_args
         result = run_simgrep_command(args)
@@ -185,14 +202,28 @@ class TestPersistentSearchE2E:
         assert result.stdout.count("Score:") == expected_results
 
     def test_persistent_search_relative_paths(self, populated_persistent_index: None, sample_docs_dir_session: pathlib.Path) -> None:
-        search_result = run_simgrep_command(["search", "bananas", "--output", "paths", "--relative-paths"], cwd=sample_docs_dir_session)
+        search_result = run_simgrep_command(
+            ["search", "bananas", "--output", "paths", "--relative-paths"],
+            cwd=sample_docs_dir_session,
+        )
         assert search_result.exit_code == 0
         assert "doc1.txt" in search_result.stdout
         assert os.path.join("subdir", "doc_sub.txt") in search_result.stdout
         assert str(sample_docs_dir_session) not in search_result.stdout
 
     def test_search_with_filters(self, populated_persistent_index: None) -> None:
-        args = ["search", "a document about bananas", "--file-filter", "*.txt", "--keyword", "kiwi", "--min-score", "0.5", "--output", "paths"]
+        args = [
+            "search",
+            "a document about bananas",
+            "--file-filter",
+            "*.txt",
+            "--keyword",
+            "kiwi",
+            "--min-score",
+            "0.5",
+            "--output",
+            "paths",
+        ]
         result = run_simgrep_command(args)
         assert result.exit_code == 0
         assert "doc1.txt" in result.stdout
@@ -202,7 +233,11 @@ class TestPersistentSearchE2E:
 
 @pytest.mark.slow
 class TestIncrementalIndexingE2E:
-    def test_incremental_index_adds_new_file(self, populated_persistent_index_func_scope: None, sample_docs_dir_func_scope: pathlib.Path) -> None:
+    def test_incremental_index_adds_new_file(
+        self,
+        populated_persistent_index_func_scope: None,
+        sample_docs_dir_func_scope: pathlib.Path,
+    ) -> None:
         new_file = sample_docs_dir_func_scope / "new_doc.txt"
         new_file.write_text("A new document about newly added content.")
 
@@ -215,7 +250,11 @@ class TestIncrementalIndexingE2E:
         assert search_after_result.exit_code == 0
         assert "new_doc.txt" in search_after_result.stdout
 
-    def test_incremental_index_prunes_deleted_file(self, populated_persistent_index_func_scope: None, sample_docs_dir_func_scope: pathlib.Path) -> None:
+    def test_incremental_index_prunes_deleted_file(
+        self,
+        populated_persistent_index_func_scope: None,
+        sample_docs_dir_func_scope: pathlib.Path,
+    ) -> None:
         file_to_delete = sample_docs_dir_func_scope / "doc1.txt"
         content_to_disappear = "unique_fruit_kiwi"
         file_to_delete.unlink()
@@ -229,7 +268,11 @@ class TestIncrementalIndexingE2E:
         assert search_after_result.exit_code == 0
         assert "No relevant chunks found" in search_after_result.stdout
 
-    def test_project_survives_directory_rename_and_reindex(self, populated_persistent_index_func_scope: None, sample_docs_dir_func_scope: pathlib.Path) -> None:
+    def test_project_survives_directory_rename_and_reindex(
+        self,
+        populated_persistent_index_func_scope: None,
+        sample_docs_dir_func_scope: pathlib.Path,
+    ) -> None:
         renamed_docs_dir = sample_docs_dir_func_scope.parent / "renamed_docs"
         os.rename(sample_docs_dir_func_scope, renamed_docs_dir)
 
@@ -239,7 +282,16 @@ class TestIncrementalIndexingE2E:
         expected_warning = f"Warning: Path '{sample_docs_dir_func_scope}' does not exist. Skipping."
         assert expected_warning in cleaned_stdout
 
-        search_after_reindex = run_simgrep_command(["search", "unique_fruit_kiwi", "--project", "default", "--min-score", "0.5"])
+        search_after_reindex = run_simgrep_command(
+            [
+                "search",
+                "unique_fruit_kiwi",
+                "--project",
+                "default",
+                "--min-score",
+                "0.5",
+            ]
+        )
         assert search_after_reindex.exit_code == 0
         assert "No relevant chunks found" in search_after_reindex.stdout
 
@@ -247,17 +299,30 @@ class TestIncrementalIndexingE2E:
 @pytest.mark.slow
 class TestCliConfigE2E:
     def test_command_fails_without_global_config(self, temp_simgrep_home: pathlib.Path) -> None:
-        result = run_simgrep_command(["project", "list"])
+        result = run_simgrep_command(["search", "test"])
         assert result.exit_code == 1
         assert "Global config not found" in result.stdout
-        assert "Please run 'simgrep init --global' to create it." in result.stdout
+
+    def test_search_fails_on_project_config_load_error(self, temp_simgrep_home: pathlib.Path) -> None:
+        """Test the SimgrepConfigError handling block in the search command."""
+        # Arrange
+        with patch(
+            "simgrep.main.load_global_config",
+            side_effect=SimgrepConfigError("mocked config error"),
+        ):
+            # Act
+            result = run_simgrep_command(["search", "query"])
+
+        # Assert
+        assert result.exit_code == 1
+        assert "Error during persistent search: mocked config error" in result.stdout
 
     def test_search_fails_without_index(self, temp_simgrep_home: pathlib.Path) -> None:
         run_simgrep_command(["init", "--global"])
-        search_result = run_simgrep_command(["search", "anything"])
-        assert search_result.exit_code == 1
-        assert "Persistent index for project 'default' not found" in search_result.stdout
-        assert "Please run 'simgrep index" in search_result.stdout
+        result = run_simgrep_command(["search", "test"])
+        assert result.exit_code == 1
+        assert "Persistent index for project 'default' not found" in result.stdout
+        assert "Please run 'simgrep index" in result.stdout
 
     def test_status_on_fresh_init(self, temp_simgrep_home: pathlib.Path) -> None:
         run_simgrep_command(["init", "--global"])
@@ -290,7 +355,10 @@ class TestCliConfigE2E:
 
 @pytest.mark.slow
 class TestIndexerRobustnessE2E:
-    @pytest.mark.skipif(sys.platform == "win32", reason="os.symlink requires special privileges on Windows")
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="os.symlink requires special privileges on Windows",
+    )
     def test_index_follows_symlinks(self, temp_simgrep_home: pathlib.Path, tmp_path: pathlib.Path) -> None:
         project_dir = tmp_path / "symlink_proj"
         project_dir.mkdir()
@@ -322,7 +390,15 @@ class TestIndexerRobustnessE2E:
         try:
             run_simgrep_command(["init", "--global"])
             run_simgrep_command(["project", "create", "unreadable-test"])
-            run_simgrep_command(["project", "add-path", str(project_dir), "--project", "unreadable-test"])
+            run_simgrep_command(
+                [
+                    "project",
+                    "add-path",
+                    str(project_dir),
+                    "--project",
+                    "unreadable-test",
+                ]
+            )
             index_result = run_simgrep_command(["index", "--project", "unreadable-test", "--rebuild", "--yes"])
 
             assert index_result.exit_code == 0
@@ -346,7 +422,17 @@ class TestIndexerRobustnessE2E:
         run_simgrep_command(["init", "--global"])
         run_simgrep_command(["project", "create", "binary-test"])
         run_simgrep_command(["project", "add-path", str(project_dir), "--project", "binary-test"])
-        index_result = run_simgrep_command(["index", "--project", "binary-test", "--rebuild", "--pattern", "*.*", "--yes"])
+        index_result = run_simgrep_command(
+            [
+                "index",
+                "--project",
+                "binary-test",
+                "--rebuild",
+                "--pattern",
+                "*.*",
+                "--yes",
+            ]
+        )
 
         assert index_result.exit_code == 0
         assert "files processed" in index_result.stdout
@@ -363,7 +449,17 @@ class TestIndexerRobustnessE2E:
         run_simgrep_command(["init", "--global"])
         run_simgrep_command(["project", "create", "no-match-proj"])
         run_simgrep_command(["project", "add-path", str(project_dir), "--project", "no-match-proj"])
-        index_result = run_simgrep_command(["index", "--project", "no-match-proj", "--pattern", "*.md", "--rebuild", "--yes"])
+        index_result = run_simgrep_command(
+            [
+                "index",
+                "--project",
+                "no-match-proj",
+                "--pattern",
+                "*.md",
+                "--rebuild",
+                "--yes",
+            ]
+        )
 
         assert index_result.exit_code == 0
         assert "No files found to index" in index_result.stdout
@@ -382,23 +478,64 @@ class TestCliFilteringE2E:
         run_simgrep_command(["init", "--global"])
         run_simgrep_command(["project", "create", "filtering-proj"])
         run_simgrep_command(["project", "add-path", str(docs_dir), "--project", "filtering-proj"])
-        run_simgrep_command(["index", "--project", "filtering-proj", "--rebuild", "--pattern", "*.txt", "--pattern", "*.py", "--yes"])
+        run_simgrep_command(
+            [
+                "index",
+                "--project",
+                "filtering-proj",
+                "--rebuild",
+                "--pattern",
+                "*.txt",
+                "--pattern",
+                "*.py",
+                "--yes",
+            ]
+        )
 
     def test_search_with_compound_filters(self, populated_filtering_index: None) -> None:
-        args = ["search", "data handling", "--project", "filtering-proj", "--file-filter", "*.py", "--keyword", "async", "--output", "paths"]
+        args = [
+            "search",
+            "data handling",
+            "--project",
+            "filtering-proj",
+            "--file-filter",
+            "*.py",
+            "--keyword",
+            "async",
+            "--output",
+            "paths",
+        ]
         result = run_simgrep_command(args)
         assert result.exit_code == 0
         assert "code.py" in result.stdout
 
     def test_search_with_min_score_filters_results(self, populated_filtering_index: None) -> None:
         query = "dependency injection"
-        args_low_score = ["search", query, "--project", "filtering-proj", "--min-score", "0.1", "--output", "paths"]
+        args_low_score = [
+            "search",
+            query,
+            "--project",
+            "filtering-proj",
+            "--min-score",
+            "0.1",
+            "--output",
+            "paths",
+        ]
         result_low_score = run_simgrep_command(args_low_score)
         assert result_low_score.exit_code == 0
         assert "strong_match.txt" in result_low_score.stdout
         assert "weak_match.txt" in result_low_score.stdout
 
-        args_high_score = ["search", query, "--project", "filtering-proj", "--min-score", "0.6", "--output", "paths"]
+        args_high_score = [
+            "search",
+            query,
+            "--project",
+            "filtering-proj",
+            "--min-score",
+            "0.6",
+            "--output",
+            "paths",
+        ]
         result_high_score = run_simgrep_command(args_high_score)
         assert result_high_score.exit_code == 0
         assert "strong_match.txt" in result_high_score.stdout

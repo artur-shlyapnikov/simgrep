@@ -1,5 +1,6 @@
 import hashlib
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -23,6 +24,12 @@ class TestCalculateFileHash:
         missing = tmp_path / "nope.txt"
         with pytest.raises(FileNotFoundError):
             calculate_file_hash(missing)
+
+    def test_calculate_file_hash_io_error(self, temp_text_file: Path) -> None:
+        """Test IOError handling in calculate_file_hash."""
+        with patch("builtins.open", side_effect=OSError("Disk read error")):
+            with pytest.raises(IOError, match="Error reading file for hashing"):
+                calculate_file_hash(temp_text_file)
 
 
 class TestGetProjectNameFromLocalConfig:

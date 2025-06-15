@@ -58,4 +58,5 @@ markers = [
     "timeout: set timeout for a test (requires pytest-timeout)",
     "contract: marks a test as a port contract test",
     "external: marks tests that use external libraries (e.g. huggingface)",
+    "slow: marks a test as slow to run",
 ]

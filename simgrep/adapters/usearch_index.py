@@ -108,8 +108,8 @@ class USearchIndex(VectorIndex):
                 if "cos" in metric_str:
                     similarity = 1.0 - distance
                 elif "ip" in metric_str:
-                    similarity = -distance
-                elif "l2" in metric_str:
+                    similarity = 1.0 - distance
+                elif "l2sq" in metric_str:
                     similarity = 1.0 / (1.0 + distance)
                 else:
                     similarity = -distance
@@ -141,7 +141,12 @@ class USearchIndex(VectorIndex):
 
     @property
     def keys(self) -> np.ndarray:
-        return np.array(self._index.keys, dtype=np.int64)
+        count = len(self._index)
+        if count == 0:
+            return np.array([], dtype=np.int64)
+        # Manual iteration to avoid potential issues with list(view) in some environments like pytest-xdist
+        keys_list = [self._index.keys[i] for i in range(count)]
+        return np.array(keys_list, dtype=np.int64)
 
     def remove(self, keys: np.ndarray) -> None:
         try:

@@ -64,16 +64,19 @@ class Indexer:
             raise IndexerError(f"Database preparation failed: {e}") from e
 
         try:
-            self.usearch_index = self.context.index_factory(self.embedding_ndim)
+            # If index is not initialized, or if we need to wipe, create a new one.
+            if self.usearch_index is None or wipe_existing:
+                self.usearch_index = self.context.index_factory(self.embedding_ndim)
+
             if wipe_existing:
                 self.console.print(f"Wiping existing vector index: {self.config.usearch_index_path}...")
                 self.config.usearch_index_path.unlink(missing_ok=True)
             else:
-                if self.config.usearch_index_path.exists():
+                # If index is empty and file exists, load it.
+                if self.config.usearch_index_path.exists() and self.usearch_index and len(self.usearch_index) == 0:
                     self.console.print(f"Loading vector index from: {self.config.usearch_index_path}...")
-                    if self.usearch_index:
-                        self.usearch_index.load(self.config.usearch_index_path)
-                        self.console.print(f"Loaded existing vector index with {len(self.usearch_index)} items.")
+                    self.usearch_index.load(self.config.usearch_index_path)
+                    self.console.print(f"Loaded existing vector index with {len(self.usearch_index)} items.")
         except (VectorStoreError, FileNotFoundError) as e:
             raise IndexerError(f"Vector store preparation failed: {e}") from e
 

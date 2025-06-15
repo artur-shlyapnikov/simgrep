@@ -1,9 +1,16 @@
 import pathlib
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
-from simgrep.core.abstractions import Embedder, Repository, TextExtractor, TokenChunker
+from simgrep.core.abstractions import (
+    Embedder,
+    Repository,
+    TextExtractor,
+    TokenChunker,
+    VectorIndex,
+)
 from simgrep.services.index_service import IndexService
 
 
@@ -44,3 +51,45 @@ def test_store_file_chunks(index_service: IndexService):
 
     assert len(index_service.index) == 1
     assert index_service.final_max_label == 0
+
+
+def test_run_index_prunes_deleted_files(
+    fake_text_extractor: TextExtractor,
+    fake_token_chunker: TokenChunker,
+    fake_embedder: Embedder,
+    tmp_path: pathlib.Path,
+) -> None:
+    """Test the logic for pruning files that exist in the DB but not on disk."""
+    mock_store = MagicMock(spec=Repository)
+    mock_index = MagicMock(spec=VectorIndex)
+    mock_store.get_max_usearch_label.return_value = None  # for init
+
+    index_service = IndexService(
+        extractor=fake_text_extractor,
+        chunker=fake_token_chunker,
+        embedder=fake_embedder,
+        store=mock_store,
+        index=mock_index,
+    )
+
+    # Arrange
+    deleted_file_path = (tmp_path / "deleted.txt").resolve()
+    mock_store.get_all_indexed_file_records.return_value = [(1, str(deleted_file_path), "hash123")]
+    mock_store.delete_file_records.return_value = [101, 102]
+
+    # Act
+    with patch("simgrep.services.index_service.gather_files_to_process", return_value=[]) as mock_gather:
+        index_service.run_index(
+            target_paths=[tmp_path],
+            file_scan_patterns=["*.txt"],
+            wipe_existing=False,
+            max_workers=1,
+            console=MagicMock(),
+        )
+
+        # Assert
+        mock_gather.assert_called_once_with(tmp_path, ["*.txt"])
+        mock_store.get_all_indexed_file_records.assert_called_once()
+        mock_store.delete_file_records.assert_called_once_with(1)
+        mock_index.remove.assert_called_once()
+        np.testing.assert_array_equal(mock_index.remove.call_args[1]["keys"], np.array([101, 102], dtype=np.int64))

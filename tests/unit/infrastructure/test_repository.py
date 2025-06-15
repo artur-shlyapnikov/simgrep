@@ -1,5 +1,6 @@
 import pathlib
 from typing import Any, Dict, Iterator, List, Tuple
+from unittest.mock import MagicMock, patch
 
 import duckdb
 import pytest
@@ -87,13 +88,20 @@ class TestMetadataStoreInit:
 
 
 class TestMetadataStoreEphemeral:
-    def test_batch_insert_files(self, ephemeral_store: MetadataStore, sample_files_metadata: list[tuple[int, pathlib.Path]]) -> None:
+    def test_batch_insert_files(
+        self,
+        ephemeral_store: MetadataStore,
+        sample_files_metadata: list[tuple[int, pathlib.Path]],
+    ) -> None:
         ephemeral_store.batch_insert_files(sample_files_metadata)
         count_result = ephemeral_store.conn.execute("SELECT COUNT(*) FROM temp_files;").fetchone()
         assert count_result[0] == len(sample_files_metadata)
 
     def test_batch_insert_chunks(
-        self, ephemeral_store: MetadataStore, sample_files_metadata: list[tuple[int, pathlib.Path]], sample_chunk_data_list: list[ChunkData]
+        self,
+        ephemeral_store: MetadataStore,
+        sample_files_metadata: list[tuple[int, pathlib.Path]],
+        sample_chunk_data_list: list[ChunkData],
     ) -> None:
         ephemeral_store.batch_insert_files(sample_files_metadata)
         ephemeral_store.batch_insert_chunks(sample_chunk_data_list)
@@ -101,16 +109,66 @@ class TestMetadataStoreEphemeral:
         assert count_result[0] == len(sample_chunk_data_list)
 
     def test_retrieve_chunk_for_display_valid_id(
-        self, ephemeral_store: MetadataStore, sample_files_metadata: list[tuple[int, pathlib.Path]], sample_chunk_data_list: list[ChunkData]
+        self,
+        ephemeral_store: MetadataStore,
+        sample_files_metadata: list[tuple[int, pathlib.Path]],
+        sample_chunk_data_list: list[ChunkData],
     ) -> None:
         ephemeral_store.batch_insert_files(sample_files_metadata)
         ephemeral_store.batch_insert_chunks(sample_chunk_data_list)
-        chunk_to_retrieve = sample_chunk_data_list[0]
-        retrieved = ephemeral_store.retrieve_chunk_for_display(chunk_to_retrieve.usearch_label)
-        assert retrieved is not None
-        text, path, start, end = retrieved
-        assert text == chunk_to_retrieve.text
-        assert path == chunk_to_retrieve.source_file_path.resolve()
+        chunk = sample_chunk_data_list[0]
+        result = ephemeral_store.retrieve_chunk_for_display(chunk.usearch_label)
+        assert result is not None
+        text, path, _, _ = result
+        assert text == chunk.text
+        assert path == chunk.source_file_path
+
+    def test_retrieve_filtered_chunk_details_ephemeral_mode(
+        self,
+        ephemeral_store: MetadataStore,
+        sample_files_metadata: list[tuple[int, pathlib.Path]],
+        sample_chunk_data_list: list[ChunkData],
+    ) -> None:
+        """Test retrieving filtered chunk details in ephemeral mode."""
+        ephemeral_store.batch_insert_files(sample_files_metadata)
+        ephemeral_store.batch_insert_chunks(sample_chunk_data_list)
+
+        all_labels = [c.usearch_label for c in sample_chunk_data_list]
+        results = ephemeral_store.retrieve_filtered_chunk_details(usearch_labels=all_labels)
+
+        assert len(results) == len(sample_chunk_data_list)
+        assert "file_path" in results[0]
+        assert isinstance(results[0]["file_path"], pathlib.Path)
+
+    def test_batch_insert_files_ephemeral_on_conflict(self, ephemeral_store: MetadataStore, tmp_path: pathlib.Path) -> None:
+        file_path = tmp_path / "conflict.txt"
+        file_path.write_text("content")
+
+        # Insert a file with a specific file_id
+        ephemeral_store.batch_insert_files([(123, file_path)])
+
+        count_before = ephemeral_store.conn.execute("SELECT COUNT(*) FROM temp_files").fetchone()[0]
+        assert count_before == 1
+
+        # Now try to insert with the same file_id but different path
+        another_path = tmp_path / "another.txt"
+        another_path.write_text("more")
+
+        ephemeral_store.batch_insert_files([(123, another_path)])
+
+        count_after = ephemeral_store.conn.execute("SELECT COUNT(*) FROM temp_files").fetchone()[0]
+        assert count_after == 1  # Should not have inserted a new row
+
+        # The original path should still be there because of DO NOTHING
+        retrieved_path = ephemeral_store.conn.execute("SELECT file_path FROM temp_files WHERE file_id = ?", [123]).fetchone()[0]
+        assert retrieved_path == str(file_path.resolve())
+
+    def test_get_index_counts_on_non_persistent_store(self, ephemeral_store: MetadataStore) -> None:
+        """Cover the warning log when get_index_counts is called on an in-memory store."""
+        with patch("simgrep.repository.logger.warning") as mock_log:
+            count = ephemeral_store.get_index_counts()
+            assert count == (0, 0)
+            mock_log.assert_called_once_with("get_index_counts called on a non-persistent store, which is not expected.")
 
 
 @pytest.fixture
@@ -137,9 +195,30 @@ def populated_persistent_store(persistent_store: MetadataStore, tmp_path: pathli
     persistent_store.insert_indexed_file_record(str(file3_path), "h3", 5, 1.0)
 
     chunks = [
-        {"file_id": file1_id, "usearch_label": 10, "chunk_text": "content", "start_char_offset": 0, "end_char_offset": 7, "token_count": 1},
-        {"file_id": file2_id, "usearch_label": 20, "chunk_text": "python", "start_char_offset": 0, "end_char_offset": 6, "token_count": 1},
-        {"file_id": file2_id, "usearch_label": 21, "chunk_text": "KEYWORD", "start_char_offset": 7, "end_char_offset": 12, "token_count": 1},
+        {
+            "file_id": file1_id,
+            "usearch_label": 10,
+            "chunk_text": "content",
+            "start_char_offset": 0,
+            "end_char_offset": 7,
+            "token_count": 1,
+        },
+        {
+            "file_id": file2_id,
+            "usearch_label": 20,
+            "chunk_text": "python",
+            "start_char_offset": 0,
+            "end_char_offset": 6,
+            "token_count": 1,
+        },
+        {
+            "file_id": file2_id,
+            "usearch_label": 21,
+            "chunk_text": "KEYWORD",
+            "start_char_offset": 7,
+            "end_char_offset": 12,
+            "token_count": 1,
+        },
     ]
     persistent_store.batch_insert_text_chunks(chunks)
     persistent_store.set_max_usearch_label(21)
@@ -187,7 +266,10 @@ class TestMetadataStorePersistent:
         assert chunks == 0
 
     def test_delete_file_records(self, populated_persistent_store: MetadataStore, tmp_path: pathlib.Path) -> None:
-        file1_id = populated_persistent_store.conn.execute("SELECT file_id FROM indexed_files WHERE file_path = ?", [str(tmp_path / "file1.txt")]).fetchone()[0]
+        file1_id = populated_persistent_store.conn.execute(
+            "SELECT file_id FROM indexed_files WHERE file_path = ?",
+            [str(tmp_path / "file1.txt")],
+        ).fetchone()[0]
         deleted_labels = populated_persistent_store.delete_file_records(file1_id)
         assert deleted_labels == [10]
         files, chunks = populated_persistent_store.get_index_counts()
@@ -195,7 +277,10 @@ class TestMetadataStorePersistent:
         assert chunks == 2
 
     def test_delete_file_records_no_chunks(self, populated_persistent_store: MetadataStore, tmp_path: pathlib.Path) -> None:
-        file3_id = populated_persistent_store.conn.execute("SELECT file_id FROM indexed_files WHERE file_path = ?", [str(tmp_path / "file3.txt")]).fetchone()[0]
+        file3_id = populated_persistent_store.conn.execute(
+            "SELECT file_id FROM indexed_files WHERE file_path = ?",
+            [str(tmp_path / "file3.txt")],
+        ).fetchone()[0]
         deleted_labels = populated_persistent_store.delete_file_records(file3_id)
         assert deleted_labels == []
         files, chunks = populated_persistent_store.get_index_counts()
@@ -211,3 +296,54 @@ class TestMetadataStorePersistent:
         # Test ON CONFLICT...DO UPDATE
         persistent_store.set_max_usearch_label(90)
         assert persistent_store.get_max_usearch_label() == 90
+
+    def test_batch_insert_chunks_transaction_rollback(self, persistent_store: MetadataStore) -> None:
+        """Ensure the transaction is rolled back if a database error occurs during a batch insert of chunks."""
+        original_conn = persistent_store.conn
+        with patch.object(persistent_store, "conn", MagicMock(wraps=original_conn)) as mock_conn:
+            mock_cursor = MagicMock()
+            mock_cursor.executemany.side_effect = duckdb.Error("mock db error")
+            mock_conn.cursor = MagicMock()
+            mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+
+            chunk_records = [{"file_id": 1, "usearch_label": 1, "chunk_text": "text", "start_char_offset": 0, "end_char_offset": 4, "token_count": 1}]
+
+            with pytest.raises(MetadataDBError, match="Failed during batch insert into 'text_chunks'"):
+                persistent_store.batch_insert_text_chunks(chunk_records)
+
+            mock_conn.execute.assert_any_call("ROLLBACK;")
+
+    def test_delete_file_records_transaction_rollback(self, populated_persistent_store: MetadataStore) -> None:
+        """Verify the transaction rollback logic in delete_file_records."""
+        original_conn = populated_persistent_store.conn
+        file_id_to_delete = original_conn.execute("SELECT file_id FROM indexed_files LIMIT 1").fetchone()[0]
+
+        with patch.object(populated_persistent_store, "conn", MagicMock(wraps=original_conn)) as mock_conn:
+            mock_cursor = MagicMock()
+            # Fail on the second execute call inside the transaction
+            mock_cursor.execute.side_effect = [None, duckdb.Error("mock db error")]
+            mock_conn.cursor = MagicMock()
+            mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+
+            with pytest.raises(MetadataDBError):
+                populated_persistent_store.delete_file_records(file_id_to_delete)
+
+            mock_conn.execute.assert_any_call("ROLLBACK;")
+
+    def test_retrieve_filtered_chunk_details_db_error(self, persistent_store: MetadataStore) -> None:
+        """Cover the except block in retrieve_filtered_chunk_details."""
+        with patch("duckdb.DuckDBPyConnection.execute", side_effect=duckdb.Error("mock db error")):
+            with pytest.raises(MetadataDBError, match="Failed to retrieve filtered chunk details"):
+                persistent_store.retrieve_filtered_chunk_details(usearch_labels=[1, 2, 3])
+
+    def test_get_set_max_usearch_label_db_error(self, persistent_store: MetadataStore) -> None:
+        """Cover the except blocks for get_max_usearch_label and set_max_usearch_label."""
+        # Test get
+        with patch("duckdb.DuckDBPyConnection.execute", side_effect=duckdb.Error("mock get error")):
+            # Should not raise, just return None and log a warning
+            assert persistent_store.get_max_usearch_label() is None
+
+        # Test set
+        with patch("duckdb.DuckDBPyConnection.execute", side_effect=duckdb.Error("mock set error")):
+            with pytest.raises(MetadataDBError, match="Failed to set max usearch label"):
+                persistent_store.set_max_usearch_label(42)

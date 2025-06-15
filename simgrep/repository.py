@@ -230,9 +230,10 @@ class MetadataStore:
             raise MetadataDBError("Failed to retrieve filtered chunk details") from e
 
     def clear_persistent_project_data(self) -> None:
-        logger.info("Clearing all data from 'indexed_files' and cascading to 'text_chunks'.")
+        logger.info("Clearing all data from 'text_chunks' and 'indexed_files'.")
         try:
-            # With ON DELETE CASCADE, this will also clear text_chunks
+            # Manually delete from chunks first due to foreign key constraint
+            self.conn.execute("DELETE FROM text_chunks;")
             self.conn.execute("DELETE FROM indexed_files;")
         except Exception as e:
             logger.error(f"Error clearing persistent project data: {e}")

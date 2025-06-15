@@ -69,7 +69,7 @@ def _create_persistent_tables_if_not_exist(conn: duckdb.DuckDBPyConnection) -> N
             """
             CREATE TABLE IF NOT EXISTS text_chunks (
                 chunk_id BIGINT PRIMARY KEY DEFAULT nextval('text_chunks_chunk_id_seq'),
-                file_id BIGINT NOT NULL REFERENCES indexed_files(file_id) ON DELETE CASCADE,
+                file_id BIGINT NOT NULL REFERENCES indexed_files(file_id),
                 usearch_label BIGINT UNIQUE NOT NULL,
                 chunk_text TEXT NOT NULL,
                 start_char_offset INTEGER NOT NULL,

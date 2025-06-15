@@ -147,12 +147,6 @@ class IndexService:
 
         files_to_process = sorted(list(all_found_files_set))
 
-        if not files_to_process:
-            _console.print("[yellow]No files found to index in any of the provided paths with current patterns.[/yellow]")
-            return 0, 0, 0
-        else:
-            _console.print(f"Found {len(files_to_process)} total file(s) to process.")
-
         existing_records = {}
         if not wipe_existing:
             existing_records = {Path(p).resolve(): (fid, chash) for fid, p, chash in self.store.get_all_indexed_file_records()}
@@ -166,6 +160,12 @@ class IndexService:
                     removed_labels = self.store.delete_file_records(fid)
                     if self.index is not None and removed_labels:
                         self.index.remove(keys=np.array(removed_labels, dtype=np.int64))
+
+        if not files_to_process:
+            _console.print("[yellow]No files found to index in any of the provided paths with current patterns.[/yellow]")
+            return 0, 0, 0
+        else:
+            _console.print(f"Found {len(files_to_process)} total file(s) to process.")
 
         file_processing_task: Optional[TaskID] = None
         if progress:

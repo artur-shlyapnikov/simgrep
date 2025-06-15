@@ -2,6 +2,7 @@ import pathlib
 from unittest.mock import patch
 
 import pytest
+import typer
 from rich.console import Console
 
 from simgrep.core.abstractions import Embedder, TextExtractor, TokenChunker
@@ -72,3 +73,20 @@ def test_ephemeral_searcher_no_results(fake_context: SimgrepContext, tmp_path: p
 
             out = capsys.readouterr().out
             assert "No relevant chunks found" in out
+
+
+def test_ephemeral_searcher_no_files_found(fake_context: SimgrepContext, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Test the code path where gather_files_to_process returns an empty list."""
+    with patch("simgrep.ephemeral_searcher.gather_files_to_process", return_value=[]):
+        console = Console(force_terminal=True, width=120)
+        searcher = EphemeralSearcher(context=fake_context, console=console)
+
+        with pytest.raises(typer.Exit):
+            searcher.search(
+                query_text="query",
+                path_to_search=tmp_path,
+                patterns=["*.txt"],
+            )
+
+        out = capsys.readouterr().out
+        assert "No files found" in out

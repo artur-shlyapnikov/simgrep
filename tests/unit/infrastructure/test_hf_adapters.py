@@ -4,8 +4,13 @@ import numpy as np
 import pytest
 from transformers import PreTrainedTokenizerBase
 
-from simgrep.adapters.hf_chunker import HFChunker
+from unittest.mock import patch
+
+import pytest
+
+from simgrep.adapters.hf_chunker import HFChunker, load_tokenizer
 from simgrep.adapters.sentence_embedder import SentenceEmbedder
+from simgrep.core.errors import SimgrepError
 
 
 @pytest.mark.external
@@ -57,6 +62,7 @@ class TestSentenceEmbedder:
 
             # Use a model name that contains "qwen"
             embedder = SentenceEmbedder("qwen-test-model")
+            mock_model.encode.reset_mock()
             embedder.encode(["my query"], is_query=True)
 
             mock_model.encode.assert_called_once()

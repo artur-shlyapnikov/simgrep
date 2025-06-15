@@ -21,7 +21,7 @@ class UnstructuredExtractor(TextExtractor):
             raise FileNotFoundError(f"File not found or is not a file: {path}")
 
         try:
-            elements: List[Element] = auto_partition.partition(filename=str(path), TESSERACT_LANGUAGES=["eng"])
+            elements: List[Element] = auto_partition.partition(filename=str(path), strategy="fast")
             extracted_texts = [el.text for el in elements if hasattr(el, "text")]
             return "\n".join(extracted_texts)
         except Exception as e:

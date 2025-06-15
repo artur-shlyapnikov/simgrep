@@ -4,11 +4,29 @@ from unittest.mock import patch
 
 import pytest
 
-from simgrep.config import SimgrepConfigError, initialize_global_config, load_global_config
+from simgrep.config import SimgrepConfigError, initialize_global_config, load_global_config, save_config
 from simgrep.core.models import SimgrepConfig
 
 
 class TestSimgrepConfig:
+    def test_save_config(self, tmp_path: Path) -> None:
+        """Test the save_config function."""
+        config_file = tmp_path / "test_config.toml"
+
+        with patch("os.path.expanduser", return_value=str(tmp_path)):
+            config = SimgrepConfig(config_file=config_file)
+
+        # Modify a value
+        config.default_chunk_size_tokens = 512
+
+        # Save it
+        save_config(config)
+
+        # Load and verify
+        assert config_file.exists()
+        reloaded_text = config_file.read_text()
+        assert "default_chunk_size_tokens = 512" in reloaded_text
+
     def test_initialize_and_load_global_config_success(self, tmp_path: Path) -> None:
         """
         Tests successful creation of SimgrepConfig and data directory using mocked home.

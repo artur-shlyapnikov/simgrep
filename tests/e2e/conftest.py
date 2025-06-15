@@ -36,14 +36,12 @@ def run_simgrep_command(
     e2e_env = env.copy() if env else {}
     e2e_env.setdefault("COLUMNS", "200")
 
-    original_cwd = None
-    if cwd:
-        original_cwd = pathlib.Path.cwd()
-        os.chdir(cwd)
-
-    result = runner.invoke(app, args, input=input_str, env=e2e_env)
-
-    if original_cwd:
+    original_cwd = pathlib.Path.cwd()
+    try:
+        if cwd:
+            os.chdir(cwd)
+        result = runner.invoke(app, args, input=input_str, env=e2e_env)
+    finally:
         os.chdir(original_cwd)
 
     if result.stdout:

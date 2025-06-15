@@ -231,4 +231,4 @@ class TestCliEphemeralE2E:
 
         assert result.exit_code == 0
         # The progress bar might still show, but the end result should be no matches.
-        assert "No relevant chunks found" in result.stdout
+        assert "No files found in directory" in result.stdout

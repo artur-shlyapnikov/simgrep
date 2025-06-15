@@ -1,4 +1,5 @@
 import logging
+import nltk
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -31,7 +32,25 @@ def cache_model_and_tokenizer():
         logger.error(f"Error caching SentenceTransformer model {MODEL_NAME}: {e}")
 
 
+def cache_nltk_data():
+    """Downloads NLTK packages required by unstructured to avoid download during tests."""
+    logger.info("Ensuring NLTK packages are cached...")
+    packages = [
+        ("punkt", "tokenizers/punkt"),
+        ("averaged_perceptron_tagger", "taggers/averaged_perceptron_tagger"),
+    ]
+    for pkg_id, pkg_path in packages:
+        try:
+            nltk.data.find(pkg_path)
+            logger.info(f"NLTK '{pkg_id}' is ready.")
+        except LookupError:
+            logger.info(f"Downloading NLTK '{pkg_id}'...")
+            nltk.download(pkg_id, quiet=True)
+            logger.info(f"NLTK '{pkg_id}' downloaded.")
+
+
 if __name__ == "__main__":
-    logger.info("Starting Hugging Face model caching process...")
+    logger.info("Starting Hugging Face model and NLTK data caching process...")
     cache_model_and_tokenizer()
-    logger.info("Model caching process finished.")
+    cache_nltk_data()
+    logger.info("Model and data caching process finished.")
