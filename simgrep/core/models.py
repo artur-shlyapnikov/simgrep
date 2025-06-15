@@ -64,9 +64,7 @@ class ProjectConfig(BaseModel):
 class SimgrepConfig(BaseModel):
     """Global configuration for the simgrep application."""
 
-    default_project_data_dir: Path = Field(
-        default_factory=lambda: Path("~/.config/simgrep/default_project").expanduser()
-    )
+    default_project_data_dir: Path = Field(default_factory=lambda: Path("~/.config/simgrep/default_project").expanduser())
     config_file: Path = Field(default_factory=lambda: Path("~/.config/simgrep/config.toml").expanduser())
     db_directory: Path = Field(default_factory=lambda: Path("~/.config/simgrep").expanduser())
     default_embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"

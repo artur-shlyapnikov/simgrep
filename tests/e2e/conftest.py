@@ -80,9 +80,7 @@ def temp_simgrep_home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -
 def sample_docs_dir_session(tmp_path_factory: pytest.TempPathFactory) -> pathlib.Path:
     """Creates a sample documents directory for the test session."""
     docs_dir = pathlib.Path(tmp_path_factory.mktemp("sample_docs_e2e"))
-    (docs_dir / "doc1.txt").write_text(
-        "This is a document about apples and bananas. It also mentions a unique_fruit_kiwi."
-    )
+    (docs_dir / "doc1.txt").write_text("This is a document about apples and bananas. It also mentions a unique_fruit_kiwi.")
     (docs_dir / "doc2.txt").write_text("Another document, this one mentions oranges and apples.")
     (docs_dir / "doc3.md").write_text("# Markdown Test\nThis is a test for markdown with apples.")  # Test non-.txt
 
@@ -146,18 +144,14 @@ def populated_persistent_index(temp_simgrep_home: pathlib.Path, sample_docs_dir_
 
 
 @pytest.fixture
-def populated_persistent_index_func_scope(
-    temp_simgrep_home: pathlib.Path, sample_docs_dir_func_scope: pathlib.Path
-) -> None:
+def populated_persistent_index_func_scope(temp_simgrep_home: pathlib.Path, sample_docs_dir_func_scope: pathlib.Path) -> None:
     """Creates a default project and indexes the sample documents into it (function scope)."""
     # 0. Global init
     init_result = run_simgrep_command(["init", "--global"])
     assert init_result.exit_code == 0
 
     # 1. Add path to default project
-    add_path_result = run_simgrep_command(
-        ["project", "add-path", str(sample_docs_dir_func_scope), "--project", "default"]
-    )
+    add_path_result = run_simgrep_command(["project", "add-path", str(sample_docs_dir_func_scope), "--project", "default"])
     assert add_path_result.exit_code == 0
 
     # 2. Index the sample documents

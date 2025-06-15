@@ -49,11 +49,6 @@ jobs:
   test:
     needs: lint
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        test-type: [unit, contract, integration, e2e]
-
     steps:
       - uses: actions/checkout@v4
 
@@ -83,70 +78,23 @@ jobs:
       - name: Pre-cache Hugging Face model for tests
         run: make download-models
 
-      - name: Run ${{ matrix.test-type }} tests
-        run: make test-${{ matrix.test-type }}
+      - name: Run tests
+        run: make test
 
       - name: Upload pytest results
         uses: actions/upload-artifact@v4
         with:
-          name: pytest-results-${{ matrix.test-type }}
-          path: reports/junit-${{ matrix.test-type }}.xml
+          name: pytest-results
+          path: reports/junit.xml
 
       - name: Upload coverage data
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-data-${{ matrix.test-type }}
-          path: .coverage
-
-  property-test:
-    needs: lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Read Python version
-        id: python-version
-        run: echo "version=$(cat .python-version)" >> $GITHUB_OUTPUT
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ steps.python-version.outputs.version }}
-
-      - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-      - name: Create virtual environment
-        run: uv venv
-
-      - name: Install system dependencies for filetype detection
-        run: sudo apt-get update && sudo apt-get install -y libmagic1
-
-      - name: Install dependencies
-        run: make install
-
-      - name: Pre-cache Hugging Face model for tests
-        run: make download-models
-
-      - name: Run property tests
-        run: make test-property
-
-      - name: Upload pytest results
-        uses: actions/upload-artifact@v4
-        with:
-          name: pytest-results-property
-          path: reports/junit-property.xml
-
-      - name: Upload coverage data
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-data-property
+          name: coverage-data
           path: .coverage
 
   coverage:
-    needs: [test, property-test]
+    needs: [test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -177,13 +125,11 @@ jobs:
       - name: Download coverage data
         uses: actions/download-artifact@v4
         with:
-          path: coverage-data
-          pattern: coverage-data-*
+          name: coverage-data
+          path: .
 
-      - name: Combine coverage
-        run: |
-          uv run coverage combine coverage-data/*/
-          uv run coverage xml
+      - name: Generate coverage report
+        run: uv run coverage xml
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4

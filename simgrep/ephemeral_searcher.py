@@ -41,9 +41,7 @@ class EphemeralSearcher:
         is_machine = output_mode in (OutputMode.json, OutputMode.paths)
 
         if not is_machine:
-            self.console.print(
-                f"Performing ephemeral search for: '[bold blue]{query_text}[/bold blue]' in path: '[green]{path_to_search}[/green]'"
-            )
+            self.console.print(f"Performing ephemeral search for: '[bold blue]{query_text}[/bold blue]' in path: '[green]{path_to_search}[/green]'")
 
         store: Optional[MetadataStore] = None
         try:
@@ -68,13 +66,9 @@ class EphemeralSearcher:
                 if path_to_search.is_file():
                     self.console.print(f"Processing single file: [green]{path_to_search}[/green]")
                 else:
-                    self.console.print(
-                        f"Scanning directory: [green]{path_to_search}[/green] for files matching: {search_patterns}..."
-                    )
+                    self.console.print(f"Scanning directory: [green]{path_to_search}[/green] for files matching: {search_patterns}...")
                     if not files_to_process:
-                        self.console.print(
-                            f"[yellow]No files found in directory {path_to_search} with patterns {search_patterns}[/yellow]"
-                        )
+                        self.console.print(f"[yellow]No files found in directory {path_to_search} with patterns {search_patterns}[/yellow]")
                     else:
                         self.console.print(f"Found {len(files_to_process)} file(s) to process.")
 
@@ -102,9 +96,7 @@ class EphemeralSearcher:
                         text = extractor.extract(file_path)
                         if not text.strip():
                             if not is_machine:
-                                self.console.print(
-                                    f"    [yellow]Skipped: File '{file_path}' is empty or contains only whitespace.[/yellow]"
-                                )
+                                self.console.print(f"    [yellow]Skipped: File '{file_path}' is empty or contains only whitespace.[/yellow]")
                             progress.advance(task)
                             continue
 
@@ -129,9 +121,7 @@ class EphemeralSearcher:
 
             if not all_chunks:
                 if not is_machine:
-                    self.console.print(
-                        "\n[yellow]No text chunks extracted from any files. Cannot perform search.[/yellow]"
-                    )
+                    self.console.print("\n[yellow]No text chunks extracted from any files. Cannot perform search.[/yellow]")
                 raise typer.Exit()
 
             if not is_machine:
@@ -177,18 +167,14 @@ class EphemeralSearcher:
 
             if not results:
                 if output_mode == OutputMode.paths:
-                    self.console.print(
-                        format_paths(file_paths=[], use_relative=False, base_path=None, console=self.console)
-                    )
+                    self.console.print(format_paths(file_paths=[], use_relative=False, base_path=None, console=self.console))
                 elif output_mode == OutputMode.json:
                     self.console.print("[]")
                 elif output_mode == OutputMode.count_results:
                     self.console.print(format_count([]))
                 else:
                     if not is_machine:
-                        self.console.print(
-                            "  No relevant chunks found for your query in the processed file(s) (after filtering)."
-                        )
+                        self.console.print("  No relevant chunks found for your query in the processed file(s) (after filtering).")
                 return
 
             if output_mode == OutputMode.paths:

@@ -34,9 +34,7 @@ class TestCliErrorsAndPromptsE2E:
         assert "Persistent index for project 'my-empty-project' not found" in result.stdout
         assert "Please run 'simgrep index --project my-empty-project' first" in result.stdout
 
-    def test_index_rebuild_prompt_aborts_on_no(
-        self, populated_persistent_index: None, sample_docs_dir_session: pathlib.Path
-    ) -> None:
+    def test_index_rebuild_prompt_aborts_on_no(self, populated_persistent_index: None, sample_docs_dir_session: pathlib.Path) -> None:
         """Ensure --rebuild prompt correctly aborts when user inputs 'n'."""
         # Arrange: Get baseline status from populated index
         status_before = run_simgrep_command(["status"], cwd=sample_docs_dir_session)
@@ -55,9 +53,7 @@ class TestCliErrorsAndPromptsE2E:
         assert status_after.exit_code == 0
         assert status_after.stdout == status_before.stdout
 
-    def test_init_in_dir_where_project_name_already_exists_globally(
-        self, temp_simgrep_home: pathlib.Path, tmp_path: pathlib.Path
-    ) -> None:
+    def test_init_in_dir_where_project_name_already_exists_globally(self, temp_simgrep_home: pathlib.Path, tmp_path: pathlib.Path) -> None:
         """Verify `simgrep init` fails if a project with the same name already exists."""
         # Arrange: Create a global project
         run_simgrep_command(["init", "--global"], cwd=temp_simgrep_home)
@@ -97,9 +93,7 @@ class TestCliErrorsAndPromptsE2E:
         # Restore permissions to allow cleanup
         os.chmod(unreadable_file, 0o644)
 
-    def test_index_fails_gracefully_on_indexer_error(
-        self, temp_simgrep_home: pathlib.Path, populated_persistent_index: None
-    ) -> None:
+    def test_index_fails_gracefully_on_indexer_error(self, temp_simgrep_home: pathlib.Path, populated_persistent_index: None) -> None:
         """Cover the IndexerError handling block in the index command."""
         from simgrep.indexer import IndexerError
 
@@ -112,9 +106,7 @@ class TestCliErrorsAndPromptsE2E:
             assert "Indexing Error:" in result.stdout
             assert "mock indexer error" in result.stdout
 
-    def test_search_persistent_handles_simgrep_error(
-        self, temp_simgrep_home: pathlib.Path, populated_persistent_index: None
-    ) -> None:
+    def test_search_persistent_handles_simgrep_error(self, temp_simgrep_home: pathlib.Path, populated_persistent_index: None) -> None:
         """Cover the generic SimgrepError handling in the search command for persistent search."""
         from simgrep.core.errors import SimgrepError
 
@@ -133,9 +125,7 @@ class TestCliErrorsAndPromptsE2E:
         assert result.exit_code == 1
         assert "Error adding path to project: Project 'non-existent-project' not found." in result.stdout
 
-    def test_index_with_workers_option(
-        self, populated_persistent_index: None, sample_docs_dir_session: pathlib.Path
-    ) -> None:
+    def test_index_with_workers_option(self, populated_persistent_index: None, sample_docs_dir_session: pathlib.Path) -> None:
         """Ensure the --workers option is correctly passed and used."""
         # This test just ensures the command doesn't crash.
         # It's hard to verify concurrency from an E2E test.
@@ -143,9 +133,7 @@ class TestCliErrorsAndPromptsE2E:
         assert result.exit_code == 0
         assert "Successfully indexed" in result.stdout
 
-    def test_index_rebuild_with_yes_flag_skips_prompt(
-        self, populated_persistent_index: None, sample_docs_dir_session: pathlib.Path
-    ) -> None:
+    def test_index_rebuild_with_yes_flag_skips_prompt(self, populated_persistent_index: None, sample_docs_dir_session: pathlib.Path) -> None:
         """Verify that the --yes flag bypasses the confirmation prompt for --rebuild."""
         result = run_simgrep_command(["index", "--rebuild", "--yes"], cwd=sample_docs_dir_session)
         assert result.exit_code == 0

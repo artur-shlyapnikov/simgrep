@@ -9,8 +9,7 @@ try:
     from simgrep.core.models import SimgrepConfig
 except ImportError:
     print(
-        "Failed to import from simgrep.adapters. "
-        "Ensure simgrep is installed in editable mode (`make install` or `uv pip install -e .`).",
+        "Failed to import from simgrep.adapters. " "Ensure simgrep is installed in editable mode (`make install` or `uv pip install -e .`).",
         file=sys.stderr,
     )
     raise

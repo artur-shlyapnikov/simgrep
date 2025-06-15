@@ -21,9 +21,7 @@ class TestProjectWorkflowE2E:
     Tests the core user workflows for creating, managing, and using persistent projects.
     """
 
-    def test_global_init_and_project_create_list_add(
-        self, temp_simgrep_home: pathlib.Path, tmp_path: pathlib.Path
-    ) -> None:
+    def test_global_init_and_project_create_list_add(self, temp_simgrep_home: pathlib.Path, tmp_path: pathlib.Path) -> None:
         """Tests creating a project, adding a path, and listing it."""
         # 1. Global init is required
         init_result = run_simgrep_command(["init", "--global"])
@@ -55,9 +53,7 @@ class TestProjectWorkflowE2E:
         assert result.exit_code == 1
         assert "Project 'my-project' already exists" in result.stdout
 
-    def test_local_project_init_index_search_workflow(
-        self, temp_simgrep_home: pathlib.Path, tmp_path: pathlib.Path
-    ) -> None:
+    def test_local_project_init_index_search_workflow(self, temp_simgrep_home: pathlib.Path, tmp_path: pathlib.Path) -> None:
         """
         Tests the core local project workflow: `init`, `index`, `search`
         all from within a project directory.
@@ -110,9 +106,7 @@ class TestProjectWorkflowE2E:
         assert result.exit_code == 1
         assert "Project 'non-existent-project' not found" in result.stdout
 
-    def test_search_from_project_subdirectory_autodetects_project(
-        self, temp_simgrep_home: pathlib.Path, tmp_path: pathlib.Path
-    ) -> None:
+    def test_search_from_project_subdirectory_autodetects_project(self, temp_simgrep_home: pathlib.Path, tmp_path: pathlib.Path) -> None:
         """
         Tests that running commands from a subdirectory of an initialized project
         correctly autodetects and uses the parent project's context.
@@ -194,16 +188,12 @@ class TestPersistentSearchE2E:
         assert "No relevant chunks found" in search_no_match_result.stdout
 
     @pytest.mark.parametrize("top_k, expected_results", [(1, 1), (2, 2), (5, 3)])
-    def test_search_top_option_limits_results(
-        self, populated_persistent_index: None, top_k: int, expected_results: int
-    ) -> None:
+    def test_search_top_option_limits_results(self, populated_persistent_index: None, top_k: int, expected_results: int) -> None:
         result = run_simgrep_command(["search", "apples", "--top", str(top_k)])
         assert result.exit_code == 0
         assert result.stdout.count("Score:") == expected_results
 
-    def test_persistent_search_relative_paths(
-        self, populated_persistent_index: None, sample_docs_dir_session: pathlib.Path
-    ) -> None:
+    def test_persistent_search_relative_paths(self, populated_persistent_index: None, sample_docs_dir_session: pathlib.Path) -> None:
         search_result = run_simgrep_command(
             ["search", "bananas", "--output", "paths", "--relative-paths"],
             cwd=sample_docs_dir_session,
@@ -380,9 +370,7 @@ class TestIndexerRobustnessE2E:
         assert search_result.exit_code == 0
         assert str(target_file.resolve()) in search_result.stdout.replace("\n", "")
 
-    def test_index_handles_unreadable_file_gracefully(
-        self, temp_simgrep_home: pathlib.Path, tmp_path: pathlib.Path
-    ) -> None:
+    def test_index_handles_unreadable_file_gracefully(self, temp_simgrep_home: pathlib.Path, tmp_path: pathlib.Path) -> None:
         project_dir = tmp_path / "unreadable_proj"
         project_dir.mkdir()
         readable_file = project_dir / "readable.txt"
@@ -475,9 +463,7 @@ class TestCliFilteringE2E:
     def populated_filtering_index(self, temp_simgrep_home: pathlib.Path, tmp_path: pathlib.Path) -> None:
         docs_dir = tmp_path / "filtering_docs"
         docs_dir.mkdir()
-        (docs_dir / "strong_match.txt").write_text(
-            "This document is all about dependency injection in modern software engineering."
-        )
+        (docs_dir / "strong_match.txt").write_text("This document is all about dependency injection in modern software engineering.")
         (docs_dir / "weak_match.txt").write_text("This file is about software.")
         (docs_dir / "code.py").write_text('async def handle_request():\n    print("processing data")')
 

@@ -27,9 +27,7 @@ def fake_context(
     )
 
 
-def test_ephemeral_searcher_show(
-    fake_context: SimgrepContext, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_ephemeral_searcher_show(fake_context: SimgrepContext, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     test_file = tmp_path / "file.txt"
     test_file.write_text("hello")
 
@@ -37,9 +35,7 @@ def test_ephemeral_searcher_show(
         mock_gather.return_value = [test_file]
         with patch("simgrep.ephemeral_searcher.SearchService") as mock_search_service:
             mock_instance = mock_search_service.return_value
-            mock_instance.search.return_value = [
-                SearchResult(label=0, score=0.99, file_path=test_file, chunk_text="hello")
-            ]
+            mock_instance.search.return_value = [SearchResult(label=0, score=0.99, file_path=test_file, chunk_text="hello")]
 
             console = Console(force_terminal=True, width=120)
             searcher = EphemeralSearcher(context=fake_context, console=console)
@@ -56,9 +52,7 @@ def test_ephemeral_searcher_show(
             assert "file.txt" in out
 
 
-def test_ephemeral_searcher_no_results(
-    fake_context: SimgrepContext, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_ephemeral_searcher_no_results(fake_context: SimgrepContext, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     test_file = tmp_path / "file.txt"
     test_file.write_text("hello")
 
@@ -82,9 +76,7 @@ def test_ephemeral_searcher_no_results(
             assert "No relevant chunks found" in out
 
 
-def test_ephemeral_searcher_no_files_found(
-    fake_context: SimgrepContext, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_ephemeral_searcher_no_files_found(fake_context: SimgrepContext, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     """Test the code path where gather_files_to_process returns an empty list."""
     with patch("simgrep.ephemeral_searcher.gather_files_to_process", return_value=[]):
         console = Console(force_terminal=True, width=120)

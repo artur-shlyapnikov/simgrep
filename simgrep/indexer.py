@@ -123,12 +123,8 @@ class Indexer:
                 self.usearch_index.save(self.config.usearch_index_path)
                 self.console.print("Vector index saved.")
 
-            self.console.print(
-                f"\n[bold green]Indexing complete for project '{self.config.project_name}'.[/bold green]"
-            )
-            self.console.print(
-                f"  Summary: {total_files_processed} files processed, {total_chunks_indexed} chunks indexed, {total_errors} errors encountered."
-            )
+            self.console.print(f"\n[bold green]Indexing complete for project '{self.config.project_name}'.[/bold green]")
+            self.console.print(f"  Summary: {total_files_processed} files processed, {total_chunks_indexed} chunks indexed, {total_errors} errors encountered.")
 
         except IndexerError as e:
             self.console.print(f"[bold red]Indexer Error: {e}[/bold red]")

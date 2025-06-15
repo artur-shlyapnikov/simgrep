@@ -82,21 +82,15 @@ def file_with_unicode_name(tmp_path: Path) -> Path:
 
 
 class TestUnstructuredExtractor:
-    def test_extract_from_existing_file(
-        self, unstructured_extractor: UnstructuredExtractor, temp_text_file: Path
-    ) -> None:
+    def test_extract_from_existing_file(self, unstructured_extractor: UnstructuredExtractor, temp_text_file: Path) -> None:
         extractor = unstructured_extractor
         expected_content = "Hello World.\nThis is a test file.\nSimgrep is cool."
         assert extractor.extract(temp_text_file) == expected_content
 
-    def test_extract_from_empty_file(
-        self, unstructured_extractor: UnstructuredExtractor, temp_empty_file: Path
-    ) -> None:
+    def test_extract_from_empty_file(self, unstructured_extractor: UnstructuredExtractor, temp_empty_file: Path) -> None:
         assert unstructured_extractor.extract(temp_empty_file) == ""
 
-    def test_extract_from_non_existent_file(
-        self, unstructured_extractor: UnstructuredExtractor, tmp_path: Path
-    ) -> None:
+    def test_extract_from_non_existent_file(self, unstructured_extractor: UnstructuredExtractor, tmp_path: Path) -> None:
         non_existent_file = tmp_path / "non_existent.txt"
         with pytest.raises(
             FileNotFoundError,
@@ -115,33 +109,25 @@ class TestUnstructuredExtractor:
         assert "2024" in content
 
     @pytest.mark.timeout(10)
-    def test_pathological_binary_file_zip(
-        self, unstructured_extractor: UnstructuredExtractor, binary_zip_file: Path
-    ) -> None:
+    def test_pathological_binary_file_zip(self, unstructured_extractor: UnstructuredExtractor, binary_zip_file: Path) -> None:
         # Unstructured might extract metadata or nothing from a zip. We expect an empty string.
         content = unstructured_extractor.extract(binary_zip_file)
         assert content == ""
         assert isinstance(content, str)
 
     @pytest.mark.timeout(20)
-    def test_very_large_repetitive_file(
-        self, unstructured_extractor: UnstructuredExtractor, large_repetitive_file: Path
-    ) -> None:
+    def test_very_large_repetitive_file(self, unstructured_extractor: UnstructuredExtractor, large_repetitive_file: Path) -> None:
         content = unstructured_extractor.extract(large_repetitive_file)
         assert isinstance(content, str)
         expected_pattern_start = "This is a highly repetitive short sentence"
         assert content.startswith(expected_pattern_start)
         assert len(content) > 900000
 
-    def test_file_with_unicode_name_handling(
-        self, unstructured_extractor: UnstructuredExtractor, file_with_unicode_name: Path
-    ) -> None:
+    def test_file_with_unicode_name_handling(self, unstructured_extractor: UnstructuredExtractor, file_with_unicode_name: Path) -> None:
         content = unstructured_extractor.extract(file_with_unicode_name)
         assert content == "Content of file with unicode name."
 
-    def test_extract_from_utf8_with_bom_file(
-        self, unstructured_extractor: UnstructuredExtractor, utf8_with_bom_file: Path
-    ) -> None:
+    def test_extract_from_utf8_with_bom_file(self, unstructured_extractor: UnstructuredExtractor, utf8_with_bom_file: Path) -> None:
         expected_content = "File with BOM."
         content = unstructured_extractor.extract(utf8_with_bom_file)
         assert content == expected_content

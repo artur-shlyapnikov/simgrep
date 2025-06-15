@@ -89,15 +89,11 @@ class TestIndexerPersistentIntegration:
 
             # check one record for correctness
             file1_path = str((persistent_test_data_path / "file1.txt").resolve())
-            file_record_result = db_conn.execute(
-                "SELECT file_id FROM indexed_files WHERE file_path = ?", [file1_path]
-            ).fetchone()
+            file_record_result = db_conn.execute("SELECT file_id FROM indexed_files WHERE file_path = ?", [file1_path]).fetchone()
             assert file_record_result is not None
             file_id = file_record_result[0]
 
-            chunk_record_result = db_conn.execute(
-                "SELECT COUNT(*) FROM text_chunks WHERE file_id = ?", [file_id]
-            ).fetchone()
+            chunk_record_result = db_conn.execute("SELECT COUNT(*) FROM text_chunks WHERE file_id = ?", [file_id]).fetchone()
             assert chunk_record_result is not None
             assert chunk_record_result[0] > 0
         finally:
@@ -226,9 +222,7 @@ class TestIndexerPersistentIntegration:
             chunk_count_before = res_ccb[0]
 
             file2_path = str((persistent_test_data_path / "file2.txt").resolve())
-            res_f2hb = store_before.conn.execute(
-                "SELECT content_hash FROM indexed_files WHERE file_path = ?", [file2_path]
-            ).fetchone()
+            res_f2hb = store_before.conn.execute("SELECT content_hash FROM indexed_files WHERE file_path = ?", [file2_path]).fetchone()
             assert res_f2hb is not None
             file2_hash_before = res_f2hb[0]
         finally:
@@ -251,9 +245,7 @@ class TestIndexerPersistentIntegration:
             assert res_ccn is not None
             chunk_count_nochange = res_ccn[0]
 
-            res_f2ha = store_after.conn.execute(
-                "SELECT content_hash FROM indexed_files WHERE file_path = ?", [file2_path]
-            ).fetchone()
+            res_f2ha = store_after.conn.execute("SELECT content_hash FROM indexed_files WHERE file_path = ?", [file2_path]).fetchone()
             assert res_f2ha is not None
             file2_hash_after = res_f2ha[0]
         finally:

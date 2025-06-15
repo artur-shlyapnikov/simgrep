@@ -145,9 +145,7 @@ class TestMetadataStoreEphemeral:
         assert "file_path" in results[0]
         assert isinstance(results[0]["file_path"], pathlib.Path)
 
-    def test_batch_insert_files_ephemeral_on_conflict(
-        self, ephemeral_store: MetadataStore, tmp_path: pathlib.Path
-    ) -> None:
+    def test_batch_insert_files_ephemeral_on_conflict(self, ephemeral_store: MetadataStore, tmp_path: pathlib.Path) -> None:
         file_path = tmp_path / "conflict.txt"
         file_path.write_text("content")
 
@@ -171,9 +169,7 @@ class TestMetadataStoreEphemeral:
         assert count_after == 1  # Should not have inserted a new row
 
         # The original path should still be there because of DO NOTHING
-        retrieved_path_res = ephemeral_store.conn.execute(
-            "SELECT file_path FROM temp_files WHERE file_id = ?", [123]
-        ).fetchone()
+        retrieved_path_res = ephemeral_store.conn.execute("SELECT file_path FROM temp_files WHERE file_id = ?", [123]).fetchone()
         assert retrieved_path_res is not None
         retrieved_path = retrieved_path_res[0]
         assert retrieved_path == str(file_path.resolve())
@@ -183,9 +179,7 @@ class TestMetadataStoreEphemeral:
         with patch("simgrep.repository.logger.warning") as mock_log:
             count = ephemeral_store.get_index_counts()
             assert count == (0, 0)
-            mock_log.assert_called_once_with(
-                "get_index_counts called on a non-persistent store, which is not expected."
-            )
+            mock_log.assert_called_once_with("get_index_counts called on a non-persistent store, which is not expected.")
 
 
 @pytest.fixture
@@ -243,9 +237,7 @@ def populated_persistent_store(persistent_store: MetadataStore, tmp_path: pathli
 
 
 class TestMetadataStorePersistent:
-    def test_retrieve_chunk_details_persistent(
-        self, populated_persistent_store: MetadataStore, tmp_path: pathlib.Path
-    ) -> None:
+    def test_retrieve_chunk_details_persistent(self, populated_persistent_store: MetadataStore, tmp_path: pathlib.Path) -> None:
         retrieved = populated_persistent_store.retrieve_chunk_details_persistent(usearch_label=10)
         assert retrieved is not None
         text, path, start, end = retrieved
@@ -264,23 +256,17 @@ class TestMetadataStorePersistent:
         assert populated_persistent_store.retrieve_filtered_chunk_details(usearch_labels=[]) == []
 
     def test_retrieve_filtered_chunk_details_file_filter(self, populated_persistent_store: MetadataStore) -> None:
-        results = populated_persistent_store.retrieve_filtered_chunk_details(
-            usearch_labels=[10, 20, 21], file_filter=["*.py"]
-        )
+        results = populated_persistent_store.retrieve_filtered_chunk_details(usearch_labels=[10, 20, 21], file_filter=["*.py"])
         assert len(results) == 2
         assert {r["usearch_label"] for r in results} == {20, 21}
 
     def test_retrieve_filtered_chunk_details_keyword_filter(self, populated_persistent_store: MetadataStore) -> None:
-        results = populated_persistent_store.retrieve_filtered_chunk_details(
-            usearch_labels=[10, 20, 21], keyword_filter="keyword"
-        )
+        results = populated_persistent_store.retrieve_filtered_chunk_details(usearch_labels=[10, 20, 21], keyword_filter="keyword")
         assert len(results) == 1
         assert results[0]["usearch_label"] == 21
 
     def test_retrieve_filtered_chunk_details_combined_filters(self, populated_persistent_store: MetadataStore) -> None:
-        results = populated_persistent_store.retrieve_filtered_chunk_details(
-            usearch_labels=[10, 20, 21], file_filter=["*.py"], keyword_filter="python"
-        )
+        results = populated_persistent_store.retrieve_filtered_chunk_details(usearch_labels=[10, 20, 21], file_filter=["*.py"], keyword_filter="python")
         assert len(results) == 1
         assert results[0]["usearch_label"] == 20
 
@@ -303,9 +289,7 @@ class TestMetadataStorePersistent:
         assert files == 2
         assert chunks == 2
 
-    def test_delete_file_records_no_chunks(
-        self, populated_persistent_store: MetadataStore, tmp_path: pathlib.Path
-    ) -> None:
+    def test_delete_file_records_no_chunks(self, populated_persistent_store: MetadataStore, tmp_path: pathlib.Path) -> None:
         res = populated_persistent_store.conn.execute(
             "SELECT file_id FROM indexed_files WHERE file_path = ?",
             [str(tmp_path / "file3.txt")],

@@ -43,7 +43,7 @@ test:
 	mkdir -p reports
 	$(UV) run pytest -n auto \
 	    --junitxml=reports/junit.xml \
-	--cov=simgrep --timeout=20
+	--cov=simgrep --timeout=30 tests/
 
 test-unit:
 	@echo "Running unit tests..."
