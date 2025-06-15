@@ -1,10 +1,11 @@
 import numpy as np
 import pytest
+
 from simgrep.core.abstractions import Embedder
 
 
 @pytest.mark.contract
-def test_encode_shape_and_determinism(embedder: Embedder):
+def test_encode_shape_and_determinism(embedder: Embedder) -> None:
     txt = ["a", "b"]
     arr1 = embedder.encode(txt)
     arr2 = embedder.encode(txt)

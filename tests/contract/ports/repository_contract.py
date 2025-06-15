@@ -1,11 +1,13 @@
 import pathlib
+
 import pytest
+
 from simgrep.core.abstractions import Repository
 
 
 @pytest.mark.contract
 class RepositoryContract:
-    def test_can_insert_and_retrieve_file_and_chunks(self, repository: Repository, tmp_path: pathlib.Path):
+    def test_can_insert_and_retrieve_file_and_chunks(self, repository: Repository, tmp_path: pathlib.Path) -> None:
         # This is a simplified test. A full contract would test each method.
         file_path = tmp_path / "test.txt"
         file_path.write_text("content")
@@ -38,7 +40,7 @@ class RepositoryContract:
         assert len(retrieved) == 1
         assert retrieved[0]["chunk_text"] == "content"
 
-    def test_get_index_counts(self, repository: Repository):
+    def test_get_index_counts(self, repository: Repository) -> None:
         repository.clear_persistent_project_data()
         files, chunks = repository.get_index_counts()
         assert isinstance(files, int)

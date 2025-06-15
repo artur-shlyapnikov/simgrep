@@ -2,7 +2,6 @@ from pathlib import Path
 from typing import Generator, List, Tuple
 
 import pytest
-import usearch.index
 from rich.console import Console
 
 from simgrep.adapters.sentence_embedder import SentenceEmbedder
@@ -37,7 +36,10 @@ def default_simgrep_config_for_search_tests(
     default_proj_data_dir = simgrep_root_config_dir / "default_project"
     default_proj_data_dir.mkdir(parents=True, exist_ok=True)
 
-    cfg = SimgrepConfig(default_project_data_dir=default_proj_data_dir, default_embedding_model_name="sentence-transformers/all-MiniLM-L6-v2")
+    cfg = SimgrepConfig(
+        default_project_data_dir=default_proj_data_dir,
+        default_embedding_model_name="sentence-transformers/all-MiniLM-L6-v2",
+    )
     return cfg
 
 
@@ -145,9 +147,10 @@ class TestSearcherPersistentIntegration:
         assert results
         if output_mode == OutputMode.show:
             for r in results:
-                print(format_show_basic(r.file_path, r.chunk_text, r.score))
+                if r.file_path and r.chunk_text:
+                    print(format_show_basic(r.file_path, r.chunk_text, r.score))
         elif output_mode == OutputMode.paths:
-            print(format_paths([r.file_path for r in results], False, None))
+            print(format_paths([p for r in results if (p := r.file_path)], False, None))
 
         captured = capsys.readouterr()
         output_str = captured.out.replace("\n", "")

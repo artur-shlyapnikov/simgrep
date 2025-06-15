@@ -58,7 +58,7 @@ test-contract:
 test-property:
 	@echo "Running property tests..."
 	mkdir -p reports
-	$(UV) run pytest -n auto --junitxml=reports/junit-property.xml --cov=simgrep tests/property/ --timeout=20
+	$(UV) run pytest -n auto --junitxml=reports/junit-property.xml --cov=simgrep 'tests/unit/infrastructure/test_usearch_index_property.py' 'tests/unit/infrastructure/test_hf_chunker_property.py' --timeout=20
 
 test-integration:
 	@echo "Running integration tests..."

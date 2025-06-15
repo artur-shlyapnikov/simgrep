@@ -67,12 +67,18 @@ class USearchIndex(VectorIndex):
             processed_query_embedding = np.expand_dims(processed_query_embedding, axis=0)
 
         if processed_query_embedding.shape[0] != 1:
-            raise ValueError(f"Expected a single query embedding, but got batch of {processed_query_embedding.shape[0]}.")
+            raise ValueError(
+                f"Expected a single query embedding, but got batch of {processed_query_embedding.shape[0]}."
+            )
         if processed_query_embedding.shape[1] != self.ndim:
-            raise ValueError(f"Query embedding dimension ({processed_query_embedding.shape[1]}) does not match index dimension ({self.ndim}).")
+            raise ValueError(
+                f"Query embedding dimension ({processed_query_embedding.shape[1]}) does not match index dimension ({self.ndim})."
+            )
 
         try:
-            search_result: Union[usearch.index.Matches, usearch.index.BatchMatches] = self._index.search(vectors=processed_query_embedding, count=k)
+            search_result: Union[usearch.index.Matches, usearch.index.BatchMatches] = self._index.search(
+                vectors=processed_query_embedding, count=k
+            )
         except Exception as e:
             raise VectorStoreError("USearch search operation failed") from e
 

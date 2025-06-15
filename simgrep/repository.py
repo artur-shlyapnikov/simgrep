@@ -113,7 +113,11 @@ class MetadataStore:
 
         logger.info(f"Batch inserting {len(data_to_insert)} chunk(s) into temp_chunks.")
         try:
-            sql = "INSERT INTO temp_chunks (chunk_id, file_id, text_content, " "start_char_offset, end_char_offset, token_count) " "VALUES (?, ?, ?, ?, ?, ?)"
+            sql = (
+                "INSERT INTO temp_chunks (chunk_id, file_id, text_content, "
+                "start_char_offset, end_char_offset, token_count) "
+                "VALUES (?, ?, ?, ?, ?, ?)"
+            )
             self.conn.executemany(sql, data_to_insert)
         except Exception as e:
             logger.error(f"DuckDB error during batch chunk insert: {e}")
@@ -339,7 +343,9 @@ class MetadataStore:
             logger.warning("get_index_counts called on a non-persistent store, which is not expected.")
             return 0, 0
         try:
-            result = self.conn.execute("SELECT (SELECT COUNT(*) FROM indexed_files), (SELECT COUNT(*) FROM text_chunks);").fetchone()
+            result = self.conn.execute(
+                "SELECT (SELECT COUNT(*) FROM indexed_files), (SELECT COUNT(*) FROM text_chunks);"
+            ).fetchone()
             if result:
                 return int(result[0]), int(result[1])
             return 0, 0
@@ -364,7 +370,8 @@ class MetadataStore:
             return
         try:
             self.conn.execute(
-                "INSERT INTO index_metadata (key, value) VALUES ('max_usearch_label', ?) " "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;",
+                "INSERT INTO index_metadata (key, value) VALUES ('max_usearch_label', ?) "
+                "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;",
                 [str(label)],
             )
         except duckdb.Error as e:

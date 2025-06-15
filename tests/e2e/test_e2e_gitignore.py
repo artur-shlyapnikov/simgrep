@@ -2,7 +2,7 @@ import pathlib
 
 import pytest
 
-from .conftest import run_simgrep_command, temp_simgrep_home
+from .conftest import run_simgrep_command
 
 pytest.importorskip("sentence_transformers")
 pytest.importorskip("usearch.index")

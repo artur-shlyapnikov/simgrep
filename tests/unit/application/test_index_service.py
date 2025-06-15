@@ -1,4 +1,5 @@
 import pathlib
+from typing import Callable
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -20,9 +21,9 @@ def index_service(
     fake_token_chunker: TokenChunker,
     fake_embedder: Embedder,
     fake_repository: Repository,
-    fake_vector_index_factory,
+    fake_vector_index_factory: Callable[[int], VectorIndex],
 ) -> IndexService:
-    vector_index = fake_vector_index_factory(ndim=fake_embedder.ndim)
+    vector_index = fake_vector_index_factory(fake_embedder.ndim)
     return IndexService(
         extractor=fake_text_extractor,
         chunker=fake_token_chunker,
@@ -41,7 +42,7 @@ def test_index_service_process_file(index_service: IndexService, tmp_path: pathl
     assert embeddings.shape[1] == index_service.embedder.ndim
 
 
-def test_store_file_chunks(index_service: IndexService):
+def test_store_file_chunks(index_service: IndexService) -> None:
     from simgrep.core.models import Chunk
 
     chunks = [Chunk(id=0, file_id=1, text="text", start=0, end=4, tokens=1)]

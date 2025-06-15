@@ -1,10 +1,11 @@
 import pathlib
+from typing import Callable
 from unittest.mock import MagicMock, patch
 
 import pytest
 from rich.console import Console
 
-from simgrep.core.abstractions import Embedder, TextExtractor, TokenChunker
+from simgrep.core.abstractions import Embedder, TextExtractor, TokenChunker, VectorIndex
 from simgrep.core.context import SimgrepContext
 from simgrep.indexer import Indexer, IndexerConfig
 
@@ -14,13 +15,13 @@ def fake_context(
     fake_text_extractor: TextExtractor,
     fake_token_chunker: TokenChunker,
     fake_embedder: Embedder,
-    fake_vector_index_factory,
+    fake_vector_index_factory: Callable[[int], VectorIndex],
 ) -> SimgrepContext:
     return SimgrepContext(
         extractor=fake_text_extractor,
         chunker=fake_token_chunker,
         embedder=fake_embedder,
-        index_factory=lambda ndim: fake_vector_index_factory(ndim=ndim),
+        index_factory=lambda ndim: fake_vector_index_factory(ndim),
     )
 
 
@@ -38,7 +39,7 @@ def indexer_config(tmp_path: pathlib.Path) -> IndexerConfig:
     )
 
 
-def test_indexer_run_index(indexer_config: IndexerConfig, fake_context: SimgrepContext, tmp_path: pathlib.Path):
+def test_indexer_run_index(indexer_config: IndexerConfig, fake_context: SimgrepContext, tmp_path: pathlib.Path) -> None:
     indexer = Indexer(config=indexer_config, context=fake_context, console=Console(quiet=True))
 
     with patch("simgrep.indexer.IndexService") as mock_index_service:

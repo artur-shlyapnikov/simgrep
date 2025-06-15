@@ -5,9 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from simgrep.core.errors import IndexerError, SimgrepConfigError, SimgrepError
-
-from .conftest import populated_persistent_index, run_simgrep_command
+from .conftest import run_simgrep_command
 
 
 @pytest.fixture
@@ -22,30 +20,19 @@ def temp_project_dir(tmp_path: pathlib.Path) -> Generator[pathlib.Path, None, No
 
 
 class TestCliErrorsAndPromptsE2E:
-    def test_search_on_unindexed_project_fails_gracefully(
-        self, temp_simgrep_home: pathlib.Path
-    ) -> None:
+    def test_search_on_unindexed_project_fails_gracefully(self, temp_simgrep_home: pathlib.Path) -> None:
         """Verify helpful message when searching a project that exists but has not been indexed."""
         # Arrange: init global, create project, but do not index
         run_simgrep_command(["init", "--global"], cwd=temp_simgrep_home)
-        run_simgrep_command(
-            ["project", "create", "my-empty-project"], cwd=temp_simgrep_home
-        )
+        run_simgrep_command(["project", "create", "my-empty-project"], cwd=temp_simgrep_home)
 
         # Act
-        result = run_simgrep_command(
-            ["search", "query", "--project", "my-empty-project"], cwd=temp_simgrep_home
-        )
+        result = run_simgrep_command(["search", "query", "--project", "my-empty-project"], cwd=temp_simgrep_home)
 
         # Assert
         assert result.exit_code == 1
-        assert (
-            "Persistent index for project 'my-empty-project' not found" in result.stdout
-        )
-        assert (
-            "Please run 'simgrep index --project my-empty-project' first"
-            in result.stdout
-        )
+        assert "Persistent index for project 'my-empty-project' not found" in result.stdout
+        assert "Please run 'simgrep index --project my-empty-project' first" in result.stdout
 
     def test_index_rebuild_prompt_aborts_on_no(
         self, populated_persistent_index: None, sample_docs_dir_session: pathlib.Path
@@ -57,9 +44,7 @@ class TestCliErrorsAndPromptsE2E:
         assert "files indexed" in status_before.stdout
 
         # Act: Run index --rebuild and provide 'n' as input
-        result = run_simgrep_command(
-            ["index", "--rebuild"], cwd=sample_docs_dir_session, input_str="n\n"
-        )
+        result = run_simgrep_command(["index", "--rebuild"], cwd=sample_docs_dir_session, input_str="n\n")
 
         # Assert
         assert "Aborted" in result.stderr
@@ -89,9 +74,7 @@ class TestCliErrorsAndPromptsE2E:
         assert result.exit_code == 1
         assert "A project named 'my-project' already exists globally" in result.stdout
 
-    def test_ephemeral_search_with_unreadable_file_is_skipped(
-        self, tmp_path: pathlib.Path
-    ) -> None:
+    def test_ephemeral_search_with_unreadable_file_is_skipped(self, tmp_path: pathlib.Path) -> None:
         """Verify that ephemeral search handles unreadable files gracefully."""
         # Arrange
         search_dir = tmp_path / "search_dir"
@@ -103,9 +86,7 @@ class TestCliErrorsAndPromptsE2E:
         os.chmod(unreadable_file, 0o000)
 
         # Act
-        result = run_simgrep_command(
-            ["search", "content", str(search_dir), "--pattern", "*.txt"]
-        )
+        result = run_simgrep_command(["search", "content", str(search_dir), "--pattern", "*.txt"])
 
         # Assert
         assert result.exit_code == 0
@@ -145,19 +126,12 @@ class TestCliErrorsAndPromptsE2E:
             assert result.exit_code == 1
             assert "Error during persistent search: mock search error" in result.stdout
 
-    def test_project_add_path_to_nonexistent_project(
-        self, temp_simgrep_home: pathlib.Path
-    ) -> None:
+    def test_project_add_path_to_nonexistent_project(self, temp_simgrep_home: pathlib.Path) -> None:
         """Cover the error path for project add-path when the project doesn't exist."""
         run_simgrep_command(["init", "--global"])
-        result = run_simgrep_command(
-            ["project", "add-path", ".", "--project", "non-existent-project"]
-        )
+        result = run_simgrep_command(["project", "add-path", ".", "--project", "non-existent-project"])
         assert result.exit_code == 1
-        assert (
-            "Error adding path to project: Project 'non-existent-project' not found."
-            in result.stdout
-        )
+        assert "Error adding path to project: Project 'non-existent-project' not found." in result.stdout
 
     def test_index_with_workers_option(
         self, populated_persistent_index: None, sample_docs_dir_session: pathlib.Path
@@ -165,9 +139,7 @@ class TestCliErrorsAndPromptsE2E:
         """Ensure the --workers option is correctly passed and used."""
         # This test just ensures the command doesn't crash.
         # It's hard to verify concurrency from an E2E test.
-        result = run_simgrep_command(
-            ["index", "--workers", "1"], cwd=sample_docs_dir_session
-        )
+        result = run_simgrep_command(["index", "--workers", "1"], cwd=sample_docs_dir_session)
         assert result.exit_code == 0
         assert "Successfully indexed" in result.stdout
 
@@ -175,9 +147,7 @@ class TestCliErrorsAndPromptsE2E:
         self, populated_persistent_index: None, sample_docs_dir_session: pathlib.Path
     ) -> None:
         """Verify that the --yes flag bypasses the confirmation prompt for --rebuild."""
-        result = run_simgrep_command(
-            ["index", "--rebuild", "--yes"], cwd=sample_docs_dir_session
-        )
+        result = run_simgrep_command(["index", "--rebuild", "--yes"], cwd=sample_docs_dir_session)
         assert result.exit_code == 0
         assert "Are you sure" not in result.stdout
         assert "Aborted" not in result.stderr

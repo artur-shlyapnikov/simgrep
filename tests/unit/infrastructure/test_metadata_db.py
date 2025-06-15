@@ -1,4 +1,5 @@
 import pathlib
+from typing import Generator
 from unittest.mock import MagicMock, patch
 
 import duckdb
@@ -20,7 +21,7 @@ from simgrep.metadata_db import (
 
 
 @pytest.fixture
-def global_db_conn(tmp_path: pathlib.Path) -> duckdb.DuckDBPyConnection:
+def global_db_conn(tmp_path: pathlib.Path) -> Generator[duckdb.DuckDBPyConnection, None, None]:
     db_path = tmp_path / "global_metadata.duckdb"
     conn = connect_global_db(db_path)
     yield conn
@@ -28,7 +29,9 @@ def global_db_conn(tmp_path: pathlib.Path) -> duckdb.DuckDBPyConnection:
 
 
 class TestMetadataDb:
-    def test_connect_persistent_db_handles_os_error_on_mkdir(self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_connect_persistent_db_handles_os_error_on_mkdir(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Verify MetadataDBError is raised if creating the DB directory fails."""
         mock_mkdir = patch("pathlib.Path.mkdir", side_effect=OSError("Permission denied"))
 
@@ -36,7 +39,9 @@ class TestMetadataDb:
             with pytest.raises(MetadataDBError, match="Could not create directory for database"):
                 connect_persistent_db(tmp_path / "nonexistent_dir" / "db.duckdb")
 
-    def test_get_project_by_name_returns_none_for_missing_project(self, global_db_conn: duckdb.DuckDBPyConnection) -> None:
+    def test_get_project_by_name_returns_none_for_missing_project(
+        self, global_db_conn: duckdb.DuckDBPyConnection
+    ) -> None:
         """Ensure get_project_by_name returns None for a non-existent project."""
         result = get_project_by_name(global_db_conn, "non-existent-project")
         assert result is None
@@ -53,7 +58,9 @@ class TestMetadataDb:
         result = get_project_config(global_db_conn, "non-existent-project")
         assert result is None
 
-    def test_create_project_scaffolding(self, global_db_conn: duckdb.DuckDBPyConnection, tmp_path: pathlib.Path) -> None:
+    def test_create_project_scaffolding(
+        self, global_db_conn: duckdb.DuckDBPyConnection, tmp_path: pathlib.Path
+    ) -> None:
         """Test project scaffolding creation."""
         config = SimgrepConfig(db_directory=tmp_path)
         project_name = "new-scaffold-project"
@@ -68,14 +75,18 @@ class TestMetadataDb:
         assert retrieved is not None
         assert retrieved[1] == project_name
 
-    def test_add_project_path_handles_db_error(self, global_db_conn: duckdb.DuckDBPyConnection, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_add_project_path_handles_db_error(
+        self, global_db_conn: duckdb.DuckDBPyConnection, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test error handling in add_project_path."""
         monkeypatch.setattr(duckdb.DuckDBPyConnection, "execute", MagicMock(side_effect=duckdb.Error("mock error")))
 
         with pytest.raises(MetadataDBError):
             add_project_path(global_db_conn, 1, "/some/path")
 
-    def test_connect_persistent_db_connection_error(self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_connect_persistent_db_connection_error(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Verify MetadataDBError is raised if duckdb.connect fails."""
         monkeypatch.setattr(duckdb, "connect", MagicMock(side_effect=duckdb.Error("Connection failed")))
         with pytest.raises(MetadataDBError, match="Failed to connect/initialize DB"):

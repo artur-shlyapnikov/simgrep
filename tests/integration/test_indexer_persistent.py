@@ -9,7 +9,6 @@ from simgrep.core.context import SimgrepContext
 from simgrep.core.errors import IndexerError
 from simgrep.indexer import Indexer, IndexerConfig
 from simgrep.repository import MetadataStore
-from simgrep.utils import calculate_file_hash
 
 pytest.importorskip("transformers")
 pytest.importorskip("sentence_transformers")
@@ -90,11 +89,15 @@ class TestIndexerPersistentIntegration:
 
             # check one record for correctness
             file1_path = str((persistent_test_data_path / "file1.txt").resolve())
-            file_record_result = db_conn.execute("SELECT file_id FROM indexed_files WHERE file_path = ?", [file1_path]).fetchone()
+            file_record_result = db_conn.execute(
+                "SELECT file_id FROM indexed_files WHERE file_path = ?", [file1_path]
+            ).fetchone()
             assert file_record_result is not None
             file_id = file_record_result[0]
 
-            chunk_record_result = db_conn.execute("SELECT COUNT(*) FROM text_chunks WHERE file_id = ?", [file_id]).fetchone()
+            chunk_record_result = db_conn.execute(
+                "SELECT COUNT(*) FROM text_chunks WHERE file_id = ?", [file_id]
+            ).fetchone()
             assert chunk_record_result is not None
             assert chunk_record_result[0] > 0
         finally:
@@ -214,10 +217,20 @@ class TestIndexerPersistentIntegration:
 
         store_before = MetadataStore(persistent=True, db_path=indexer_config.db_path)
         try:
-            file_count_before = store_before.conn.execute("SELECT COUNT(*) FROM indexed_files").fetchone()[0]
-            chunk_count_before = store_before.conn.execute("SELECT COUNT(*) FROM text_chunks").fetchone()[0]
+            res_fcb = store_before.conn.execute("SELECT COUNT(*) FROM indexed_files").fetchone()
+            assert res_fcb is not None
+            file_count_before = res_fcb[0]
+
+            res_ccb = store_before.conn.execute("SELECT COUNT(*) FROM text_chunks").fetchone()
+            assert res_ccb is not None
+            chunk_count_before = res_ccb[0]
+
             file2_path = str((persistent_test_data_path / "file2.txt").resolve())
-            file2_hash_before = store_before.conn.execute("SELECT content_hash FROM indexed_files WHERE file_path = ?", [file2_path]).fetchone()[0]
+            res_f2hb = store_before.conn.execute(
+                "SELECT content_hash FROM indexed_files WHERE file_path = ?", [file2_path]
+            ).fetchone()
+            assert res_f2hb is not None
+            file2_hash_before = res_f2hb[0]
         finally:
             store_before.close()
 
@@ -230,9 +243,19 @@ class TestIndexerPersistentIntegration:
 
         store_after = MetadataStore(persistent=True, db_path=indexer_config.db_path)
         try:
-            file_count_nochange = store_after.conn.execute("SELECT COUNT(*) FROM indexed_files").fetchone()[0]
-            chunk_count_nochange = store_after.conn.execute("SELECT COUNT(*) FROM text_chunks").fetchone()[0]
-            file2_hash_after = store_after.conn.execute("SELECT content_hash FROM indexed_files WHERE file_path = ?", [file2_path]).fetchone()[0]
+            res_fcn = store_after.conn.execute("SELECT COUNT(*) FROM indexed_files").fetchone()
+            assert res_fcn is not None
+            file_count_nochange = res_fcn[0]
+
+            res_ccn = store_after.conn.execute("SELECT COUNT(*) FROM text_chunks").fetchone()
+            assert res_ccn is not None
+            chunk_count_nochange = res_ccn[0]
+
+            res_f2ha = store_after.conn.execute(
+                "SELECT content_hash FROM indexed_files WHERE file_path = ?", [file2_path]
+            ).fetchone()
+            assert res_f2ha is not None
+            file2_hash_after = res_f2ha[0]
         finally:
             store_after.close()
 

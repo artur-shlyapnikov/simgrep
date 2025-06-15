@@ -1,11 +1,20 @@
+import pathlib
+from typing import Iterator, cast
+
 import pytest
+
 from simgrep.adapters.hf_chunker import HFChunker
 from simgrep.adapters.sentence_embedder import SentenceEmbedder
 from simgrep.adapters.unstructured_extractor import UnstructuredExtractor
 from simgrep.adapters.usearch_index import USearchIndex
+from simgrep.core.abstractions import (
+    Embedder,
+    Repository,
+    TextExtractor,
+    TokenChunker,
+    VectorIndex,
+)
 from simgrep.repository import MetadataStore
-from simgrep.core.abstractions import Embedder, Repository, TextExtractor, TokenChunker, VectorIndex
-import pathlib
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
@@ -31,7 +40,7 @@ def usearch_index(hf_embedder: Embedder) -> USearchIndex:
 
 
 @pytest.fixture
-def metadata_store(tmp_path: pathlib.Path) -> Repository:
+def metadata_store(tmp_path: pathlib.Path) -> Iterator[Repository]:
     db_path = tmp_path / "test_metadata.duckdb"
     store = MetadataStore(persistent=True, db_path=db_path)
     yield store
@@ -40,25 +49,25 @@ def metadata_store(tmp_path: pathlib.Path) -> Repository:
 
 # These fixtures are used by pytest_generate_tests to select which adapter to test
 @pytest.fixture
-def embedder(request) -> Embedder:
-    return request.getfixturevalue(request.param)
+def embedder(request: pytest.FixtureRequest) -> Embedder:
+    return cast(Embedder, request.getfixturevalue(request.param))
 
 
 @pytest.fixture
-def text_extractor(request) -> TextExtractor:
-    return request.getfixturevalue(request.param)
+def text_extractor(request: pytest.FixtureRequest) -> TextExtractor:
+    return cast(TextExtractor, request.getfixturevalue(request.param))
 
 
 @pytest.fixture
-def token_chunker(request) -> TokenChunker:
-    return request.getfixturevalue(request.param)
+def token_chunker(request: pytest.FixtureRequest) -> TokenChunker:
+    return cast(TokenChunker, request.getfixturevalue(request.param))
 
 
 @pytest.fixture
-def vector_index(request) -> VectorIndex:
-    return request.getfixturevalue(request.param)
+def vector_index(request: pytest.FixtureRequest) -> VectorIndex:
+    return cast(VectorIndex, request.getfixturevalue(request.param))
 
 
 @pytest.fixture
-def repository(request) -> Repository:
-    return request.getfixturevalue(request.param)
+def repository(request: pytest.FixtureRequest) -> Repository:
+    return cast(Repository, request.getfixturevalue(request.param))

@@ -110,7 +110,9 @@ def get_active_project(project_option: Optional[str]) -> str:
 @app.callback(invoke_without_command=True)
 def main_callback(
     ctx: typer.Context,
-    version_flag: Optional[bool] = typer.Option(None, "--version", "-v", help="Show simgrep version and exit.", is_eager=True),
+    version_flag: Optional[bool] = typer.Option(
+        None, "--version", "-v", help="Show simgrep version and exit.", is_eager=True
+    ),
 ) -> None:
     """
     simgrep CLI application.
@@ -183,7 +185,9 @@ def init(
 
             project_info = get_project_by_name(conn, proj_cfg.name)
             if not project_info:
-                console.print(f"[bold red]Internal Error: Failed to retrieve project '{proj_cfg.name}' after creation.[/bold red]")
+                console.print(
+                    f"[bold red]Internal Error: Failed to retrieve project '{proj_cfg.name}' after creation.[/bold red]"
+                )
                 raise typer.Exit(code=1)
             project_id = project_info[0]
             add_project_path(conn, project_id, str(cwd))
@@ -276,7 +280,9 @@ def search(
             active_project = get_active_project(project)
 
             if not is_machine_readable_output:
-                console.print(f"Searching for: '[bold blue]{query_text}[/bold blue]' in project '[magenta]{active_project}[/magenta]'")
+                console.print(
+                    f"Searching for: '[bold blue]{query_text}[/bold blue]' in project '[magenta]{active_project}[/magenta]'"
+                )
 
             global_db_path = global_simgrep_config.db_directory / "global_metadata.duckdb"
             with connect_global_db(global_db_path) as conn:
@@ -336,7 +342,9 @@ def search(
             elif output == OutputMode.paths:
                 base = Path.cwd() if relative_paths else None
                 output_paths = [r.file_path for r in results if r.file_path]
-                print(format_paths(file_paths=output_paths, use_relative=relative_paths, base_path=base, console=console))
+                print(
+                    format_paths(file_paths=output_paths, use_relative=relative_paths, base_path=base, console=console)
+                )
             elif output == OutputMode.json:
                 print(format_json(results))
             elif output == OutputMode.count_results:
@@ -423,7 +431,9 @@ def index(
     active_project = get_active_project(project)
     console.print(f"Starting indexing for project '[magenta]{active_project}[/magenta]'")
     if rebuild:
-        console.print(f"[bold yellow]Warning: This will wipe and rebuild the '{active_project}' project index.[/bold yellow]")
+        console.print(
+            f"[bold yellow]Warning: This will wipe and rebuild the '{active_project}' project index.[/bold yellow]"
+        )
         if not yes:
             if not typer.confirm(
                 f"Are you sure you want to wipe and rebuild the '{active_project}' project index?",

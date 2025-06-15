@@ -6,7 +6,7 @@ from typing import Callable
 import pytest
 from typer.testing import Result
 
-from .conftest import run_simgrep_command, temp_simgrep_home
+from .conftest import run_simgrep_command
 
 pytest.importorskip("sentence_transformers")
 pytest.importorskip("usearch.index")
@@ -175,7 +175,9 @@ class TestCliEphemeralE2E:
             assert pathlib.Path(line).is_absolute()
 
     def test_ephemeral_search_no_matches(self, ephemeral_docs_dir: pathlib.Path) -> None:
-        result = run_simgrep_command(["search", "xyz", str(ephemeral_docs_dir), "--output", "count", "--min-score", "0.9"])
+        result = run_simgrep_command(
+            ["search", "xyz", str(ephemeral_docs_dir), "--output", "count", "--min-score", "0.9"]
+        )
         assert result.exit_code == 0
         assert "0 matching chunks in 0 files." in result.stdout
 

@@ -60,7 +60,8 @@ def format_paths(
     if use_relative:
         if base_path is None:
             console.print(
-                "Warning (simgrep internal): base_path was not provided to format_paths " "when use_relative was True. Defaulting to absolute paths.",
+                "Warning (simgrep internal): base_path was not provided to format_paths "
+                "when use_relative was True. Defaulting to absolute paths.",
                 style="yellow",
             )
             # fallback to absolute paths for this call

@@ -39,4 +39,6 @@ class SentenceEmbedder(Embedder):
             embeddings = self._model.encode(sentences=texts, **encode_kwargs)
             return cast(np.ndarray, embeddings)
         except Exception as e:
-            raise SimgrepError(f"Failed to generate embeddings using model '{self._model_name}'. Original error: {e}") from e
+            raise SimgrepError(
+                f"Failed to generate embeddings using model '{self._model_name}'. Original error: {e}"
+            ) from e

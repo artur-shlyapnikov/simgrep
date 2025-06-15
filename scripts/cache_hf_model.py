@@ -1,16 +1,23 @@
 import logging
-import nltk
+import sys
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+import nltk
 
 try:
     from simgrep.adapters.hf_chunker import load_tokenizer
     from simgrep.adapters.sentence_embedder import _load_embedding_model as load_embedding_model
     from simgrep.core.models import SimgrepConfig
 except ImportError:
-    logger.error("Failed to import from simgrep.adapters. " "Ensure simgrep is installed in editable mode (`make install` or `uv pip install -e .`).")
+    print(
+        "Failed to import from simgrep.adapters. "
+        "Ensure simgrep is installed in editable mode (`make install` or `uv pip install -e .`).",
+        file=sys.stderr,
+    )
     raise
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 MODEL_NAME = SimgrepConfig().default_embedding_model_name
 

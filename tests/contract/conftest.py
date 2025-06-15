@@ -1,6 +1,8 @@
-import pytest
 import pathlib
+
 import numpy as np
+import pytest
+
 from simgrep.core.abstractions import VectorIndex
 
 

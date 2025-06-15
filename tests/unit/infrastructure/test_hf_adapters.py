@@ -2,15 +2,9 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
-from transformers import PreTrainedTokenizerBase
 
-from unittest.mock import patch
-
-import pytest
-
-from simgrep.adapters.hf_chunker import HFChunker, load_tokenizer
+from simgrep.adapters.hf_chunker import HFChunker
 from simgrep.adapters.sentence_embedder import SentenceEmbedder
-from simgrep.core.errors import SimgrepError
 
 
 @pytest.mark.external
@@ -45,7 +39,7 @@ class TestSentenceEmbedder:
     def test_generate_embeddings_empty_list(self, hf_embedder: SentenceEmbedder) -> None:
         import numpy as np
 
-        texts = []
+        texts: list[str] = []
         embeddings = hf_embedder.encode(texts)
         assert isinstance(embeddings, np.ndarray)
         assert embeddings.shape[0] == 0

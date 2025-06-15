@@ -15,7 +15,9 @@ class SearchService:
         self.embedder = embedder
         self.index = index
 
-    def search(self, query: str, *, k: int, min_score: float, file_filter: Optional[List[str]], keyword_filter: Optional[str]) -> List[SearchResult]:
+    def search(
+        self, query: str, *, k: int, min_score: float, file_filter: Optional[List[str]], keyword_filter: Optional[str]
+    ) -> List[SearchResult]:
         if len(self.index) == 0:
             return []
 

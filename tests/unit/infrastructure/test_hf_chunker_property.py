@@ -1,11 +1,10 @@
 import pytest
 from hypothesis import HealthCheck, assume, given, settings
+from hypothesis import strategies as st
+
+from simgrep.adapters.hf_chunker import HFChunker
 
 pytest.mark.external
-from hypothesis import strategies as st
-from transformers import PreTrainedTokenizerBase
-
-from simgrep.adapters.hf_chunker import HFChunker, load_tokenizer
 
 
 @settings(max_examples=200, suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow])

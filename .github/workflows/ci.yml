@@ -34,6 +34,9 @@ jobs:
       - name: Create virtual environment
         run: uv venv
 
+      - name: Install system dependencies for filetype detection
+        run: sudo apt-get update && sudo apt-get install -y libmagic1
+
       - name: Install dependencies
         run: make install
 
@@ -49,7 +52,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        test-type: [unit, contract, property, integration, e2e]
+        test-type: [unit, contract, integration, e2e]
 
     steps:
       - uses: actions/checkout@v4
@@ -70,6 +73,9 @@ jobs:
 
       - name: Create virtual environment
         run: uv venv
+
+      - name: Install system dependencies for filetype detection
+        run: sudo apt-get update && sudo apt-get install -y libmagic1
 
       - name: Install dependencies
         run: make install
@@ -92,8 +98,8 @@ jobs:
           name: coverage-data-${{ matrix.test-type }}
           path: .coverage
 
-  coverage:
-    needs: test
+  property-test:
+    needs: lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -114,6 +120,56 @@ jobs:
 
       - name: Create virtual environment
         run: uv venv
+
+      - name: Install system dependencies for filetype detection
+        run: sudo apt-get update && sudo apt-get install -y libmagic1
+
+      - name: Install dependencies
+        run: make install
+
+      - name: Pre-cache Hugging Face model for tests
+        run: make download-models
+
+      - name: Run property tests
+        run: make test-property
+
+      - name: Upload pytest results
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-results-property
+          path: reports/junit-property.xml
+
+      - name: Upload coverage data
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-data-property
+          path: .coverage
+
+  coverage:
+    needs: [test, property-test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read Python version
+        id: python-version
+        run: echo "version=$(cat .python-version)" >> $GITHUB_OUTPUT
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ steps.python-version.outputs.version }}
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Create virtual environment
+        run: uv venv
+
+      - name: Install system dependencies for filetype detection
+        run: sudo apt-get update && sudo apt-get install -y libmagic1
 
       - name: Install dependencies
         run: make install

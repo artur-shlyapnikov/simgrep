@@ -1,16 +1,15 @@
 import pathlib
-from typing import Any, Dict, Iterator, List, Tuple
+from typing import Iterator
 from unittest.mock import MagicMock, patch
 
 import duckdb
 import pytest
 
-pytest.mark.external
-
-# Ensure consistent exception type
 from simgrep.core.errors import MetadataDBError
 from simgrep.core.models import ChunkData
 from simgrep.repository import MetadataStore
+
+pytest.mark.external
 
 
 @pytest.fixture
@@ -71,18 +70,22 @@ def sample_chunk_data_list(
 
 
 class TestMetadataStoreInit:
-    def test_init_ephemeral(self):
+    def test_init_ephemeral(self) -> None:
         store = MetadataStore(persistent=False)
-        assert store.conn.execute("SELECT current_database();").fetchone()[0] == "memory"
+        res = store.conn.execute("SELECT current_database();").fetchone()
+        assert res is not None
+        assert res[0] == "memory"
         store.close()
 
-    def test_init_persistent_no_path_raises(self):
+    def test_init_persistent_no_path_raises(self) -> None:
         with pytest.raises(ValueError, match="db_path must be provided for persistent MetadataStore"):
             MetadataStore(persistent=True, db_path=None)
 
-    def test_init_ephemeral_with_path_is_ignored(self, tmp_path: pathlib.Path):
+    def test_init_ephemeral_with_path_is_ignored(self, tmp_path: pathlib.Path) -> None:
         store = MetadataStore(persistent=False, db_path=tmp_path / "db.duckdb")
-        assert store.conn.execute("SELECT current_database();").fetchone()[0] == "memory"
+        res = store.conn.execute("SELECT current_database();").fetchone()
+        assert res is not None
+        assert res[0] == "memory"
         assert not (tmp_path / "db.duckdb").exists()
         store.close()
 
@@ -95,6 +98,7 @@ class TestMetadataStoreEphemeral:
     ) -> None:
         ephemeral_store.batch_insert_files(sample_files_metadata)
         count_result = ephemeral_store.conn.execute("SELECT COUNT(*) FROM temp_files;").fetchone()
+        assert count_result is not None
         assert count_result[0] == len(sample_files_metadata)
 
     def test_batch_insert_chunks(
@@ -106,6 +110,7 @@ class TestMetadataStoreEphemeral:
         ephemeral_store.batch_insert_files(sample_files_metadata)
         ephemeral_store.batch_insert_chunks(sample_chunk_data_list)
         count_result = ephemeral_store.conn.execute("SELECT COUNT(*) FROM temp_chunks;").fetchone()
+        assert count_result is not None
         assert count_result[0] == len(sample_chunk_data_list)
 
     def test_retrieve_chunk_for_display_valid_id(
@@ -140,14 +145,18 @@ class TestMetadataStoreEphemeral:
         assert "file_path" in results[0]
         assert isinstance(results[0]["file_path"], pathlib.Path)
 
-    def test_batch_insert_files_ephemeral_on_conflict(self, ephemeral_store: MetadataStore, tmp_path: pathlib.Path) -> None:
+    def test_batch_insert_files_ephemeral_on_conflict(
+        self, ephemeral_store: MetadataStore, tmp_path: pathlib.Path
+    ) -> None:
         file_path = tmp_path / "conflict.txt"
         file_path.write_text("content")
 
         # Insert a file with a specific file_id
         ephemeral_store.batch_insert_files([(123, file_path)])
 
-        count_before = ephemeral_store.conn.execute("SELECT COUNT(*) FROM temp_files").fetchone()[0]
+        count_before_res = ephemeral_store.conn.execute("SELECT COUNT(*) FROM temp_files").fetchone()
+        assert count_before_res is not None
+        count_before = count_before_res[0]
         assert count_before == 1
 
         # Now try to insert with the same file_id but different path
@@ -156,11 +165,17 @@ class TestMetadataStoreEphemeral:
 
         ephemeral_store.batch_insert_files([(123, another_path)])
 
-        count_after = ephemeral_store.conn.execute("SELECT COUNT(*) FROM temp_files").fetchone()[0]
+        count_after_res = ephemeral_store.conn.execute("SELECT COUNT(*) FROM temp_files").fetchone()
+        assert count_after_res is not None
+        count_after = count_after_res[0]
         assert count_after == 1  # Should not have inserted a new row
 
         # The original path should still be there because of DO NOTHING
-        retrieved_path = ephemeral_store.conn.execute("SELECT file_path FROM temp_files WHERE file_id = ?", [123]).fetchone()[0]
+        retrieved_path_res = ephemeral_store.conn.execute(
+            "SELECT file_path FROM temp_files WHERE file_id = ?", [123]
+        ).fetchone()
+        assert retrieved_path_res is not None
+        retrieved_path = retrieved_path_res[0]
         assert retrieved_path == str(file_path.resolve())
 
     def test_get_index_counts_on_non_persistent_store(self, ephemeral_store: MetadataStore) -> None:
@@ -168,7 +183,9 @@ class TestMetadataStoreEphemeral:
         with patch("simgrep.repository.logger.warning") as mock_log:
             count = ephemeral_store.get_index_counts()
             assert count == (0, 0)
-            mock_log.assert_called_once_with("get_index_counts called on a non-persistent store, which is not expected.")
+            mock_log.assert_called_once_with(
+                "get_index_counts called on a non-persistent store, which is not expected."
+            )
 
 
 @pytest.fixture
@@ -226,7 +243,9 @@ def populated_persistent_store(persistent_store: MetadataStore, tmp_path: pathli
 
 
 class TestMetadataStorePersistent:
-    def test_retrieve_chunk_details_persistent(self, populated_persistent_store: MetadataStore, tmp_path: pathlib.Path) -> None:
+    def test_retrieve_chunk_details_persistent(
+        self, populated_persistent_store: MetadataStore, tmp_path: pathlib.Path
+    ) -> None:
         retrieved = populated_persistent_store.retrieve_chunk_details_persistent(usearch_label=10)
         assert retrieved is not None
         text, path, start, end = retrieved
@@ -245,17 +264,23 @@ class TestMetadataStorePersistent:
         assert populated_persistent_store.retrieve_filtered_chunk_details(usearch_labels=[]) == []
 
     def test_retrieve_filtered_chunk_details_file_filter(self, populated_persistent_store: MetadataStore) -> None:
-        results = populated_persistent_store.retrieve_filtered_chunk_details(usearch_labels=[10, 20, 21], file_filter=["*.py"])
+        results = populated_persistent_store.retrieve_filtered_chunk_details(
+            usearch_labels=[10, 20, 21], file_filter=["*.py"]
+        )
         assert len(results) == 2
         assert {r["usearch_label"] for r in results} == {20, 21}
 
     def test_retrieve_filtered_chunk_details_keyword_filter(self, populated_persistent_store: MetadataStore) -> None:
-        results = populated_persistent_store.retrieve_filtered_chunk_details(usearch_labels=[10, 20, 21], keyword_filter="keyword")
+        results = populated_persistent_store.retrieve_filtered_chunk_details(
+            usearch_labels=[10, 20, 21], keyword_filter="keyword"
+        )
         assert len(results) == 1
         assert results[0]["usearch_label"] == 21
 
     def test_retrieve_filtered_chunk_details_combined_filters(self, populated_persistent_store: MetadataStore) -> None:
-        results = populated_persistent_store.retrieve_filtered_chunk_details(usearch_labels=[10, 20, 21], file_filter=["*.py"], keyword_filter="python")
+        results = populated_persistent_store.retrieve_filtered_chunk_details(
+            usearch_labels=[10, 20, 21], file_filter=["*.py"], keyword_filter="python"
+        )
         assert len(results) == 1
         assert results[0]["usearch_label"] == 20
 
@@ -266,21 +291,27 @@ class TestMetadataStorePersistent:
         assert chunks == 0
 
     def test_delete_file_records(self, populated_persistent_store: MetadataStore, tmp_path: pathlib.Path) -> None:
-        file1_id = populated_persistent_store.conn.execute(
+        res = populated_persistent_store.conn.execute(
             "SELECT file_id FROM indexed_files WHERE file_path = ?",
             [str(tmp_path / "file1.txt")],
-        ).fetchone()[0]
+        ).fetchone()
+        assert res is not None
+        file1_id = res[0]
         deleted_labels = populated_persistent_store.delete_file_records(file1_id)
         assert deleted_labels == [10]
         files, chunks = populated_persistent_store.get_index_counts()
         assert files == 2
         assert chunks == 2
 
-    def test_delete_file_records_no_chunks(self, populated_persistent_store: MetadataStore, tmp_path: pathlib.Path) -> None:
-        file3_id = populated_persistent_store.conn.execute(
+    def test_delete_file_records_no_chunks(
+        self, populated_persistent_store: MetadataStore, tmp_path: pathlib.Path
+    ) -> None:
+        res = populated_persistent_store.conn.execute(
             "SELECT file_id FROM indexed_files WHERE file_path = ?",
             [str(tmp_path / "file3.txt")],
-        ).fetchone()[0]
+        ).fetchone()
+        assert res is not None
+        file3_id = res[0]
         deleted_labels = populated_persistent_store.delete_file_records(file3_id)
         assert deleted_labels == []
         files, chunks = populated_persistent_store.get_index_counts()
@@ -306,7 +337,16 @@ class TestMetadataStorePersistent:
             mock_conn.cursor = MagicMock()
             mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
 
-            chunk_records = [{"file_id": 1, "usearch_label": 1, "chunk_text": "text", "start_char_offset": 0, "end_char_offset": 4, "token_count": 1}]
+            chunk_records = [
+                {
+                    "file_id": 1,
+                    "usearch_label": 1,
+                    "chunk_text": "text",
+                    "start_char_offset": 0,
+                    "end_char_offset": 4,
+                    "token_count": 1,
+                }
+            ]
 
             with pytest.raises(MetadataDBError, match="Failed during batch insert into 'text_chunks'"):
                 persistent_store.batch_insert_text_chunks(chunk_records)
@@ -316,7 +356,9 @@ class TestMetadataStorePersistent:
     def test_delete_file_records_transaction_rollback(self, populated_persistent_store: MetadataStore) -> None:
         """Verify the transaction rollback logic in delete_file_records."""
         original_conn = populated_persistent_store.conn
-        file_id_to_delete = original_conn.execute("SELECT file_id FROM indexed_files LIMIT 1").fetchone()[0]
+        res = original_conn.execute("SELECT file_id FROM indexed_files LIMIT 1").fetchone()
+        assert res is not None
+        file_id_to_delete = res[0]
 
         with patch.object(populated_persistent_store, "conn", MagicMock(wraps=original_conn)) as mock_conn:
             mock_cursor = MagicMock()

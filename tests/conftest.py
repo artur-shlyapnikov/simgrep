@@ -1,13 +1,21 @@
-import pytest
-from simgrep.core.abstractions import Embedder, Repository, TextExtractor, TokenChunker, VectorIndex
-import numpy as np
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Sequence
-from simgrep.core.models import Chunk, SearchResult, ChunkData
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+
+import numpy as np
+import pytest
+
+from simgrep.core.abstractions import (
+    Embedder,
+    Repository,
+    TextExtractor,
+    TokenChunker,
+    VectorIndex,
+)
+from simgrep.core.models import Chunk, ChunkData, SearchResult
 
 
 # This hook will parametrize contract tests
-def pytest_generate_tests(metafunc):
+def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     if "embedder" in metafunc.fixturenames:
         metafunc.parametrize("embedder", ["hf_embedder"], indirect=True)
     if "text_extractor" in metafunc.fixturenames:
@@ -103,12 +111,12 @@ class FakeVectorIndex(VectorIndex):
 
 
 @pytest.fixture
-def fake_vector_index_factory():
+def fake_vector_index_factory() -> Callable[[int], VectorIndex]:
     return FakeVectorIndex
 
 
 class FakeRepository(Repository):
-    def __init__(self):
+    def __init__(self) -> None:
         self.files: Dict[int, str] = {}
         self.chunks: Dict[int, Dict[str, Any]] = {}
         self.max_label = -1
