@@ -1,9 +1,12 @@
 from pathlib import Path
 from typing import List, Optional
 
+import duckdb
+
 from .config import SimgrepConfig, load_global_config
+from .core.errors import MetadataDBError
+from .core.models import ProjectConfig
 from .metadata_db import (
-    MetadataDBError,
     add_project_path,
     connect_global_db,
     create_project_scaffolding,
@@ -11,7 +14,6 @@ from .metadata_db import (
     get_project_by_name,
     get_project_config,
 )
-from .models import ProjectConfig
 
 
 class ProjectManager:
@@ -21,7 +23,7 @@ class ProjectManager:
         self.config = config or load_global_config()
         self._db_path = self.config.db_directory / "global_metadata.duckdb"
 
-    def _connect(self):
+    def _connect(self) -> duckdb.DuckDBPyConnection:
         return connect_global_db(self._db_path)
 
     def create_project(self, name: str) -> ProjectConfig:
@@ -41,7 +43,7 @@ class ProjectManager:
             proj = get_project_by_name(conn, project_name)
             if proj is None:
                 raise MetadataDBError(f"Project '{project_name}' not found.")
-            project_id = int(proj[0])
+            project_id = proj[0]
             add_project_path(conn, project_id, str(path))
         finally:
             conn.close()

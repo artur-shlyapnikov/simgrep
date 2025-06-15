@@ -8,7 +8,7 @@ dependencies = [
     "pydantic>=2.11.4",
     "rich>=14.0.0",
     "typer>=0.15.4",
-    "unstructured[md]>=0.13.0",
+    "unstructured[md,magic]>=0.14.4",
     "sentence-transformers>=2.7.0",
     "transformers>=4.51.0",
     "huggingface-hub>=0.20.0",
@@ -16,6 +16,7 @@ dependencies = [
     "numpy>=1.23.0",
     "duckdb>=0.10.0",
     "pathspec>=0.12.1",
+    "tomli-w>=1.0.0",
 ]
 
 [project.scripts]
@@ -55,4 +56,7 @@ pythonpath = [
 ]
 markers = [
     "timeout: set timeout for a test (requires pytest-timeout)",
+    "contract: marks a test as a port contract test",
+    "external: marks tests that use external libraries (e.g. huggingface)",
+    "slow: marks a test as slow to run",
 ]

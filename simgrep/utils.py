@@ -1,3 +1,4 @@
+import hashlib
 import tomllib
 from pathlib import Path
 from typing import List, Optional
@@ -10,6 +11,9 @@ def gather_files_to_process(path: Path, patterns: List[str]) -> List[Path]:
 
     Respects ``.gitignore`` entries found in the target directory.
     """
+    import fnmatch
+    import os
+
     base_dir = path.parent if path.is_file() else path
 
     ignore_spec = None
@@ -21,21 +25,26 @@ def gather_files_to_process(path: Path, patterns: List[str]) -> List[Path]:
             ignore_spec = None
 
     if path.is_file():
-        if ignore_spec and ignore_spec.match_file(path.name):
-            return []
+        # If a direct file path is provided, we process it regardless of gitignore.
+        # The user's explicit intent overrides the ignore file.
         return [path.resolve()]
 
     found: set[Path] = set()
-    for pattern in patterns:
-        for p in base_dir.rglob(pattern):
-            if not p.is_file():
+    for root, _, files in os.walk(base_dir, followlinks=True):
+        root_path = Path(root)
+        for name in files:
+            file_path = root_path / name
+            if not file_path.is_file():
                 continue
-            rel = p.relative_to(base_dir)
+
+            rel = file_path.relative_to(base_dir)
             if ignore_spec and ignore_spec.match_file(str(rel)):
                 continue
-            found.add(p.resolve())
 
-    return sorted(found)
+            if any(fnmatch.fnmatch(name, p) for p in patterns):
+                found.add(file_path.resolve())
+
+    return sorted(list(found))
 
 
 def find_project_root(path: Optional[Path] = None) -> Optional[Path]:
@@ -65,3 +74,18 @@ def get_project_name_from_local_config(project_root: Path) -> Optional[str]:
         return data.get("project_name")
     except (tomllib.TOMLDecodeError, OSError):
         return None
+
+
+def calculate_file_hash(file_path: Path) -> str:
+    """Compute the SHA256 hash of a file's contents."""
+    if not file_path.exists() or not file_path.is_file():
+        raise FileNotFoundError(f"File not found or is not a file: {file_path}")
+
+    sha256_hash = hashlib.sha256()
+    try:
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                sha256_hash.update(chunk)
+        return sha256_hash.hexdigest()
+    except OSError as e:
+        raise IOError(f"Error reading file for hashing: {e}") from e

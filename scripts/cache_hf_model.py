@@ -1,19 +1,24 @@
 import logging
+import sys
+
+import nltk
+
+try:
+    from simgrep.adapters.hf_chunker import load_tokenizer
+    from simgrep.adapters.sentence_embedder import _load_embedding_model as load_embedding_model
+    from simgrep.core.models import SimgrepConfig
+except ImportError:
+    print(
+        "Failed to import from simgrep.adapters. " "Ensure simgrep is installed in editable mode (`make install` or `uv pip install -e .`).",
+        file=sys.stderr,
+    )
+    raise
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-try:
-    # Import our loading functions to leverage the new download-progress UI
-    from simgrep.processor import load_embedding_model, load_tokenizer
-except ImportError:
-    logger.error(
-        "Failed to import from simgrep.processor. "
-        "Ensure simgrep is installed in editable mode (`make install` or `uv pip install -e .`)."
-    )
-    raise
 
-MODEL_NAME = "Qwen/Qwen3-Embedding-0.6B"
+MODEL_NAME = SimgrepConfig().default_embedding_model_name
 
 
 def cache_model_and_tokenizer():
@@ -33,7 +38,25 @@ def cache_model_and_tokenizer():
         logger.error(f"Error caching SentenceTransformer model {MODEL_NAME}: {e}")
 
 
+def cache_nltk_data():
+    """Downloads NLTK packages required by unstructured to avoid download during tests."""
+    logger.info("Ensuring NLTK packages are cached...")
+    packages = [
+        ("punkt", "tokenizers/punkt"),
+        ("averaged_perceptron_tagger", "taggers/averaged_perceptron_tagger"),
+    ]
+    for pkg_id, pkg_path in packages:
+        try:
+            nltk.data.find(pkg_path)
+            logger.info(f"NLTK '{pkg_id}' is ready.")
+        except LookupError:
+            logger.info(f"Downloading NLTK '{pkg_id}'...")
+            nltk.download(pkg_id, quiet=True)
+            logger.info(f"NLTK '{pkg_id}' downloaded.")
+
+
 if __name__ == "__main__":
-    logger.info("Starting Hugging Face model caching process...")
+    logger.info("Starting Hugging Face model and NLTK data caching process...")
     cache_model_and_tokenizer()
-    logger.info("Model caching process finished.")
+    cache_nltk_data()
+    logger.info("Model and data caching process finished.")

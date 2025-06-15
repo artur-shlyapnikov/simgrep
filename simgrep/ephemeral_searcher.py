@@ -1,34 +1,28 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import numpy as np
 import typer
 from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
 
-from .config import DEFAULT_K_RESULTS, SimgrepConfig
-from .formatter import format_count, format_json, format_paths, format_show_basic
-from .metadata_store import MetadataStore
-from .models import ChunkData, OutputMode, SearchResult
+from .config import DEFAULT_K_RESULTS
+from .core.context import SimgrepContext
+from .core.models import Chunk, ChunkData, OutputMode, SearchResult
+from .repository import MetadataStore
+from .services.search_service import SearchService
+from .ui.formatters import format_count, format_json, format_paths, format_show_basic
 from .utils import gather_files_to_process
-from .vector_store import create_inmemory_index, search_inmemory_index
-
-chunk_text_by_tokens: Optional[Any] = None
-extract_text_from_file: Optional[Any] = None
-generate_embeddings: Optional[Any] = None
-load_embedding_model: Optional[Any] = None
-load_tokenizer: Optional[Any] = None
-ProcessedChunkInfo: Optional[Any] = None  # alias for the dataclass, loaded lazily
 
 
 class EphemeralSearcher:
     """Utility to perform one-off searches on arbitrary files or directories."""
 
-    def __init__(self, console: Optional[Console] = None, config: Optional[SimgrepConfig] = None) -> None:
+    def __init__(self, context: SimgrepContext, console: Optional[Console] = None) -> None:
+        self.context = context
         self.console = console or Console()
-        self.config = config or SimgrepConfig()
 
     def search(
         self,
@@ -44,52 +38,7 @@ class EphemeralSearcher:
         keyword_filter: Optional[str] = None,
     ) -> None:
         """Run an ephemeral search and print results to the console."""
-        global chunk_text_by_tokens, extract_text_from_file, generate_embeddings, load_embedding_model, load_tokenizer, ProcessedChunkInfo
-        if any(
-            f is None
-            for f in (
-                chunk_text_by_tokens,
-                extract_text_from_file,
-                generate_embeddings,
-                load_embedding_model,
-                load_tokenizer,
-            )
-        ):
-            from .processor import (
-                ProcessedChunk as _ProcessedChunkInfo,
-            )
-            from .processor import (
-                chunk_text_by_tokens as _chunk_text_by_tokens,
-            )
-            from .processor import (
-                extract_text_from_file as _extract_text_from_file,
-            )
-            from .processor import (
-                generate_embeddings as _generate_embeddings,
-            )
-            from .processor import (
-                load_embedding_model as _load_embedding_model,
-            )
-            from .processor import (
-                load_tokenizer as _load_tokenizer,
-            )
-
-            if chunk_text_by_tokens is None:
-                chunk_text_by_tokens = _chunk_text_by_tokens
-            if extract_text_from_file is None:
-                extract_text_from_file = _extract_text_from_file
-            if generate_embeddings is None:
-                generate_embeddings = _generate_embeddings
-            if load_embedding_model is None:
-                load_embedding_model = _load_embedding_model
-            if load_tokenizer is None:
-                load_tokenizer = _load_tokenizer
-            if ProcessedChunkInfo is None:
-                ProcessedChunkInfo = _ProcessedChunkInfo
-
-
         is_machine = output_mode in (OutputMode.json, OutputMode.paths)
-        cfg = self.config
 
         if not is_machine:
             self.console.print(f"Performing ephemeral search for: '[bold blue]{query_text}[/bold blue]' in path: '[green]{path_to_search}[/green]'")
@@ -103,11 +52,12 @@ class EphemeralSearcher:
                 self.console.print("  In-memory database and tables created.")
 
             if not is_machine:
-                self.console.print("\n[bold]Setup: Loading Tokenizer[/bold]")
-                self.console.print(f"  Loading tokenizer for model: '{cfg.default_embedding_model_name}'...")
-            tokenizer = load_tokenizer(cfg.default_embedding_model_name)
+                self.console.print("\n[bold]Setup: Preparing services from context[/bold]")
+            extractor = self.context.extractor
+            chunker = self.context.chunker
+            embedder = self.context.embedder
             if not is_machine:
-                self.console.print(f"    Tokenizer loaded successfully: {tokenizer.__class__.__name__}")
+                self.console.print("  Services ready.")
 
             search_patterns = list(patterns) if patterns else ["*.txt"]
             files_to_process = gather_files_to_process(path_to_search, search_patterns)
@@ -131,7 +81,7 @@ class EphemeralSearcher:
             label_counter = 0
 
             if not is_machine:
-                self.console.print("\n[bold]Step 1 & 2: Processing files, extracting and chunking text (token-based)[/bold]")
+                self.console.print("\n[bold]Step 1 & 2: Processing files, extracting and chunking text[/bold]")
             progress_columns = [
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
@@ -143,19 +93,14 @@ class EphemeralSearcher:
                 for file_idx, file_path in enumerate(files_to_process):
                     progress.update(task, description=f"Processing: {file_path.name}")
                     try:
-                        text = extract_text_from_file(file_path)
+                        text = extractor.extract(file_path)
                         if not text.strip():
                             if not is_machine:
                                 self.console.print(f"    [yellow]Skipped: File '{file_path}' is empty or contains only whitespace.[/yellow]")
                             progress.advance(task)
                             continue
 
-                        chunk_infos: List[ProcessedChunkInfo] = chunk_text_by_tokens(
-                            full_text=text,
-                            tokenizer=tokenizer,
-                            chunk_size_tokens=cfg.default_chunk_size_tokens,
-                            overlap_tokens=cfg.default_chunk_overlap_tokens,
-                        )
+                        chunk_infos: List[Chunk] = list(chunker.chunk(text))
                         for c in chunk_infos:
                             all_chunks.append(
                                 ChunkData(
@@ -163,9 +108,9 @@ class EphemeralSearcher:
                                     source_file_path=file_path,
                                     source_file_id=file_idx,
                                     usearch_label=label_counter,
-                                    start_char_offset=c.start_char_offset,
-                                    end_char_offset=c.end_char_offset,
-                                    token_count=c.token_count,
+                                    start_char_offset=c.start,
+                                    end_char_offset=c.end,
+                                    token_count=c.tokens,
                                 )
                             )
                             label_counter += 1
@@ -189,28 +134,25 @@ class EphemeralSearcher:
 
             if not is_machine:
                 self.console.print(f"\n[bold]Step 3: Generating Embeddings for {len(all_chunks)} total chunk(s)[/bold]")
-            model = load_embedding_model(cfg.default_embedding_model_name)
-            query_embedding = generate_embeddings(
-                texts=[query_text],
-                model_name=cfg.default_embedding_model_name,
-                model=model,
-                is_query=True,
-            )
-            chunk_embeddings = generate_embeddings(
-                texts=[c.text for c in all_chunks],
-                model_name=cfg.default_embedding_model_name,
-                model=model,
-                is_query=False,
-            )
+            chunk_embeddings = embedder.encode(texts=[c.text for c in all_chunks], is_query=False)
 
+            results: List[SearchResult] = []
             if chunk_embeddings.size == 0:
                 if not is_machine:
                     self.console.print("  No chunk embeddings available. Skipping vector search.")
-                search_matches: List[SearchResult] = []
             else:
                 labels_np = np.array([c.usearch_label for c in all_chunks], dtype=np.int64)
-                idx = create_inmemory_index(embeddings=chunk_embeddings, labels_for_usearch=labels_np)
-                search_matches = search_inmemory_index(index=idx, query_embedding=query_embedding, k=top)
+                idx = self.context.index_factory(embedder.ndim)
+                idx.add(labels_np, chunk_embeddings)
+
+                search_service = SearchService(store=store, embedder=embedder, index=idx)
+                results = search_service.search(
+                    query=query_text,
+                    k=top,
+                    min_score=min_score,
+                    file_filter=file_filter,
+                    keyword_filter=keyword_filter,
+                )
 
             if not is_machine:
                 self.console.print("\n[bold]Step 5: Displaying Results[/bold]")
@@ -222,38 +164,6 @@ class EphemeralSearcher:
                         "Paths will be displayed according to the selected output mode.[/yellow]"
                     )
                 )
-
-            if not search_matches:
-                if output_mode == OutputMode.paths:
-                    self.console.print(format_paths(file_paths=[], use_relative=False, base_path=None, console=self.console))
-                elif output_mode == OutputMode.json:
-                    self.console.print("[]")
-                elif output_mode == OutputMode.count_results:
-                    self.console.print(format_count([]))
-                else:
-                    if not is_machine:
-                        self.console.print("  No relevant chunks found for your query in the processed file(s).")
-                return
-
-            results: List[Dict[str, Any]] = []
-            for match in search_matches:
-                if match.score < min_score:
-                    continue
-                details = store.retrieve_chunk_for_display(match.label)
-                if details:
-                    txt, pth, start_off, end_off = details
-                    results.append(
-                        {
-                            "file_path": pth,
-                            "chunk_text": txt,
-                            "score": match.score,
-                            "start_char_offset": start_off,
-                            "end_char_offset": end_off,
-                            "usearch_label": match.label,
-                        }
-                    )
-
-            results.sort(key=lambda r: r["score"], reverse=True)
 
             if not results:
                 if output_mode == OutputMode.paths:
@@ -268,7 +178,7 @@ class EphemeralSearcher:
                 return
 
             if output_mode == OutputMode.paths:
-                output_paths = [r["file_path"] for r in results]
+                output_paths = [r.file_path for r in results if r.file_path]
                 base: Optional[Path] = None
                 if relative_paths:
                     base = path_to_search if path_to_search.is_dir() else path_to_search.parent
@@ -282,9 +192,10 @@ class EphemeralSearcher:
             elif output_mode == OutputMode.show:
                 self.console.print(f"\n[bold cyan]Search Results (Top {len(results)}):[/bold cyan]")
                 for r in results:
-                    out = format_show_basic(file_path=r["file_path"], chunk_text=r["chunk_text"], score=r["score"])
-                    self.console.print("---")
-                    self.console.print(out)
+                    if r.file_path and r.chunk_text:
+                        out = format_show_basic(file_path=r.file_path, chunk_text=r.chunk_text, score=r.score)
+                        self.console.print("---")
+                        self.console.print(out)
             elif output_mode == OutputMode.json:
                 print(format_json(results))
             elif output_mode == OutputMode.count_results:
