@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from .core.errors import MetadataDBError
     from .core.models import ProjectConfig, SimgrepConfig
 try:
-    import duckdb.duckdb
+    import duckdb.duckdb  # type: ignore
 except ImportError:
     import duckdb
 
@@ -69,7 +69,7 @@ def _create_persistent_tables_if_not_exist(conn: duckdb.DuckDBPyConnection) -> N
             """
             CREATE TABLE IF NOT EXISTS text_chunks (
                 chunk_id BIGINT PRIMARY KEY DEFAULT nextval('text_chunks_chunk_id_seq'),
-                file_id BIGINT NOT NULL REFERENCES indexed_files(file_id),
+                file_id BIGINT NOT NULL REFERENCES indexed_files(file_id) ON DELETE CASCADE,
                 usearch_label BIGINT UNIQUE NOT NULL,
                 chunk_text TEXT NOT NULL,
                 start_char_offset INTEGER NOT NULL,
@@ -80,6 +80,16 @@ def _create_persistent_tables_if_not_exist(conn: duckdb.DuckDBPyConnection) -> N
             """
         )
         logger.debug("Table 'text_chunks' ensured.")
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS index_metadata (
+                key VARCHAR PRIMARY KEY,
+                value VARCHAR NOT NULL
+            );
+            """
+        )
+        logger.debug("Table 'index_metadata' ensured.")
     except duckdb.Error as e:
         logger.error(f"Error creating persistent tables: {e}")
         raise MetadataDBError("Failed to create persistent tables") from e
@@ -97,22 +107,16 @@ def connect_persistent_db(db_path: pathlib.Path) -> duckdb.DuckDBPyConnection:
         logger.info(f"Ensured directory exists for DB: {db_path.parent}")
     except OSError as e:
         logger.error(f"Failed to create directory for DB at {db_path.parent}: {e}")
-        raise MetadataDBError(
-            f"Could not create directory for database at {db_path.parent}"
-        ) from e
+        raise MetadataDBError(f"Could not create directory for database at {db_path.parent}") from e
 
     try:
         conn = duckdb.connect(database=str(db_path), read_only=False)
         logger.info(f"Successfully connected to persistent DB at {db_path}")
         # duckdb enforces foreign keys by default if defined in schema.
         # the pragma foreign_keys = on; is sqlite syntax.
-        logger.debug(
-            f"Foreign key constraints are enforced by default in DuckDB for DB at {db_path}"
-        )
+        logger.debug(f"Foreign key constraints are enforced by default in DuckDB for DB at {db_path}")
     except duckdb.Error as e:
-        logger.error(
-            f"Failed to connect to or initialize persistent DB at {db_path}: {e}"
-        )
+        logger.error(f"Failed to connect to or initialize persistent DB at {db_path}: {e}")
         raise MetadataDBError(f"Failed to connect/initialize DB at {db_path}") from e
 
     _create_persistent_tables_if_not_exist(conn)
@@ -123,9 +127,7 @@ def connect_global_db(path: pathlib.Path) -> duckdb.DuckDBPyConnection:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
     except OSError as e:
-        raise MetadataDBError(
-            f"Could not create directory for global DB at {path.parent}"
-        ) from e
+        raise MetadataDBError(f"Could not create directory for global DB at {path.parent}") from e
 
     try:
         conn = duckdb.connect(database=str(path), read_only=False)
@@ -180,9 +182,7 @@ def insert_project(
         raise MetadataDBError("Failed to insert project") from e
 
 
-def get_project_by_name(
-    conn: duckdb.DuckDBPyConnection, project_name: str
-) -> Optional[Tuple[int, str, str, str, str]]:
+def get_project_by_name(conn: duckdb.DuckDBPyConnection, project_name: str) -> Optional[Tuple[int, str, str, str, str]]:
     try:
         row = conn.execute(
             "SELECT * FROM projects WHERE project_name = ?;",
@@ -201,9 +201,7 @@ def get_project_by_name(
         raise MetadataDBError("Failed to fetch project") from e
 
 
-def add_project_path(
-    conn: duckdb.DuckDBPyConnection, project_id: int, path: str
-) -> None:
+def add_project_path(conn: duckdb.DuckDBPyConnection, project_id: int, path: str) -> None:
     """Adds an indexed path to a project, ignoring duplicates."""
     try:
         # ON CONFLICT is supported in DuckDB >= 0.8.0. pyproject.toml requires >= 0.10.0
@@ -211,9 +209,7 @@ def add_project_path(
             "INSERT INTO project_indexed_paths (project_id, path) VALUES (?, ?) ON CONFLICT DO NOTHING;",
             [project_id, path],
         )
-        logger.info(
-            f"Added/ensured path '{path}' is associated with project_id {project_id}."
-        )
+        logger.info(f"Added/ensured path '{path}' is associated with project_id {project_id}.")
     except duckdb.Error as e:
         logger.error(f"DuckDB error adding path '{path}' to project {project_id}: {e}")
         raise MetadataDBError(f"Failed to add path to project {project_id}") from e
@@ -222,25 +218,19 @@ def add_project_path(
 def get_all_projects(conn: duckdb.DuckDBPyConnection) -> List[str]:
     """Return a list of all project names in the global metadata DB."""
     try:
-        rows = conn.execute(
-            "SELECT project_name FROM projects ORDER BY project_name;"
-        ).fetchall()
+        rows = conn.execute("SELECT project_name FROM projects ORDER BY project_name;").fetchall()
         return [str(row[0]) for row in rows]
     except duckdb.Error as e:
         raise MetadataDBError("Failed to fetch projects") from e
 
 
-def get_project_config(
-    conn: duckdb.DuckDBPyConnection, project_name: str
-) -> Optional[ProjectConfig]:
+def get_project_config(conn: duckdb.DuckDBPyConnection, project_name: str) -> Optional[ProjectConfig]:
     """Retrieve a full ProjectConfig from the database."""
     project_row = get_project_by_name(conn, project_name)
     if not project_row:
         return None
 
-    project_id, name, db_path_str, usearch_index_path_str, embedding_model_name = (
-        project_row
-    )
+    project_id, name, db_path_str, usearch_index_path_str, embedding_model_name = project_row
 
     path_rows = conn.execute(
         "SELECT path FROM project_indexed_paths WHERE project_id = ?;",

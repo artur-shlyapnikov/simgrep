@@ -6,11 +6,12 @@ logger = logging.getLogger(__name__)
 try:
     from simgrep.adapters.hf_chunker import load_tokenizer
     from simgrep.adapters.sentence_embedder import _load_embedding_model as load_embedding_model
+    from simgrep.core.models import SimgrepConfig
 except ImportError:
     logger.error("Failed to import from simgrep.adapters. " "Ensure simgrep is installed in editable mode (`make install` or `uv pip install -e .`).")
     raise
 
-MODEL_NAME = "Qwen/Qwen3-Embedding-0.6B"
+MODEL_NAME = SimgrepConfig().default_embedding_model_name
 
 
 def cache_model_and_tokenizer():

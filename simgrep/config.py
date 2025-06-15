@@ -1,8 +1,9 @@
-import json
 import sys
 import tomllib
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
+
+import tomli_w
 
 try:
     from .core.models import ProjectConfig, SimgrepConfig
@@ -85,16 +86,10 @@ def _serialize_paths(obj: Any) -> Any:
     return obj
 
 
-def _dumps_toml(data: Dict[str, Any]) -> str:
-    lines = []
-    for key, value in data.items():
-        lines.append(f"{key} = {json.dumps(value)}")
-    return "\n".join(lines) + "\n"
-
-
 def _write_config(config: SimgrepConfig) -> None:
     data = _serialize_paths(config.model_dump())
-    config.config_file.write_text(_dumps_toml(data), encoding="utf-8")
+    with open(config.config_file, "wb") as f:
+        tomli_w.dump(data, f)
 
 
 def _create_default_project(config: SimgrepConfig) -> ProjectConfig:

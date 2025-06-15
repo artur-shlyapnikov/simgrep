@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from simgrep.core.abstractions import Embedder, Repository, VectorIndex
 from simgrep.core.models import SearchResult

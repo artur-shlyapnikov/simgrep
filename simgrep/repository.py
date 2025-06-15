@@ -17,14 +17,11 @@ __all__ = ["MetadataStore"]
 class MetadataStore:
     """Convenience wrapper around metadata_db operations."""
 
-    def __init__(
-        self, persistent: bool = False, db_path: Optional[pathlib.Path] = None
-    ) -> None:
+    def __init__(self, persistent: bool = False, db_path: Optional[pathlib.Path] = None) -> None:
+        self.persistent = persistent
         if persistent:
             if db_path is None:
-                raise ValueError(
-                    "db_path must be provided for persistent MetadataStore"
-                )
+                raise ValueError("db_path must be provided for persistent MetadataStore")
             self.conn = connect_persistent_db(db_path)
         else:
             self.conn = create_inmemory_db_connection()
@@ -63,12 +60,24 @@ class MetadataStore:
         self.conn.close()
 
     # --- ephemeral table helpers ---
-    def batch_insert_files(
-        self, files_metadata: List[Tuple[int, pathlib.Path]]
-    ) -> None:
+    def batch_insert_files(self, files_metadata: List[Tuple[int, pathlib.Path]]) -> None:
         if not files_metadata:
             logger.debug("No file metadata provided for batch insert.")
             return
+
+        # For ephemeral search, paths can theoretically be duplicated if symlinks
+        # resolve to the same file but are passed as distinct entries.
+        # We ensure uniqueness on the resolved path before inserting, as the
+        # table has a UNIQUE constraint on file_path.
+        if not self.persistent:
+            seen_paths: set[str] = set()
+            unique_metadata: list[tuple[int, pathlib.Path]] = []
+            for fid, fpath in files_metadata:
+                resolved_path_str = str(fpath.resolve())
+                if resolved_path_str not in seen_paths:
+                    seen_paths.add(resolved_path_str)
+                    unique_metadata.append((fid, fpath))
+            files_metadata = unique_metadata
 
         data_to_insert = [(fid, str(fp.resolve())) for fid, fp in files_metadata]
         table_name = "temp_files" if not self.persistent else "indexed_files"
@@ -83,9 +92,7 @@ class MetadataStore:
             )
         except Exception as e:
             logger.error(f"DuckDB error during batch insert into '{table_name}': {e}")
-            raise MetadataDBError(
-                f"Failed during batch insert into '{table_name}'"
-            ) from e
+            raise MetadataDBError(f"Failed during batch insert into '{table_name}'") from e
 
     def batch_insert_chunks(self, chunk_data_list: List[ChunkData]) -> None:
         if not chunk_data_list:
@@ -106,19 +113,13 @@ class MetadataStore:
 
         logger.info(f"Batch inserting {len(data_to_insert)} chunk(s) into temp_chunks.")
         try:
-            sql = (
-                "INSERT INTO temp_chunks (chunk_id, file_id, text_content, "
-                "start_char_offset, end_char_offset, token_count) "
-                "VALUES (?, ?, ?, ?, ?, ?)"
-            )
+            sql = "INSERT INTO temp_chunks (chunk_id, file_id, text_content, " "start_char_offset, end_char_offset, token_count) " "VALUES (?, ?, ?, ?, ?, ?)"
             self.conn.executemany(sql, data_to_insert)
         except Exception as e:
             logger.error(f"DuckDB error during batch chunk insert: {e}")
             raise MetadataDBError("Failed during batch chunk insert") from e
 
-    def retrieve_chunk_for_display(
-        self, chunk_id: int
-    ) -> Optional[Tuple[str, pathlib.Path, int, int]]:
+    def retrieve_chunk_for_display(self, chunk_id: int) -> Optional[Tuple[str, pathlib.Path, int, int]]:
         query = """
             SELECT tc.text_content, tf.file_path, tc.start_char_offset, tc.end_char_offset
             FROM temp_chunks tc
@@ -142,18 +143,14 @@ class MetadataStore:
             return None
 
     # --- persistent table helpers ---
-    def retrieve_chunk_details_persistent(
-        self, usearch_label: int
-    ) -> Optional[Tuple[str, pathlib.Path, int, int]]:
+    def retrieve_chunk_details_persistent(self, usearch_label: int) -> Optional[Tuple[str, pathlib.Path, int, int]]:
         query = """
             SELECT tc.chunk_text, f.file_path, tc.start_char_offset, tc.end_char_offset
             FROM text_chunks tc
             JOIN indexed_files f ON tc.file_id = f.file_id
             WHERE tc.usearch_label = ?;
         """
-        logger.debug(
-            f"Retrieving persistent chunk details for usearch_label: {usearch_label}"
-        )
+        logger.debug(f"Retrieving persistent chunk details for usearch_label: {usearch_label}")
         try:
             result = self.conn.execute(query, [usearch_label]).fetchone()
             if result:
@@ -166,12 +163,8 @@ class MetadataStore:
                 )
             return None
         except Exception as e:
-            logger.error(
-                f"DuckDB error retrieving persistent chunk (label {usearch_label}): {e}"
-            )
-            raise MetadataDBError(
-                f"Failed to retrieve persistent chunk details for label {usearch_label}"
-            ) from e
+            logger.error(f"DuckDB error retrieving persistent chunk (label {usearch_label}): {e}")
+            raise MetadataDBError(f"Failed to retrieve persistent chunk details for label {usearch_label}") from e
 
     def retrieve_filtered_chunk_details(
         self,
@@ -182,15 +175,26 @@ class MetadataStore:
         if not usearch_labels:
             return []
 
-        query_parts = [
-            "SELECT f.file_path, tc.chunk_text, tc.start_char_offset, tc.end_char_offset, tc.usearch_label",
-            "FROM text_chunks AS tc",
-            "JOIN indexed_files AS f ON tc.file_id = f.file_id",
-        ]
         params: List[Any] = []
+        if self.persistent:
+            query_parts = [
+                "SELECT f.file_path, tc.chunk_text, tc.start_char_offset, tc.end_char_offset, tc.usearch_label",
+                "FROM text_chunks AS tc",
+                "JOIN indexed_files AS f ON tc.file_id = f.file_id",
+            ]
+            label_column = "usearch_label"
+            chunk_text_column = "chunk_text"
+        else:  # Ephemeral
+            query_parts = [
+                "SELECT f.file_path, tc.text_content AS chunk_text, tc.start_char_offset, tc.end_char_offset, tc.chunk_id AS usearch_label",
+                "FROM temp_chunks AS tc",
+                "JOIN temp_files AS f ON tc.file_id = f.file_id",
+            ]
+            label_column = "chunk_id"
+            chunk_text_column = "text_content"
 
         label_placeholders = ", ".join(["?"] * len(usearch_labels))
-        query_parts.append(f"WHERE tc.usearch_label IN ({label_placeholders})")
+        query_parts.append(f"WHERE tc.{label_column} IN ({label_placeholders})")
         params.extend(usearch_labels)
 
         if file_filter:
@@ -200,13 +204,11 @@ class MetadataStore:
             params.extend(sql_like_patterns)
 
         if keyword_filter:
-            query_parts.append("AND lower(tc.chunk_text) LIKE ?")
+            query_parts.append(f"AND lower(tc.{chunk_text_column}) LIKE ?")
             params.append(f"%{keyword_filter.lower()}%")
 
         full_query = "\n".join(query_parts) + ";"
-        logger.debug(
-            f"Executing filtered chunk retrieval query: {full_query} with params: {params}"
-        )
+        logger.debug(f"Executing filtered chunk retrieval query: {full_query} with params: {params}")
 
         try:
             cursor = self.conn.execute(full_query, params)
@@ -228,21 +230,12 @@ class MetadataStore:
             raise MetadataDBError("Failed to retrieve filtered chunk details") from e
 
     def clear_persistent_project_data(self) -> None:
-        logger.info(
-            "Clearing all data from 'text_chunks' and 'indexed_files' tables for persistent project."
-        )
+        logger.info("Clearing all data from 'indexed_files' and cascading to 'text_chunks'.")
         try:
-            with self.conn.cursor() as cursor:
-                cursor.execute("BEGIN TRANSACTION;")
-                cursor.execute("DELETE FROM text_chunks;")
-                cursor.execute("DELETE FROM indexed_files;")
-                cursor.execute("COMMIT;")
+            # With ON DELETE CASCADE, this will also clear text_chunks
+            self.conn.execute("DELETE FROM indexed_files;")
         except Exception as e:
             logger.error(f"Error clearing persistent project data: {e}")
-            try:
-                self.conn.execute("ROLLBACK;")
-            except Exception:
-                pass
             raise MetadataDBError("Failed to clear persistent project data") from e
 
     def insert_indexed_file_record(
@@ -269,15 +262,11 @@ class MetadataStore:
             return None
         except Exception as e:
             logger.error(f"Failed to insert file record for {file_path}: {e}")
-            raise MetadataDBError(
-                f"Failed to insert file record for {file_path}"
-            ) from e
+            raise MetadataDBError(f"Failed to insert file record for {file_path}") from e
 
     def batch_insert_text_chunks(self, chunk_records: List[Dict[str, Any]]) -> None:
         if not chunk_records:
-            logger.debug(
-                "No chunk records provided for batch insert into 'text_chunks'."
-            )
+            logger.debug("No chunk records provided for batch insert into 'text_chunks'.")
             return
 
         data_to_insert = []
@@ -294,9 +283,7 @@ class MetadataStore:
                 )
             )
 
-        logger.info(
-            f"Batch inserting {len(data_to_insert)} chunk record(s) into persistent 'text_chunks'."
-        )
+        logger.info(f"Batch inserting {len(data_to_insert)} chunk record(s) into persistent 'text_chunks'.")
         try:
             with self.conn.cursor() as cursor:
                 cursor.execute("BEGIN TRANSACTION;")
@@ -316,15 +303,11 @@ class MetadataStore:
                 self.conn.execute("ROLLBACK;")
             except Exception:
                 pass
-            raise MetadataDBError(
-                "Failed during batch insert into 'text_chunks'"
-            ) from e
+            raise MetadataDBError("Failed during batch insert into 'text_chunks'") from e
 
     def get_all_indexed_file_records(self) -> List[Tuple[int, str, str]]:
         try:
-            rows = self.conn.execute(
-                "SELECT file_id, file_path, content_hash FROM indexed_files;"
-            ).fetchall()
+            rows = self.conn.execute("SELECT file_id, file_path, content_hash FROM indexed_files;").fetchall()
             return [(int(r[0]), str(r[1]), str(r[2])) for r in rows]
         except Exception as e:
             logger.error(f"DuckDB error fetching all indexed file records: {e}")
@@ -339,9 +322,7 @@ class MetadataStore:
             labels = [int(r[0]) for r in labels_rows]
             with self.conn.cursor() as cursor:
                 cursor.execute("DELETE FROM text_chunks WHERE file_id = ?;", [file_id])
-                cursor.execute(
-                    "DELETE FROM indexed_files WHERE file_id = ?;", [file_id]
-                )
+                cursor.execute("DELETE FROM indexed_files WHERE file_id = ?;", [file_id])
             return labels
         except Exception as e:
             logger.error(f"DuckDB error deleting records for file_id {file_id}: {e}")
@@ -352,53 +333,39 @@ class MetadataStore:
             raise MetadataDBError("Failed to delete file records") from e
 
     def get_index_counts(self) -> Tuple[int, int]:
+        """For persistent index, gets the count of indexed files and chunks."""
+        if not self.persistent:
+            logger.warning("get_index_counts called on a non-persistent store, which is not expected.")
+            return 0, 0
         try:
-            result = self.conn.execute(
-                "SELECT (SELECT COUNT(*) FROM indexed_files), (SELECT COUNT(*) FROM text_chunks);"
-            ).fetchone()
+            result = self.conn.execute("SELECT (SELECT COUNT(*) FROM indexed_files), (SELECT COUNT(*) FROM text_chunks);").fetchone()
             if result:
                 return int(result[0]), int(result[1])
             return 0, 0
         except Exception as e:
             logger.error(f"DuckDB error getting index counts: {e}")
             raise MetadataDBError("Failed to get index counts") from e
-        """For persistent index, gets the count of indexed files and chunks."""
+
+    def get_max_usearch_label(self) -> Optional[int]:
+        """Retrieves the maximum usearch label from the metadata table."""
         if not self.persistent:
-            return 0, 0
+            return None
         try:
-            # The query now counts distinct file_ids from text_chunks, which is more
-            # representative of files that actually have chunks in the index.
-            result = self.conn.execute(
-                "SELECT COUNT(DISTINCT file_id), COUNT(chunk_id) FROM text_chunks;"
-            ).fetchone()
-            if result:
-                return result[0] or 0, result[1] or 0
-            return 0, 0
-        except (duckdb.Error, AttributeError) as e:
-            logger.error(f"Failed to get index counts: {e}")
-            return 0, 0
+            result = self.conn.execute("SELECT value FROM index_metadata WHERE key = 'max_usearch_label';").fetchone()
+            return int(result[0]) if result else None
+        except (duckdb.Error, ValueError):
+            logger.warning("Could not retrieve max_usearch_label from DB.")
+            return None
+
+    def set_max_usearch_label(self, label: int) -> None:
+        """Saves the maximum usearch label to the metadata table."""
         if not self.persistent:
-            return 0, 0
+            return
         try:
-            result = self.conn.execute(
-                "SELECT (SELECT COUNT(*) FROM indexed_files), (SELECT COUNT(*) FROM text_chunks);"
-            ).fetchone()
-            if result:
-                return result[0], result[1]
-            return 0, 0
-        except Exception as e:
-            logger.error(f"Failed to get index counts: {e}")
-            return 0, 0
-        try:
-            file_res = self.conn.execute(
-                "SELECT COUNT(*) FROM indexed_files;"
-            ).fetchone()
-            chunk_res = self.conn.execute(
-                "SELECT COUNT(*) FROM text_chunks;"
-            ).fetchone()
-            files_count = int(file_res[0]) if file_res else 0
-            chunks_count = int(chunk_res[0]) if chunk_res else 0
-            return files_count, chunks_count
-        except Exception as e:
-            logger.error(f"DuckDB error retrieving index counts: {e}")
-            raise MetadataDBError("Failed to retrieve index counts") from e
+            self.conn.execute(
+                "INSERT INTO index_metadata (key, value) VALUES ('max_usearch_label', ?) " "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;",
+                [str(label)],
+            )
+        except duckdb.Error as e:
+            logger.error(f"Failed to save max_usearch_label to DB: {e}")
+            raise MetadataDBError("Failed to set max usearch label") from e

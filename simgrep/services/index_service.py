@@ -1,4 +1,3 @@
-import os
 import pathlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -16,7 +15,7 @@ from simgrep.core.abstractions import (
     VectorIndex,
 )
 from simgrep.core.models import Chunk
-from simgrep.utils import calculate_file_hash
+from simgrep.utils import calculate_file_hash, gather_files_to_process
 
 
 class IndexService:
@@ -36,9 +35,14 @@ class IndexService:
         self.store = store
         self.index = index
         self._current_usearch_label: int = 0
-        if self.index is not None and len(self.index) > 0:
+
+        max_label_from_db = self.store.get_max_usearch_label()
+        if max_label_from_db is not None:
+            self._current_usearch_label = max_label_from_db + 1
+        elif self.index is not None and len(self.index) > 0:
+            # Fallback to old logic if value not in DB (for backward compatibility)
             try:
-                keys = self.index.keys()
+                keys = self.index.keys
                 if keys.size > 0:
                     # Get the highest existing label to continue from there.
                     # USearch keys are not guaranteed to be sorted, so we find the max.
@@ -49,6 +53,11 @@ class IndexService:
                 IndexError,
             ):  # ValueError if keys is empty, though we check len > 0
                 self._current_usearch_label = 0
+
+    @property
+    def final_max_label(self) -> int:
+        """Returns the highest usearch label that was actually used."""
+        return self._current_usearch_label - 1
 
     def process_file(self, file_path: Path) -> Tuple[List[Chunk], np.ndarray]:
         """
@@ -124,54 +133,43 @@ class IndexService:
 
         _console = console or Console(quiet=True)
 
-        files_to_process: List[Path]
-        all_found_files_set = set()
-        _console.print(
-            f"Scanning {len(target_paths)} path(s) for files matching patterns: {file_scan_patterns}..."
-        )
+        all_found_files_set: set[pathlib.Path] = set()
+        _console.print(f"Scanning {len(target_paths)} path(s) for files matching patterns: {file_scan_patterns}...")
+
         for target_path in target_paths:
             if not target_path.exists():
-                _console.print(
-                    f"[yellow]Warning: Path '{target_path}' does not exist. Skipping.[/yellow]"
-                )
+                _console.print(f"[yellow]Warning: Path '{target_path}' does not exist. Skipping.[/yellow]")
                 continue
-            if target_path.is_file():
-                all_found_files_set.add(target_path)
-            elif target_path.is_dir():
-                for root, _, files in os.walk(target_path, followlinks=True):
-                    for file_name in files:
-                        file_p = Path(root) / file_name
-                        if any(file_p.match(p) for p in file_scan_patterns):
-                            all_found_files_set.add(file_p)
+            # gather_files_to_process handles both files and directories, respects .gitignore,
+            # and resolves paths to be absolute.
+            found_files = gather_files_to_process(target_path, file_scan_patterns)
+            all_found_files_set.update(found_files)
+
         files_to_process = sorted(list(all_found_files_set))
 
         if not files_to_process:
-            _console.print(
-                "[yellow]No files found to index in any of the provided paths with current patterns.[/yellow]"
-            )
+            _console.print("[yellow]No files found to index in any of the provided paths with current patterns.[/yellow]")
             return 0, 0, 0
         else:
             _console.print(f"Found {len(files_to_process)} total file(s) to process.")
 
         existing_records = {}
         if not wipe_existing:
-            existing_records = {
-                Path(p).resolve(): (fid, chash)
-                for fid, p, chash in self.store.get_all_indexed_file_records()
-            }
+            existing_records = {Path(p).resolve(): (fid, chash) for fid, p, chash in self.store.get_all_indexed_file_records()}
             current_paths = {p.resolve() for p in files_to_process}
             deleted_paths = set(existing_records.keys()) - current_paths
-            for del_p in deleted_paths:
-                fid, _ = existing_records[del_p]
-                removed_labels = self.store.delete_file_records(fid)
-                if self.index is not None and removed_labels:
-                    self.index.remove(keys=np.array(removed_labels, dtype=np.int64))
+            if deleted_paths:
+                plural = "s" if len(deleted_paths) > 1 else ""
+                _console.print(f"[dim]Pruning {len(deleted_paths)} deleted file{plural} from index...[/dim]")
+                for del_p in deleted_paths:
+                    fid, _ = existing_records[del_p]
+                    removed_labels = self.store.delete_file_records(fid)
+                    if self.index is not None and removed_labels:
+                        self.index.remove(keys=np.array(removed_labels, dtype=np.int64))
 
         file_processing_task: Optional[TaskID] = None
         if progress:
-            file_processing_task = progress.add_task(
-                "[cyan]Indexing files...", total=len(files_to_process)
-            )
+            file_processing_task = progress.add_task("[cyan]Indexing files...", total=len(files_to_process))
 
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             future_map = {}
@@ -182,9 +180,7 @@ class IndexService:
                         current_hash = calculate_file_hash(resolved_fp)
                         stored_id, stored_hash = existing_records[resolved_fp]
                         if current_hash == stored_hash:
-                            _console.print(
-                                f"[yellow]Skipped (unchanged): {file_p}[/yellow]"
-                            )
+                            _console.print(f"[yellow]Skipped (unchanged): {file_p}[/yellow]")
                             if progress and file_processing_task is not None:
                                 progress.update(
                                     file_processing_task,
@@ -195,13 +191,9 @@ class IndexService:
                             continue
                         removed_labels = self.store.delete_file_records(stored_id)
                         if self.index is not None and removed_labels:
-                            self.index.remove(
-                                keys=np.array(removed_labels, dtype=np.int64)
-                            )
+                            self.index.remove(keys=np.array(removed_labels, dtype=np.int64))
                     except (IOError, FileNotFoundError) as e:
-                        _console.print(
-                            f"[bold red]Error checking file {resolved_fp}: {e}[/bold red]"
-                        )
+                        _console.print(f"[bold red]Error checking file {resolved_fp}: {e}[/bold red]")
                         if progress and file_processing_task is not None:
                             progress.update(
                                 file_processing_task,
@@ -242,9 +234,7 @@ class IndexService:
                             description=f"Processed: {file_display} ({len(chunks)} chunks)",
                         )
                 except Exception as e:
-                    _console.print(
-                        f"[bold red]Error processing {file_path}: {e}[/bold red]"
-                    )
+                    _console.print(f"[bold red]Error processing {file_path}: {e}[/bold red]")
                     total_errors += 1
                     if progress and file_processing_task is not None:
                         progress.update(

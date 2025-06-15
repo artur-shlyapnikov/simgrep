@@ -115,7 +115,7 @@ class TestSearcherPersistentIntegration:
                 "simgrep",
                 OutputMode.show,
                 ["simgrep is a tool for semantic search", "Score: "],
-                0.6,  # High score to filter out the less relevant match
+                0.4,  # High score to filter out the less relevant match
                 id="show_mode_high_min_score",
             ),
         ],

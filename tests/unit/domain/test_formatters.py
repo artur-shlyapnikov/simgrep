@@ -1,10 +1,11 @@
+import json
 from pathlib import Path
 from typing import Any, Dict, List
 
 from rich.console import Console
 
 from simgrep.core.models import SearchResult
-from simgrep.ui.formatters import format_count, format_paths, format_show_basic
+from simgrep.ui.formatters import format_count, format_json, format_paths, format_show_basic
 
 
 class TestFormatShowBasic:
@@ -130,3 +131,38 @@ class TestFormatCount:
         ]
         output = format_count(results)
         assert output == "2 matching chunks in 1 file."
+
+
+class TestFormatJson:
+    def test_format_json_with_full_data(self) -> None:
+        results = [
+            SearchResult(
+                label=1,
+                score=0.99,
+                file_path=Path("/path/to/file.txt"),
+                chunk_text="some text",
+                start_char_offset=0,
+                end_char_offset=9,
+            )
+        ]
+        json_str = format_json(results)
+        data = json.loads(json_str)
+        assert len(data) == 1
+        assert data[0]["file_path"] == "/path/to/file.txt"
+        assert data[0]["chunk_text"] == "some text"
+        assert data[0]["score"] == 0.99
+
+    def test_format_json_with_missing_optional_data(self) -> None:
+        results = [SearchResult(label=1, score=0.99)]
+        json_str = format_json(results)
+        data = json.loads(json_str)
+        assert len(data) == 1
+        assert data[0]["file_path"] is None
+        assert data[0]["chunk_text"] is None
+        assert data[0]["start_char_offset"] is None
+        assert data[0]["end_char_offset"] is None
+
+    def test_format_json_empty_list(self) -> None:
+        results: List[SearchResult] = []
+        json_str = format_json(results)
+        assert json_str == "[]"

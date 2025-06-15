@@ -16,6 +16,7 @@ dependencies = [
     "numpy>=1.23.0",
     "duckdb>=0.10.0",
     "pathspec>=0.12.1",
+    "tomli-w>=1.0.0",
 ]
 
 [project.scripts]
@@ -55,4 +56,6 @@ pythonpath = [
 ]
 markers = [
     "timeout: set timeout for a test (requires pytest-timeout)",
+    "contract: marks a test as a port contract test",
+    "external: marks tests that use external libraries (e.g. huggingface)",
 ]

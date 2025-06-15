@@ -166,41 +166,37 @@ The tool is designed to be intuitive for simple use cases ("semantic grep replac
         *   `token_count`: Number of tokens in the chunk.
 
 *   **DuckDB Schema (`metadata_db.py` defines this):**
-    *   `projects`:
-        *   `project_id INTEGER PRIMARY KEY`
-        *   `project_name VARCHAR UNIQUE NOT NULL`
-        *   `config_path VARCHAR` (Path to project-specific config if any)
-        *   `db_path VARCHAR NOT NULL` (Path to this project's DuckDB file)
-        *   `usearch_index_path VARCHAR NOT NULL`
-        *   `embedding_model_name VARCHAR NOT NULL`
-        *   `chunk_size INTEGER NOT NULL`
-        *   `chunk_overlap INTEGER NOT NULL`
-        *   `created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`
-    *   `indexed_paths` (associates paths with projects):
-        *   `path_id INTEGER PRIMARY KEY`
-        *   `project_id INTEGER REFERENCES projects(project_id) ON DELETE CASCADE`
-        *   `absolute_path VARCHAR UNIQUE NOT NULL`
-        *   `added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`
-    *   `indexed_files`:
-        *   `file_id BIGINT PRIMARY KEY`
-        *   `file_path VARCHAR NOT NULL UNIQUE` (Absolute, resolved path)
-        *   `content_hash VARCHAR NOT NULL` (SHA256 of file content)
-        *   `file_size_bytes BIGINT`
-        *   `last_modified_os TIMESTAMP`
-        *   `last_indexed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`
-    *   `text_chunks`:
-        *   `chunk_id BIGINT PRIMARY KEY`
-        *   `file_id BIGINT REFERENCES indexed_files(file_id)`
-        *   `usearch_label BIGINT UNIQUE NOT NULL` (Links to USearch vector)
-        *   `chunk_text TEXT NOT NULL` (The full text of the chunk)
-        *   `start_char_offset INTEGER NOT NULL`
-        *   `end_char_offset INTEGER NOT NULL`
-        *   `token_count INTEGER NOT NULL`
-        *   `embedding_hash VARCHAR` (Hash of the embedding vector, for potential future use)
-    *   `file_dependencies`:
-        *   `file_id INTEGER REFERENCES indexed_files(file_id) ON DELETE CASCADE`
-        *   `imports_file_id INTEGER REFERENCES indexed_files(file_id) ON DELETE CASCADE`
-        *   `PRIMARY KEY (file_id, imports_file_id)`
+    *   **Global DB (`~/.config/simgrep/global_metadata.duckdb`):**
+        *   `projects`:
+            *   `project_id BIGINT PRIMARY KEY`
+            *   `project_name VARCHAR UNIQUE NOT NULL`
+            *   `db_path VARCHAR NOT NULL`
+            *   `usearch_index_path VARCHAR NOT NULL`
+            *   `embedding_model_name VARCHAR NOT NULL`
+        *   `project_indexed_paths`:
+            *   `project_id BIGINT REFERENCES projects(project_id)`
+            *   `path VARCHAR NOT NULL`
+            *   `PRIMARY KEY (project_id, path)`
+    *   **Project-specific DB (`.../projects/<name>/metadata.duckdb`):**
+        *   `indexed_files`:
+            *   `file_id BIGINT PRIMARY KEY`
+            *   `file_path VARCHAR NOT NULL UNIQUE` (Absolute, resolved path)
+            *   `content_hash VARCHAR NOT NULL` (SHA256 of file content)
+            *   `file_size_bytes BIGINT`
+            *   `last_modified_os TIMESTAMP`
+            *   `last_indexed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`
+        *   `text_chunks`:
+            *   `chunk_id BIGINT PRIMARY KEY`
+            *   `file_id BIGINT REFERENCES indexed_files(file_id)`
+            *   `usearch_label BIGINT UNIQUE NOT NULL` (Links to USearch vector)
+            *   `chunk_text TEXT NOT NULL` (The full text of the chunk)
+            *   `start_char_offset INTEGER NOT NULL`
+            *   `end_char_offset INTEGER NOT NULL`
+            *   `token_count INTEGER NOT NULL`
+            *   `embedding_hash VARCHAR` (Hash of the embedding vector, for potential future use)
+        *   `index_metadata`:
+            *   `key VARCHAR PRIMARY KEY`
+            *   `value VARCHAR NOT NULL`
 
 **5.4. Configuration Management**
 

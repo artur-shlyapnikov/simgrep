@@ -2,11 +2,7 @@ import pathlib
 
 import pytest
 
-from .test_cli_persistent_e2e import run_simgrep_command
-from .test_cli_persistent_e2e import temp_simgrep_home as _temp_simgrep_home
-
-# Re-export fixture for pytest to discover and use
-temp_simgrep_home = _temp_simgrep_home
+from .conftest import run_simgrep_command, temp_simgrep_home
 
 pytest.importorskip("sentence_transformers")
 pytest.importorskip("usearch.index")
@@ -56,13 +52,14 @@ ignored_dir/
     return project_dir
 
 
+@pytest.mark.slow
 class TestCliGitignoreE2E:
     @pytest.fixture(autouse=True)
     def _init_global_for_e2e(self, temp_simgrep_home: pathlib.Path) -> None:
         """Initializes global config for all tests in this class."""
         run_simgrep_command(["init", "--global"])
 
-    def test_ephemeral_search_respects_gitignore(self, docs_with_gitignore: pathlib.Path, temp_simgrep_home: pathlib.Path) -> None:
+    def test_ephemeral_search_respects_gitignore(self, docs_with_gitignore: pathlib.Path) -> None:
         """
         Tests that ephemeral search (`simgrep search <path>`) correctly ignores files
         specified in a .gitignore file.
@@ -83,7 +80,7 @@ class TestCliGitignoreE2E:
         assert "another.log" not in output
         assert "another_file.txt" not in output  # from ignored_dir
 
-    def test_ephemeral_search_on_explicitly_ignored_file_is_honored(self, docs_with_gitignore: pathlib.Path, temp_simgrep_home: pathlib.Path) -> None:
+    def test_ephemeral_search_on_explicitly_ignored_file_is_honored(self, docs_with_gitignore: pathlib.Path) -> None:
         """
         Tests that if a user provides a direct path to an ignored file, it is still
         processed, as the explicit user intent overrides the .gitignore.
@@ -103,13 +100,12 @@ class TestCliGitignoreE2E:
         assert "ignored_file.txt" in result.stdout
         assert "regular_file.txt" not in result.stdout
 
-    def test_persistent_index_respects_gitignore(self, docs_with_gitignore: pathlib.Path, temp_simgrep_home: pathlib.Path) -> None:
+    def test_persistent_index_respects_gitignore(self, docs_with_gitignore: pathlib.Path) -> None:
         """
         Tests that persistent indexing (`simgrep index`) correctly ignores files
         specified in a .gitignore file.
         """
         # 1. Global init and create project
-        run_simgrep_command(["init", "--global"])
         run_simgrep_command(["project", "create", "ignore-test"])
         run_simgrep_command(
             [
@@ -143,7 +139,7 @@ class TestCliGitignoreE2E:
         assert "ignored_file.txt" not in output
         assert "system.log" not in output
 
-    def test_nested_gitignore_is_respected(self, tmp_path: pathlib.Path, temp_simgrep_home: pathlib.Path) -> None:
+    def test_nested_gitignore_is_respected(self, tmp_path: pathlib.Path) -> None:
         """
         Tests that ignore rules from nested .gitignore files are correctly applied.
         """

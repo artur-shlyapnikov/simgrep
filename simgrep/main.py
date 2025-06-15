@@ -20,6 +20,7 @@ try:
     )
     from .core.context import SimgrepContext
     from .core.errors import MetadataDBError, SimgrepError
+    from .core.models import OutputMode, SimgrepConfig
     from .ephemeral_searcher import EphemeralSearcher
     from .indexer import Indexer, IndexerConfig, IndexerError
     from .metadata_db import (
@@ -29,7 +30,6 @@ try:
         get_project_by_name,
         get_project_config,
     )
-    from .models import OutputMode, SimgrepConfig
     from .project_manager import ProjectManager
     from .repository import MetadataStore
     from .services.search_service import SearchService
@@ -53,6 +53,7 @@ except ImportError:
         )
         from simgrep.core.context import SimgrepContext
         from simgrep.core.errors import MetadataDBError, SimgrepError
+        from simgrep.core.models import OutputMode, SimgrepConfig
         from simgrep.ephemeral_searcher import EphemeralSearcher
         from simgrep.indexer import Indexer, IndexerConfig, IndexerError
         from simgrep.metadata_db import (
@@ -61,10 +62,6 @@ except ImportError:
             create_project_scaffolding,
             get_project_by_name,
             get_project_config,
-        )
-        from simgrep.models import (
-            OutputMode,
-            SimgrepConfig,
         )
         from simgrep.project_manager import ProjectManager
         from simgrep.repository import MetadataStore
@@ -166,7 +163,7 @@ def init(
 
         if simgrep_dir.exists():
             console.print(f"Project '{project_name}' seems to be already initialized at {cwd}.")
-            raise typer.Exit()
+            raise typer.Exit(code=1)
 
         try:
             global_cfg = load_global_config()
@@ -207,7 +204,6 @@ def search(
     query_text: str = typer.Argument(..., help="The text or concept to search for."),
     path_to_search: Optional[Path] = typer.Argument(
         None,  # Default to None, making it optional
-        exists=True,  # This will only be checked if path_to_search is not None
         file_okay=True,
         dir_okay=True,
         readable=True,
@@ -354,6 +350,10 @@ def search(
                 persistent_store.close()
         return
 
+    if not path_to_search.exists():
+        console.print(f"[bold red]Error: Path '{path_to_search}' does not exist.[/bold red]")
+        raise typer.Exit(code=1)
+
     global_simgrep_config = load_global_config()
     context = SimgrepContext.from_defaults(
         model_name=global_simgrep_config.default_embedding_model_name,
@@ -482,25 +482,44 @@ def index(
 
 
 @app.command()
-def status() -> None:
+def status(
+    project: Optional[str] = typer.Option(
+        None,
+        "--project",
+        help="Project name to check status for. Autodetected if in a project directory.",
+    ),
+) -> None:
+    """Shows indexing status for a project."""
     try:
-        cfg = load_global_config()
+        global_cfg = load_global_config()
     except SimgrepConfigError as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(code=1)
 
-    db_file = cfg.default_project_data_dir / "metadata.duckdb"
-    if not db_file.exists():
-        console.print("Default Project: 0 files indexed, 0 chunks.")
+    active_project = get_active_project(project)
+
+    global_db_path = global_cfg.db_directory / "global_metadata.duckdb"
+    conn = connect_global_db(global_db_path)
+    try:
+        project_cfg = get_project_config(conn, active_project)
+    finally:
+        conn.close()
+
+    if project_cfg is None:
+        console.print(f"[bold red]Error: Project '{active_project}' not found.[/bold red]")
+        raise typer.Exit(code=1)
+
+    if not project_cfg.db_path.exists():
+        console.print(f"Project '{active_project}': 0 files indexed, 0 chunks (index not found).")
         raise typer.Exit()
 
     store: Optional[MetadataStore] = None
     try:
-        store = MetadataStore(persistent=True, db_path=db_file)
+        store = MetadataStore(persistent=True, db_path=project_cfg.db_path)
         files_count, chunks_count = store.get_index_counts()
-        console.print(f"Default Project: {files_count} files indexed, {chunks_count} chunks.")
+        console.print(f"Project '{active_project}': {files_count} files indexed, {chunks_count} chunks.")
     except MetadataDBError as e:
-        console.print(f"[bold red]Error retrieving status: {e}[/bold red]")
+        console.print(f"[bold red]Error retrieving status for project '{active_project}': {e}[/bold red]")
         raise typer.Exit(code=1)
     finally:
         if store:

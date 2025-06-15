@@ -129,21 +129,25 @@ class TestIndexerPersistentIntegration:
             if store:
                 store.close()
 
-    def test_index_non_existent_path_raises_error(
+    def test_index_non_existent_path_is_handled_gracefully(
         self,
         tmp_path: pathlib.Path,
         indexer_config: IndexerConfig,
         simgrep_context: SimgrepContext,
         test_console: Console,
     ) -> None:
-        """Test that indexing a non-existent path does not raise an unhandled error."""
+        """Test that indexing a non-existent path is handled gracefully and creates an empty index."""
         non_existent_path = tmp_path / "does_not_exist"
         indexer = Indexer(config=indexer_config, context=simgrep_context, console=test_console)
         # The indexer should handle this gracefully and report it.
         # It should not raise an exception, but complete with 0 files processed.
         indexer.run_index(target_paths=[non_existent_path], wipe_existing=True)
-        # Check that it didn't create an index with data
-        assert not indexer_config.usearch_index_path.exists()
+
+        # An empty index file should be created.
+        assert indexer_config.usearch_index_path.exists()
+        idx = USearchIndex(ndim=indexer.embedding_ndim)
+        idx.load(indexer_config.usearch_index_path)
+        assert len(idx) == 0
 
     def test_index_empty_directory(
         self,
@@ -205,8 +209,8 @@ class TestIndexerPersistentIntegration:
     ) -> None:
         """Test incremental indexing skips unchanged files and updates changed ones."""
         # Initial full index
-        indexer1 = Indexer(config=indexer_config, context=simgrep_context, console=test_console)
-        indexer1.run_index(target_paths=[persistent_test_data_path], wipe_existing=True)
+        indexer = Indexer(config=indexer_config, context=simgrep_context, console=test_console)
+        indexer.run_index(target_paths=[persistent_test_data_path], wipe_existing=True)
 
         store_before = MetadataStore(persistent=True, db_path=indexer_config.db_path)
         try:
@@ -217,12 +221,12 @@ class TestIndexerPersistentIntegration:
         finally:
             store_before.close()
 
-        idx_before = USearchIndex(ndim=indexer1.embedding_ndim)
+        idx_before = USearchIndex(ndim=indexer.embedding_ndim)
         idx_before.load(indexer_config.usearch_index_path)
         index_size_before = len(idx_before)
 
-        indexer2 = Indexer(config=indexer_config, context=simgrep_context, console=test_console)
-        indexer2.run_index(target_paths=[persistent_test_data_path], wipe_existing=False)
+        # Second run with no changes, should be a no-op for content.
+        indexer.run_index(target_paths=[persistent_test_data_path], wipe_existing=False)
 
         store_after = MetadataStore(persistent=True, db_path=indexer_config.db_path)
         try:
@@ -232,7 +236,7 @@ class TestIndexerPersistentIntegration:
         finally:
             store_after.close()
 
-        idx_nochange = USearchIndex(ndim=indexer2.embedding_ndim)
+        idx_nochange = USearchIndex(ndim=indexer.embedding_ndim)
         idx_nochange.load(indexer_config.usearch_index_path)
         index_size_nochange = len(idx_nochange)
 

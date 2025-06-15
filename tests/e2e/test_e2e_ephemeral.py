@@ -6,19 +6,13 @@ from typing import Callable
 import pytest
 from typer.testing import Result
 
-from .test_cli_persistent_e2e import (
-    run_simgrep_command,
-)
-from .test_cli_persistent_e2e import (
-    temp_simgrep_home as _temp_simgrep_home,
-)
-
-temp_simgrep_home = _temp_simgrep_home  # re-export for pytest
+from .conftest import run_simgrep_command, temp_simgrep_home
 
 pytest.importorskip("sentence_transformers")
 pytest.importorskip("usearch.index")
 
 
+@pytest.mark.slow
 class TestCliEphemeralE2E:
     @pytest.fixture(autouse=True)
     def _init_global_for_e2e(self, temp_simgrep_home: pathlib.Path) -> None:
@@ -64,7 +58,6 @@ class TestCliEphemeralE2E:
     def test_ephemeral_search_output_modes(
         self,
         ephemeral_docs_dir: pathlib.Path,
-        temp_simgrep_home: pathlib.Path,
         output_mode: str,
         extra_args: list[str],
         validation_fn: Callable[[Result], bool],
@@ -79,7 +72,7 @@ class TestCliEphemeralE2E:
             assert "100%" in result.stdout
         assert validation_fn(result)
 
-    def test_ephemeral_search_single_file_paths_mode(self, tmp_path: pathlib.Path, temp_simgrep_home: pathlib.Path) -> None:
+    def test_ephemeral_search_single_file_paths_mode(self, tmp_path: pathlib.Path) -> None:
         file_path = tmp_path / "single.txt"
         file_path.write_text("grapefruit and apples")
 
@@ -87,7 +80,7 @@ class TestCliEphemeralE2E:
         assert result.exit_code == 0
         assert "single.txt" in result.stdout
 
-    def test_ephemeral_search_single_file_relative_path(self, tmp_path: pathlib.Path, temp_simgrep_home: pathlib.Path) -> None:
+    def test_ephemeral_search_single_file_relative_path(self, tmp_path: pathlib.Path) -> None:
         """
         Tests that --output paths --relative-paths on a single file target
         produces a path relative to the file's parent directory.
@@ -107,10 +100,9 @@ class TestCliEphemeralE2E:
         )
         assert result.exit_code == 0
         # The output should be just the filename, with a newline.
-        # With the fixes to suppress logging, this should be the only output
         assert result.stdout.strip() == "single_relative.txt"
 
-    def test_ephemeral_search_relative_paths(self, tmp_path: pathlib.Path, temp_simgrep_home: pathlib.Path) -> None:
+    def test_ephemeral_search_relative_paths(self, tmp_path: pathlib.Path) -> None:
         docs_dir = tmp_path / "docs_rel"
         docs_dir.mkdir()
         (docs_dir / "root.txt").write_text("apples here")
@@ -132,7 +124,7 @@ class TestCliEphemeralE2E:
         assert "root.txt" in result.stdout
         assert os.path.join("subdir", "nested.txt") in result.stdout
 
-    def test_ephemeral_search_json_output_is_clean_and_valid(self, tmp_path: pathlib.Path, temp_simgrep_home: pathlib.Path) -> None:
+    def test_ephemeral_search_json_output_is_clean_and_valid(self, tmp_path: pathlib.Path) -> None:
         """
         Tests that --output json is clean and machine-readable, with no
         logging or other text on stdout or stderr, and is valid JSON.
@@ -159,7 +151,7 @@ class TestCliEphemeralE2E:
         except json.JSONDecodeError:
             pytest.fail(f"--output json did not produce valid JSON. Output:\n{result.stdout}")
 
-    def test_ephemeral_search_paths_output_is_clean(self, ephemeral_docs_dir: pathlib.Path, temp_simgrep_home: pathlib.Path) -> None:
+    def test_ephemeral_search_paths_output_is_clean(self, ephemeral_docs_dir: pathlib.Path) -> None:
         """
         Tests that --output paths is clean and machine-readable, with no
         logging or other text on stdout or stderr.
@@ -182,22 +174,23 @@ class TestCliEphemeralE2E:
             assert not line.startswith(" ")
             assert pathlib.Path(line).is_absolute()
 
-    def test_ephemeral_search_no_matches(self, ephemeral_docs_dir: pathlib.Path, temp_simgrep_home: pathlib.Path) -> None:
+    def test_ephemeral_search_no_matches(self, ephemeral_docs_dir: pathlib.Path) -> None:
         result = run_simgrep_command(["search", "xyz", str(ephemeral_docs_dir), "--output", "count", "--min-score", "0.9"])
         assert result.exit_code == 0
         assert "0 matching chunks in 0 files." in result.stdout
 
-    def test_ephemeral_search_on_nonexistent_path_fails_early(self, tmp_path: pathlib.Path, temp_simgrep_home: pathlib.Path) -> None:
+    def test_ephemeral_search_on_nonexistent_path_fails_early(self, tmp_path: pathlib.Path) -> None:
         """Tests that ephemeral search fails with a clear error for a non-existent path."""
         non_existent_path = tmp_path / "this_path_does_not_exist"
         args = ["search", "query", str(non_existent_path)]
         result = run_simgrep_command(args)
         assert result.exit_code != 0
-        # Typer provides this error message for arguments with exists=True
-        assert "does not exist" in result.stderr
-        assert "this_path_does_not_exist" in result.stderr
+        # Check for the custom error message on stdout
+        assert "Error: Path" in result.stdout
+        assert "does not exist" in result.stdout
+        assert "this_path_does_not_exist" in result.stdout
 
-    def test_ephemeral_search_multiple_patterns(self, tmp_path: pathlib.Path, temp_simgrep_home: pathlib.Path) -> None:
+    def test_ephemeral_search_multiple_patterns(self, tmp_path: pathlib.Path) -> None:
         """
         Tests ephemeral search with multiple --pattern arguments to include different file types.
         """
@@ -224,3 +217,18 @@ class TestCliEphemeralE2E:
         assert "doc.py" in result.stdout
         assert "doc.md" in result.stdout
         assert "doc.txt" not in result.stdout
+
+    def test_ephemeral_search_no_files_match_pattern(self, tmp_path: pathlib.Path) -> None:
+        """
+        Tests ephemeral search on a directory where no files match the pattern.
+        """
+        docs_dir = tmp_path / "no_match_docs"
+        docs_dir.mkdir()
+        (docs_dir / "doc.py").write_text("some python code")
+
+        args = ["search", "query", str(docs_dir), "--pattern", "*.nonexistent"]
+        result = run_simgrep_command(args)
+
+        assert result.exit_code == 0
+        # The progress bar might still show, but the end result should be no matches.
+        assert "No relevant chunks found" in result.stdout

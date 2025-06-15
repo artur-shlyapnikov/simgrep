@@ -1,40 +1,31 @@
 import pathlib
-from typing import Any, List
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import numpy as np
 import pytest
 from rich.console import Console
 
+from simgrep.core.abstractions import Embedder, TextExtractor, TokenChunker
 from simgrep.core.context import SimgrepContext
-from simgrep.core.models import Chunk, OutputMode, SearchResult
+from simgrep.core.models import OutputMode, SearchResult
 from simgrep.ephemeral_searcher import EphemeralSearcher
 
 
 @pytest.fixture
-def mock_context() -> SimgrepContext:
-    mock_extractor = MagicMock()
-    mock_extractor.extract.return_value = "hello"
-
-    mock_chunker = MagicMock()
-    mock_chunker.chunk.return_value = [Chunk(id=-1, file_id=-1, text="hello", start=0, end=5, tokens=1)]
-
-    mock_embedder = MagicMock()
-    mock_embedder.ndim = 3
-    mock_embedder.encode.return_value = np.zeros((1, 3))
-
-    mock_index = MagicMock()
-    mock_index_factory = MagicMock(return_value=mock_index)
-
+def fake_context(
+    fake_text_extractor: TextExtractor,
+    fake_token_chunker: TokenChunker,
+    fake_embedder: Embedder,
+    fake_vector_index_factory,
+) -> SimgrepContext:
     return SimgrepContext(
-        extractor=mock_extractor,
-        chunker=mock_chunker,
-        embedder=mock_embedder,
-        index_factory=mock_index_factory,
+        extractor=fake_text_extractor,
+        chunker=fake_token_chunker,
+        embedder=fake_embedder,
+        index_factory=lambda ndim: fake_vector_index_factory(ndim=ndim),
     )
 
 
-def test_ephemeral_searcher_show(mock_context: SimgrepContext, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_ephemeral_searcher_show(fake_context: SimgrepContext, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     test_file = tmp_path / "file.txt"
     test_file.write_text("hello")
 
@@ -45,7 +36,7 @@ def test_ephemeral_searcher_show(mock_context: SimgrepContext, tmp_path: pathlib
             mock_instance.search.return_value = [SearchResult(label=0, score=0.99, file_path=test_file, chunk_text="hello")]
 
             console = Console(force_terminal=True, width=120)
-            searcher = EphemeralSearcher(context=mock_context, console=console)
+            searcher = EphemeralSearcher(context=fake_context, console=console)
             searcher.search(
                 query_text="hello",
                 path_to_search=tmp_path,
@@ -59,7 +50,7 @@ def test_ephemeral_searcher_show(mock_context: SimgrepContext, tmp_path: pathlib
             assert "file.txt" in out
 
 
-def test_ephemeral_searcher_no_results(mock_context: SimgrepContext, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_ephemeral_searcher_no_results(fake_context: SimgrepContext, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     test_file = tmp_path / "file.txt"
     test_file.write_text("hello")
 
@@ -70,7 +61,7 @@ def test_ephemeral_searcher_no_results(mock_context: SimgrepContext, tmp_path: p
             mock_instance.search.return_value = []  # No results
 
             console = Console(force_terminal=True, width=120)
-            searcher = EphemeralSearcher(context=mock_context, console=console)
+            searcher = EphemeralSearcher(context=fake_context, console=console)
             searcher.search(
                 query_text="goodbye",
                 path_to_search=tmp_path,

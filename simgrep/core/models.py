@@ -67,7 +67,7 @@ class SimgrepConfig(BaseModel):
     default_project_data_dir: Path = Field(default_factory=lambda: Path("~/.config/simgrep/default_project").expanduser())
     config_file: Path = Field(default_factory=lambda: Path("~/.config/simgrep/config.toml").expanduser())
     db_directory: Path = Field(default_factory=lambda: Path("~/.config/simgrep").expanduser())
-    default_embedding_model_name: str = "Qwen/Qwen3-Embedding-0.6B"
+    default_embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     default_chunk_size_tokens: int = 128
     default_chunk_overlap_tokens: int = 20
     model_config = {"validate_assignment": True}

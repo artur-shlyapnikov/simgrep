@@ -1,14 +1,13 @@
 import numpy as np
 import pytest
 from hypothesis import HealthCheck, given, settings
+
+pytest.mark.external
 from hypothesis import strategies as st
 from hypothesis.extra import numpy as hynp
 from hypothesis.strategies import DrawFn
 
 from simgrep.adapters.usearch_index import USearchIndex
-
-pytest.importorskip("numpy")
-pytest.importorskip("usearch.index")
 
 
 def _embedding_label_strategy() -> st.SearchStrategy[tuple[np.ndarray, np.ndarray, np.ndarray]]:

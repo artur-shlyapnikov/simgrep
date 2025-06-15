@@ -49,7 +49,7 @@ class USearchIndex(VectorIndex):
             processed_labels = keys.astype(np.int64)
 
         try:
-            self._index.add(keys=processed_labels, vectors=vecs)
+            self._index.add(keys=processed_labels, vectors=vecs, copy=True)
         except Exception as e:
             raise VectorStoreError("Failed to add vectors to USearch index") from e
 
@@ -141,7 +141,7 @@ class USearchIndex(VectorIndex):
 
     @property
     def keys(self) -> np.ndarray:
-        return np.array(self._index.keys)
+        return np.array(self._index.keys, dtype=np.int64)
 
     def remove(self, keys: np.ndarray) -> None:
         try:

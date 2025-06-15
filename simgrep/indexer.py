@@ -110,7 +110,12 @@ class Indexer:
                     console=self.console,
                 )
 
-            if self.usearch_index is not None and len(self.usearch_index) > 0:
+            if self.index_service is not None and self.metadata_store is not None:
+                final_label = self.index_service.final_max_label
+                if final_label >= 0:
+                    self.metadata_store.set_max_usearch_label(final_label)
+
+            if self.usearch_index is not None:
                 self.console.print(f"Saving vector index with {len(self.usearch_index)} items...")
                 self.usearch_index.save(self.config.usearch_index_path)
                 self.console.print("Vector index saved.")

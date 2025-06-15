@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import List, Sequence, cast
+from typing import List, cast
 
 from huggingface_hub import snapshot_download
 from huggingface_hub.utils import LocalEntryNotFoundError
@@ -54,6 +54,7 @@ class HFChunker(TokenChunker):
         if overlap >= chunk_size:
             raise ValueError("overlap must be less than chunk_size.")
 
+        self.model_name = model_name
         self._tokenizer = load_tokenizer(model_name)
         self._chunk_size = chunk_size
         self._overlap = overlap
