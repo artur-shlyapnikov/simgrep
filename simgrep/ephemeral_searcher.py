@@ -81,7 +81,7 @@ class EphemeralSearcher:
             label_counter = 0
 
             if not is_machine:
-                self.console.print("\n[bold]Step 1 & 2: Processing files, extracting and chunking text[/bold]")
+                self.console.print("\n[bold]Processing files, extracting and chunking text[/bold]")
             progress_columns = [
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
@@ -133,7 +133,7 @@ class EphemeralSearcher:
                 self.console.print(f"  Inserted {len(all_chunks)} chunk(s) into DB.")
 
             if not is_machine:
-                self.console.print(f"\n[bold]Step 3: Generating Embeddings for {len(all_chunks)} total chunk(s)[/bold]")
+                self.console.print(f"\n[bold]Generating embeddings for {len(all_chunks)} total chunk(s)[/bold]")
             chunk_embeddings = embedder.encode(texts=[c.text for c in all_chunks], is_query=False)
 
             results: List[SearchResult] = []
@@ -155,7 +155,7 @@ class EphemeralSearcher:
                 )
 
             if not is_machine:
-                self.console.print("\n[bold]Step 5: Displaying Results[/bold]")
+                self.console.print("\n[bold]Displaying results[/bold]")
 
             if relative_paths and output_mode != OutputMode.paths and not is_machine:
                 self.console.print(
