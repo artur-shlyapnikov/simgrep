@@ -272,7 +272,17 @@ def search(
     if path_to_search is None:
         persistent_store: Optional[MetadataStore] = None
         try:
-            global_simgrep_config = load_global_config()
+            try:
+                global_simgrep_config = load_global_config()
+            except SimgrepConfigError:
+                if not is_machine_readable_output:
+                    default_cfg = SimgrepConfig()
+                    console.print(f"[yellow]Global config not found. Creating one at {default_cfg.db_directory}[/yellow]")
+                initialize_global_config()
+                global_simgrep_config = load_global_config()
+                if not is_machine_readable_output:
+                    console.print(f"[green]Global simgrep configuration initialized at {global_simgrep_config.db_directory}[/green]")
+
             active_project = get_active_project(project)
 
             if not is_machine_readable_output:
@@ -358,8 +368,12 @@ def search(
         global_simgrep_config = load_global_config()
     except SimgrepConfigError:
         if not is_machine_readable_output:
-            console.print("[dim]Global config not found. Using default settings for ephemeral search.[/dim]")
-        global_simgrep_config = SimgrepConfig()
+            default_cfg = SimgrepConfig()
+            console.print(f"[yellow]Global config not found. Creating one at {default_cfg.db_directory}[/yellow]")
+        initialize_global_config()
+        global_simgrep_config = load_global_config()
+        if not is_machine_readable_output:
+            console.print(f"[green]Global simgrep configuration initialized at {global_simgrep_config.db_directory}[/green]")
 
     context = SimgrepContext.from_defaults(
         model_name=global_simgrep_config.default_embedding_model_name,
