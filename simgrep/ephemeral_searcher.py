@@ -41,7 +41,7 @@ class EphemeralSearcher:
 
         if not path_to_search.exists():
             self.console.print(f"[bold red]Error: Path '{path_to_search}' does not exist.[/bold red]")
-            raise typer.Exit(code=1)
+            raise SystemExit(1)
 
         try:
             cfg = load_global_config()
@@ -68,8 +68,16 @@ class EphemeralSearcher:
             chunk_overlap=indexer_cfg.chunk_overlap_tokens,
         )
 
-        indexer = Indexer(config=indexer_cfg, context=context, console=self.console)
+        indexer_console = self.console
+        null_file = None
+        if is_machine:
+            null_file = open(os.devnull, "w")
+            indexer_console = Console(file=null_file, force_terminal=False, color_system=None)
+
+        indexer = Indexer(config=indexer_cfg, context=context, console=indexer_console)
         indexer.run_index(target_paths=[path_to_search], wipe_existing=False)
+        if null_file:
+            null_file.close()
 
         store = MetadataStore(persistent=True, db_path=db_path)
         vector_index = context.index_factory(context.embedder.ndim)
