@@ -290,10 +290,13 @@ class TestIncrementalIndexingE2E:
 
 @pytest.mark.slow
 class TestCliConfigE2E:
-    def test_command_fails_without_global_config(self, temp_simgrep_home: pathlib.Path) -> None:
+    def test_command_auto_initializes_global_config(self, temp_simgrep_home: pathlib.Path) -> None:
+        config_file = temp_simgrep_home / ".config" / "simgrep" / "config.toml"
+        assert not config_file.exists()
         result = run_simgrep_command(["search", "test"])
-        assert result.exit_code == 1
-        assert "Global config not found" in result.stdout
+        assert result.exit_code == 0
+        assert "Global simgrep configuration initialized" in result.stdout
+        assert config_file.exists()
 
     def test_search_fails_on_project_config_load_error(self, temp_simgrep_home: pathlib.Path) -> None:
         """Test the SimgrepConfigError handling block in the search command."""
