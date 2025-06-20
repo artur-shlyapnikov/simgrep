@@ -67,6 +67,9 @@ class SimgrepConfig(BaseModel):
     default_project_data_dir: Path = Field(default_factory=lambda: Path("~/.config/simgrep/default_project").expanduser())
     config_file: Path = Field(default_factory=lambda: Path("~/.config/simgrep/config.toml").expanduser())
     db_directory: Path = Field(default_factory=lambda: Path("~/.config/simgrep").expanduser())
+    ephemeral_cache_dir: Path = Field(
+        default_factory=lambda: Path("~/.cache/simgrep/quicksearch").expanduser()
+    )
     default_embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     default_chunk_size_tokens: int = 128
     default_chunk_overlap_tokens: int = 20

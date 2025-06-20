@@ -89,3 +89,18 @@ def calculate_file_hash(file_path: Path) -> str:
         return sha256_hash.hexdigest()
     except OSError as e:
         raise IOError(f"Error reading file for hashing: {e}") from e
+
+
+def get_ephemeral_cache_paths(
+    target_path: Path, cfg: "SimgrepConfig", patterns: Optional[List[str]] = None
+) -> tuple[Path, Path]:
+    """Return the DB and index paths for an ephemeral search target."""
+    from hashlib import sha256
+
+    resolved = str(target_path.resolve())
+    pattern_key = "|".join(sorted(patterns or []))
+    digest = sha256(f"{resolved}:{pattern_key}".encode()).hexdigest()[:16]
+    base = cfg.ephemeral_cache_dir / digest
+    db_path = base / "metadata.duckdb"
+    index_path = base / "index.usearch"
+    return db_path, index_path
