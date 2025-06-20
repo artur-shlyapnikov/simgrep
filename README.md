@@ -31,14 +31,14 @@ This creates configuration files and databases in your home directory (`~/.confi
 
 `simgrep` works in two main modes:
 
-* Quick search. For one-off searches. It indexes files in memory, performs the search, and discards the index.
+* Quick search. For one-off searches. Results are cached under `~/.cache/simgrep/quicksearch` so repeated searches on the same path are faster. Use `simgrep clean-cache` to remove these files.
 * Projects. For searching the same set of files repeatedly (like a codebase). It creates a persistent index on disk, allowing for fast subsequent searches and incremental updates.
 
 ## Usage examples
 
 ### Quick search
 
-This is the fastest way to get started. `simgrep` will build a temporary index for your search path.
+This is the fastest way to get started. `simgrep` caches quick search indexes under `~/.cache/simgrep/quicksearch` so repeated searches are faster. Use `simgrep clean-cache` to clear the cache.
 
 **Search a directory for a concept:**
 Find text related to "database connection errors" in your project's `src` folder.

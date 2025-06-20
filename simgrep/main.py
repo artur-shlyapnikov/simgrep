@@ -3,6 +3,7 @@ import sys
 import warnings
 from importlib.metadata import version
 from pathlib import Path
+import shutil
 from typing import (
     List,
     Optional,
@@ -354,19 +355,7 @@ def search(
         console.print(f"[bold red]Error: Path '{path_to_search}' does not exist.[/bold red]")
         raise typer.Exit(code=1)
 
-    try:
-        global_simgrep_config = load_global_config()
-    except SimgrepConfigError:
-        if not is_machine_readable_output:
-            console.print("[dim]Global config not found. Using default settings for ephemeral search.[/dim]")
-        global_simgrep_config = SimgrepConfig()
-
-    context = SimgrepContext.from_defaults(
-        model_name=global_simgrep_config.default_embedding_model_name,
-        chunk_size=global_simgrep_config.default_chunk_size_tokens,
-        chunk_overlap=global_simgrep_config.default_chunk_overlap_tokens,
-    )
-    searcher = EphemeralSearcher(context=context, console=console)
+    searcher = EphemeralSearcher(console=console)
     searcher.search(
         query_text=query_text,
         path_to_search=path_to_search,
@@ -530,6 +519,22 @@ def status(
     finally:
         if store:
             store.close()
+
+
+@app.command("clean-cache")
+def clean_cache() -> None:
+    """Remove the ephemeral search cache directory."""
+    try:
+        cfg = load_global_config()
+    except SimgrepConfigError as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+    if cfg.ephemeral_cache_dir.exists():
+        shutil.rmtree(cfg.ephemeral_cache_dir)
+        console.print(f"Removed cache directory {cfg.ephemeral_cache_dir}")
+    else:
+        console.print("Cache directory does not exist.")
 
 
 @project_app.command("create")

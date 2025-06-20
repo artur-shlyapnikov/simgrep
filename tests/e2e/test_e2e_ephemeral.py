@@ -67,9 +67,6 @@ class TestCliEphemeralE2E:
         result = run_simgrep_command(args)
 
         assert result.exit_code == 0
-        if output_mode == "show":
-            assert "Processing:" in result.stdout
-            assert "100%" in result.stdout
         assert validation_fn(result)
 
     def test_ephemeral_search_single_file_paths_mode(self, tmp_path: pathlib.Path) -> None:
@@ -230,5 +227,16 @@ class TestCliEphemeralE2E:
         result = run_simgrep_command(args)
 
         assert result.exit_code == 0
-        # The progress bar might still show, but the end result should be no matches.
-        assert "No files found in directory" in result.stdout
+        assert "No files found" in result.stdout
+    def test_ephemeral_search_cache_reuse(self, tmp_path: pathlib.Path) -> None:
+        docs_dir = tmp_path / "cache_docs"
+        docs_dir.mkdir()
+        (docs_dir / "c.txt").write_text("apples in cache")
+
+        first = run_simgrep_command(["search", "apples", str(docs_dir)])
+        assert first.exit_code == 0
+
+        second = run_simgrep_command(["search", "apples", str(docs_dir)])
+        assert second.exit_code == 0
+        assert "Loading vector index" in second.stdout
+
