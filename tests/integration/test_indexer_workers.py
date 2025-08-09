@@ -21,7 +21,7 @@ def test_index_with_workers(tmp_path: pathlib.Path) -> None:
         project_name="workers_proj",
         db_path=tmp_path / "meta.duckdb",
         usearch_index_path=tmp_path / "index.usearch",
-        embedding_model_name="sentence-transformers/all-MiniLM-L6-v2",
+        embedding_model_name="ibm-granite/granite-embedding-30m-english",
         chunk_size_tokens=16,
         chunk_overlap_tokens=0,
         file_scan_patterns=["*.txt"],

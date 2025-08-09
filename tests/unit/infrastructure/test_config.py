@@ -54,7 +54,7 @@ class TestSimgrepConfig:
             assert isinstance(config, SimgrepConfig)
             assert config.default_project_data_dir == expected_data_dir
             assert config.config_file == expected_config_file
-            assert config.default_embedding_model_name == "sentence-transformers/all-MiniLM-L6-v2"
+            assert config.default_embedding_model_name == "ibm-granite/granite-embedding-30m-english"
             assert config.default_chunk_size_tokens == 128
             assert config.default_chunk_overlap_tokens == 20
 
@@ -142,7 +142,7 @@ class TestSimgrepConfig:
             assert config.db_directory == mock_home / ".config" / "simgrep"
 
         # These defaults don't depend on path expansion
-        assert config.default_embedding_model_name == "sentence-transformers/all-MiniLM-L6-v2"
+        assert config.default_embedding_model_name == "ibm-granite/granite-embedding-30m-english"
         assert config.default_chunk_size_tokens == 128
         assert config.default_chunk_overlap_tokens == 20
         # assert config.llm_api_key is None # If/when added

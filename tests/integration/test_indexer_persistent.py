@@ -34,7 +34,7 @@ def indexer_config(tmp_path: pathlib.Path) -> IndexerConfig:
         project_name="persistent_test_project",
         db_path=tmp_path / "metadata.duckdb",
         usearch_index_path=tmp_path / "index.usearch",
-        embedding_model_name="sentence-transformers/all-MiniLM-L6-v2",  # a small, fast model
+        embedding_model_name="ibm-granite/granite-embedding-30m-english",  # a small, fast model
         chunk_size_tokens=16,
         chunk_overlap_tokens=4,
         file_scan_patterns=["*.txt"],

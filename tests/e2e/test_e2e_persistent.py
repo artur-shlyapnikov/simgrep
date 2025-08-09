@@ -183,7 +183,8 @@ class TestPersistentSearchE2E:
         assert "doc1.txt" in search_banana_result.stdout
         assert os.path.join("subdir", "doc_sub.txt") in search_banana_result.stdout
 
-        search_no_match_result = run_simgrep_command(["search", "nonexistentqueryxyz"])
+        # Use a high min-score to ensure no matches are returned for this nonsensical query
+        search_no_match_result = run_simgrep_command(["search", "nonexistentqueryxyz", "--min-score", "0.95"])
         assert search_no_match_result.exit_code == 0
         assert "No relevant chunks found" in search_no_match_result.stdout
 

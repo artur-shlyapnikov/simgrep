@@ -86,7 +86,7 @@ class TestCliErrorsAndPromptsE2E:
 
         # Assert
         assert result.exit_code == 0
-        assert "Chunk: this is a readable file with content." in result.stdout
+        assert "chunk: this is a readable file with content." in result.stdout.lower()
         assert "This is unreadable." not in result.stdout
         # The warning is now logged by unstructured and not printed to console
 

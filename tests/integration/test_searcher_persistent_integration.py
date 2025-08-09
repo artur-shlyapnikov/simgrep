@@ -38,7 +38,7 @@ def default_simgrep_config_for_search_tests(
 
     cfg = SimgrepConfig(
         default_project_data_dir=default_proj_data_dir,
-        default_embedding_model_name="sentence-transformers/all-MiniLM-L6-v2",
+        default_embedding_model_name="ibm-granite/granite-embedding-30m-english",
     )
     return cfg
 

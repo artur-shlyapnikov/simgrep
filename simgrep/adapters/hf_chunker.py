@@ -95,16 +95,21 @@ class HFChunker(TokenChunker):
             chunk_text = self._tokenizer.decode(chunk_token_ids_batch, skip_special_tokens=True)
             num_tokens_in_this_chunk = len(chunk_token_ids_batch)
 
-            chunks.append(
-                Chunk(
-                    id=-1,
-                    file_id=-1,
-                    text=chunk_text,
-                    start=start_char,
-                    end=end_char,
-                    tokens=num_tokens_in_this_chunk,
+            invisible_chars = ("\u200b", "\u200c", "\u200d", "\ufeff")
+            cleaned = chunk_text
+            for ch in invisible_chars:
+                cleaned = cleaned.replace(ch, "")
+            if cleaned.strip():
+                chunks.append(
+                    Chunk(
+                        id=-1,
+                        file_id=-1,
+                        text=chunk_text,
+                        start=start_char,
+                        end=end_char,
+                        tokens=num_tokens_in_this_chunk,
+                    )
                 )
-            )
             current_token_idx += step
 
         return chunks

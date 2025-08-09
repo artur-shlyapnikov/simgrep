@@ -52,7 +52,7 @@ class SimgrepContext:
     @classmethod
     def default(
         cls,
-        model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
+        model_name: str = "ibm-granite/granite-embedding-30m-english",
         chunk_size: int = 128,
         chunk_overlap: int = 20,
     ) -> "SimgrepContext":

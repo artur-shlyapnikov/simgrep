@@ -16,7 +16,7 @@ from simgrep.core.abstractions import (
 )
 from simgrep.repository import MetadataStore
 
-MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+MODEL_NAME = "ibm-granite/granite-embedding-30m-english"
 
 
 @pytest.fixture(scope="session")

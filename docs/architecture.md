@@ -211,7 +211,7 @@ The tool is designed to be intuitive for simple use cases ("semantic grep replac
 
 **5.5. Embedding Model Management**
 
-*   Models specified by their `sentence-transformers` names (e.g., `all-MiniLM-L6-v2`).
+*   Models specified by their `sentence-transformers` names (e.g., `ibm-granite/granite-embedding-30m-english`).
 *   The model used for indexing is stored per project.
 *   Changing a project's model will require a full re-index of that project's files. `simgrep index --rebuild` will be necessary.
 *   The tool will download models on first use if not locally cached by `sentence-transformers`.

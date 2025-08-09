@@ -64,7 +64,7 @@ class TestSentenceEmbedder:
             assert call_kwargs.get("prompt_name") == "query"
 
     def test_non_qwen_no_query_prompt(self, hf_embedder: SentenceEmbedder) -> None:
-        # hf_embedder uses 'all-MiniLM-L6-v2' which is not a qwen model
+        # hf_embedder uses 'ibm-granite/granite-embedding-30m-english' which is not a qwen model
         with patch.object(hf_embedder._model, "encode", wraps=hf_embedder._model.encode) as spy_encode:
             hf_embedder.encode(["my query"], is_query=True)
             spy_encode.assert_called_once()
