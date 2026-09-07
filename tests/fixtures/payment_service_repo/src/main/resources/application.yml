@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: tax-invoice-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/invoice
+    username: invoice_user
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+openapi:
+  title: Tax Invoice OpenAPI
+  version: 1.0.0
+  enabled: true
+
+invoice:
+  tax:
+    default-rate: 0.20
+    rounding-mode: HALF_EVEN
+  payment:
+    retry-attempts: 3
+    timeout-seconds: 30

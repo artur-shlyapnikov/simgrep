@@ -1,0 +1,42 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Local assistant/editor state
+.claude/settings.local.json
+
+# simgrep local/project state
+.simgrep/
+indexes/
+*.duckdb
+*.usearch
+*.sqlite
+*.sqlite3
+
+# Caches
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+.DS_Store
+.coverage*
+.hypothesis/
+coverage.xml
+reports/
+
+# Local credentials and editor state
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+.idea/
+.vscode/

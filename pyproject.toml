@@ -1,0 +1,89 @@
+[project]
+name = "simgrep"
+version = "0.1.0"
+description = "Semantic search CLI for local files. Quickly find text by meaning rather than keywords."
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "Apache-2.0"}
+authors = [{name = "Artur Shlyapnikov"}]
+dependencies = [
+    "rich>=14.0.0",
+    "typer>=0.15.4",
+    "unstructured[md]>=0.24.0",
+    "sentence-transformers>=5.1.1",
+    "transformers>=5.5.0",
+    "onnxruntime>=1.20.0",
+    "huggingface-hub>=0.20.0",
+    "onnx>=1.17.0",
+    "usearch>=2.9.0",
+    "numpy>=1.23.0",
+    "duckdb>=0.10.0",
+    "pathspec>=0.12.1",
+    "tomli-w>=1.0.0",
+    "filelock>=3.15.0",
+]
+
+[project.scripts]
+simgrep = "simgrep.main:app"
+
+[tool.setuptools]
+
+[tool.setuptools.packages.find]
+include = ["simgrep*"]
+
+[tool.uv]
+package = true
+# Security floor for the transitive sentence-transformers runtime.
+constraint-dependencies = ["torch>=2.13.0"]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.15.0",
+    "pytest>=8.2.0",
+    "ruff>=0.4.0,<0.5.0",
+    "pytest-timeout>=2.3.0",
+    "pytest-xdist>=3.5.0",
+    "hypothesis>=6.100",
+    "pytest-cov>=6.0",
+]
+security = [
+    "bandit[toml]>=1.8.3",
+    "pip-audit>=2.8.0",
+    "zizmor>=1.9.0",
+]
+
+[tool.ruff]
+line-length = 160
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.format]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_calls = true
+
+[tool.coverage.run]
+core = "sysmon"
+
+[tool.pytest.ini_options]
+addopts = "--dist loadfile"
+pythonpath = [
+  "."
+]
+markers = [
+    "timeout: set timeout for a test (requires pytest-timeout)",
+    "external: requires model downloads, huggingface/unstructured, or heavy native adapters",
+    "slow: intentionally slow acceptance or regression test",
+    "regression: guards a specific previously observed bug",
+]
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "build", "dist"]
+skips = ["B101", "B615"]  # B615: model downloads are user-initiated at index time (latest revision intended); query-time reads are offline-first from the local HF cache
