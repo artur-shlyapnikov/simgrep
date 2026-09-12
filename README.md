@@ -1,7 +1,7 @@
 # simgrep
 
-`simgrep` is an early-stage semantic search CLI for local files. It embeds a query and file
-chunks with a local Hugging Face model, then combines semantic similarity with lexical ranking.
+`simgrep` is an early-stage semantic search CLI for local files. It embeds queries and file
+chunks with a local Hugging Face model. It combines semantic similarity with lexical ranking.
 It can build a temporary in-memory index for a one-off scan or keep a project index on disk for
 repeated searches.
 
@@ -242,7 +242,7 @@ simgrep similar SOURCE [TARGET_DIR]
 
 `SOURCE` can be a literal string, `@PATH` for a whole file, `PATH:LINE`, `PATH:START-END`, or `-`
 for stdin. `TARGET_DIR` sets the optional corpus path. The command uses an ephemeral scan when
-`--ephemeral` is set or the active project does not cover that path. Without it, the command uses
+`--ephemeral` is set or the active project does not cover that path. Otherwise, the command uses
 the active project when one exists.
 
 ~~~bash
@@ -317,7 +317,7 @@ simgrep debt . --max-age 90
 chunks into themes, and reports file ages from git when available. The default threshold is `0.8`,
 the minimum theme size is `2`, and the report shows at most `20` themes and `8` matches per theme.
 `--max-age DAYS` makes the command fail with exit code `1` when a dated theme is older than the
-limit. It also needs at least one available git age for a corpus containing markers. Formats are
+limit. `--max-age` also needs at least one git age for a file carrying markers. Formats are
 `rich`, `json`, and `jsonl`.
 
 ### Rerank an external file list
