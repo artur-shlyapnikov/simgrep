@@ -297,7 +297,7 @@ def execute_search(
         outcome.results[:] = expand_results(outcome.results, fetch=read_text_raw)
     if rerank is not None:
         from simgrep.adapters.reranker import CrossEncoderReranker
-        from simgrep.rerank import rerank_results
+        from simgrep.ranking import rerank_results
 
         resolved_reranker = getattr(selected_runtime, "reranker", None)
         if resolved_reranker is None:

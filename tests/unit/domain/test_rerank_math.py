@@ -8,9 +8,11 @@ from typing import Sequence
 import numpy as np
 import pytest
 
+from simgrep.adapters.chunker import chunk_file_texts
 from simgrep.errors import RerankError
+from simgrep.main import ensure_chunk_cap
 from simgrep.models import Chunk, FileRole, RerankMatch, SearchResult
-from simgrep.rerank import best_per_file, chunk_file_texts, ensure_chunk_cap, rerank_orderings, rerank_results
+from simgrep.ranking import best_per_file, rerank_orderings, rerank_results
 
 
 def make_result(label: int, chunk_text: str, score: float = 0.5) -> SearchResult:

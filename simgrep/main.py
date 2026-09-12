@@ -735,6 +735,15 @@ def debt(
         raise typer.Exit(code=getattr(exc, "exit_code", 1)) from exc
 
 
+def ensure_chunk_cap(count: int, cap: int) -> None:
+    """Raise :class:`RerankError` when ``count`` chunks exceed the ``cap``."""
+    if count > cap:
+        raise RerankError(
+            f"{count} chunks exceed the {cap}-chunk rerank cap",
+            hint="raise --max-chunks or narrow the file list",
+        )
+
+
 @app.command()
 def rerank(
     query: str = typer.Argument(..., help="Query the chunks are scored against."),
@@ -757,9 +766,10 @@ def rerank(
         stderr_console.print(f"[bold red]Error: --format must be one of {_RERANK_FORMATS_TEXT}.[/bold red]")
         raise typer.Exit(code=2)
     try:
+        from simgrep.adapters.chunker import chunk_file_texts
         from simgrep.adapters.reranker import CrossEncoderReranker  # Lazy: heavy import.
         from simgrep.execution import factory as _resolve_factory
-        from simgrep.rerank import best_per_file, chunk_file_texts, ensure_chunk_cap
+        from simgrep.ranking import best_per_file
 
         paths = [Path(name) for name in (files or ())]
         if files_from is not None:

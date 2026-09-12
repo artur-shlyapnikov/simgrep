@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import fnmatch
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Iterable, Optional, Sequence
+from typing import Any, Callable, Iterable, Optional, Sequence
+
+import numpy as np
 
 from simgrep.corpus import StoredChunk
-from simgrep.models import DiversityMode, FileRole, LexicalFallbackMode, PathBoost, SearchOptions, SearchResult
+from simgrep.models import DiversityMode, FileRole, LexicalFallbackMode, PathBoost, RerankMatch, SearchOptions, SearchOutcome, SearchResult
 
 
 def _normalize_semantic(value: Optional[float]) -> float:
@@ -245,3 +247,45 @@ def rank_candidates(
         )
         for row in merged
     ]
+
+
+def rerank_orderings(cross_scores: Sequence[float]) -> tuple[int, ...]:
+    """Argsort descending; ties keep original index order. Deterministic."""
+    return tuple(sorted(range(len(cross_scores)), key=lambda i: (-cross_scores[i], i)))
+
+
+def rerank_results(
+    results: list[SearchResult],
+    query: str,
+    score_fn: Callable[[str, list[str]], "np.ndarray"],
+    top: int,
+) -> SearchOutcome:
+    """Rerank the first ``min(top, len(results))`` entries by cross score.
+
+    The window is scored via ``score_fn(query, [r.chunk_text ...])`` in incoming
+    (hybrid) order, then sorted by ``(-cross, original_index)``; each windowed
+    result's ``score`` field becomes its cross score. Results beyond the window
+    are passed through untouched. Callers merge ``.results`` into their own
+    outcome metadata (base_path, counters) — this fresh outcome carries none.
+    """
+    if not results:
+        return SearchOutcome(results=[], base_path=Path("."))
+    window_n = min(top, len(results))
+    window = results[:window_n]
+    cross = np.asarray(score_fn(query, [r.chunk_text for r in window]), dtype=np.float64)
+    order = rerank_orderings(cross.tolist())
+    reranked = [replace(window[i], score=float(cross[i])) for i in order]
+    return SearchOutcome(results=reranked + list(results[window_n:]), base_path=Path("."))
+
+
+def best_per_file(matches: Sequence[RerankMatch]) -> tuple[RerankMatch, ...]:
+    """One match per file: max score wins, ties keep the lowest line_start.
+
+    Output is sorted descending by score (line_start ascending on ties).
+    """
+    best: dict[str, RerankMatch] = {}
+    for m in matches:
+        current = best.get(m.file_path)
+        if current is None or m.score > current.score or (m.score == current.score and m.line_start < current.line_start):
+            best[m.file_path] = m
+    return tuple(sorted(best.values(), key=lambda m: (-m.score, m.line_start)))

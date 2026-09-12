@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import TYPE_CHECKING, Optional, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 from simgrep.errors import SimgrepError
 from simgrep.models import Chunk
@@ -122,3 +122,12 @@ class HFChunker:
                 chunks.append(Chunk(id=-1, file_id=-1, text=chunk_text, start=start, end=end, tokens=len(chunk_offsets)))
             token_idx += step
         return chunks
+
+
+def chunk_file_texts(text: str, chunker: Any) -> list:
+    """Thin delegation to ``chunker.chunk(text)``, returned as a plain list.
+
+    Pure pass-through: chunk identity, offsets and line-start/line-end fields
+    are preserved exactly as the chunker produced them — no re-computation here.
+    """
+    return list(chunker.chunk(text))

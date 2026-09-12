@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from simgrep.models import FileRole, SearchResult
-from simgrep.rerank import rerank_results
+from simgrep.ranking import rerank_results
 from tests.conftest import FakeRuntime
 
 
